@@ -1,0 +1,1487 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gestión Anafer</title>
+<link rel="icon" type="image/svg+xml" href="assets/anafer-logo.svg">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    color-scheme: light;
+    --bg:#f7f6f2;
+    --surface:#ffffff;
+    --surface-2:#f0eee6;
+    --ink:#18160f;
+    --ink-2:#5c584c;
+    --muted:#8d8877;
+    --border:rgba(24,22,15,0.12);
+    --border-strong:rgba(24,22,15,0.22);
+    --accent:#1472cc;
+    --accent-ink:#ffffff;
+    --ghost-bg:rgba(24,22,15,0.04);
+    --today:rgba(20,114,204,0.10);
+    --danger:#e30613;
+    --shadow: 0 12px 28px -12px rgba(24,22,15,0.28), 0 2px 6px -2px rgba(24,22,15,0.16);
+
+    --truck-13:#2a78d6; --truck-13-ink:#ffffff;
+    --truck-20:#c85a20; --truck-20-ink:#ffffff;
+    --truck-32:#158a63; --truck-32-ink:#ffffff;
+    --truck-17:#a97600; --truck-17-ink:#ffffff;
+    --truck-41:#c15c85; --truck-41-ink:#ffffff;
+    --truck-4000:#6a3fb5; --truck-4000-ink:#ffffff;
+    --truck-x:#8d8877; --truck-x-ink:#ffffff;
+
+    --chart-route:#158a63;
+    --chart-driver:#a97600;
+    --chart-helper:#c15c85;
+    --chart-weekday:#1472cc;
+    --chart-source:#6b6656;
+    --chart-cargo:#6a3fb5;
+    --chart-branch:#b5453f;
+    --chart-company:#158a63;
+    --chart-occasional:#8046c9;
+    --chart-gastos:#0c7d8a;
+
+    /* Paleta categórica "divertida" para las pastillas de Sucursales, Empresas
+       y Eventuales — un color distinto por destino, elegido por hash del id
+       (ver destColorVar/destInkVar), igual de vívida que los colores de camión. */
+    --dest-1:#2a78d6;  --dest-1-ink:#ffffff;
+    --dest-2:#c85a20;  --dest-2-ink:#ffffff;
+    --dest-3:#158a63;  --dest-3-ink:#ffffff;
+    --dest-4:#a97600;  --dest-4-ink:#ffffff;
+    --dest-5:#c15c85;  --dest-5-ink:#ffffff;
+    --dest-6:#6a3fb5;  --dest-6-ink:#ffffff;
+    --dest-7:#1d8f96;  --dest-7-ink:#ffffff;
+    --dest-8:#b5453f;  --dest-8-ink:#ffffff;
+    --dest-9:#5a7d2a;  --dest-9-ink:#ffffff;
+    --dest-10:#8046c9; --dest-10-ink:#ffffff;
+    --dest-11:#c98f1c; --dest-11-ink:#141413;
+    --dest-12:#3f6fa8; --dest-12-ink:#ffffff;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --bg:#0e0e0c;
+      --surface:#1a1a17;
+      --surface-2:#232320;
+      --ink:#f6f5f0;
+      --ink-2:#c4c1b5;
+      --muted:#8d8877;
+      --border:rgba(255,255,255,0.12);
+      --border-strong:rgba(255,255,255,0.22);
+      --accent:#3b9dfb;
+      --accent-ink:#0e0e0c;
+      --ghost-bg:rgba(255,255,255,0.05);
+      --today:rgba(59,157,251,0.14);
+      --danger:#ff4452;
+      --shadow: 0 12px 28px -12px rgba(0,0,0,0.55), 0 2px 6px -2px rgba(0,0,0,0.4);
+
+      --truck-13:#5b9ce8; --truck-13-ink:#0e0e0c;
+      --truck-20:#e08a4f; --truck-20-ink:#0e0e0c;
+      --truck-32:#2fb589; --truck-32-ink:#0e0e0c;
+      --truck-17:#d1a233; --truck-17-ink:#0e0e0c;
+      --truck-41:#e08fac; --truck-41-ink:#0e0e0c;
+      --truck-4000:#a98bea; --truck-4000-ink:#0e0e0c;
+      --truck-x:#a6a294; --truck-x-ink:#0e0e0c;
+
+      --chart-route:#2fb589;
+      --chart-driver:#d1a233;
+      --chart-helper:#e08fac;
+      --chart-weekday:#3b9dfb;
+      --chart-source:#a6a294;
+      --chart-cargo:#a98bea;
+      --chart-branch:#e8837c;
+      --chart-company:#2fb589;
+      --chart-occasional:#bd93f0;
+      --chart-gastos:#3ecfe0;
+
+      --dest-1:#5b9ce8;  --dest-1-ink:#0e0e0c;
+      --dest-2:#e08a4f;  --dest-2-ink:#0e0e0c;
+      --dest-3:#2fb589;  --dest-3-ink:#0e0e0c;
+      --dest-4:#d1a233;  --dest-4-ink:#0e0e0c;
+      --dest-5:#e08fac;  --dest-5-ink:#0e0e0c;
+      --dest-6:#a98bea;  --dest-6-ink:#0e0e0c;
+      --dest-7:#4fc2c9;  --dest-7-ink:#0e0e0c;
+      --dest-8:#e8837c;  --dest-8-ink:#0e0e0c;
+      --dest-9:#9ec25a;  --dest-9-ink:#0e0e0c;
+      --dest-10:#bd93f0; --dest-10-ink:#0e0e0c;
+      --dest-11:#e6bd4d; --dest-11-ink:#0e0e0c;
+      --dest-12:#7ea8dd; --dest-12-ink:#0e0e0c;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --bg:#0e0e0c;
+    --surface:#1a1a17;
+    --surface-2:#232320;
+    --ink:#f6f5f0;
+    --ink-2:#c4c1b5;
+    --muted:#8d8877;
+    --border:rgba(255,255,255,0.12);
+    --border-strong:rgba(255,255,255,0.22);
+    --accent:#3b9dfb;
+    --accent-ink:#0e0e0c;
+    --ghost-bg:rgba(255,255,255,0.05);
+    --today:rgba(59,157,251,0.14);
+    --danger:#ff4452;
+    --shadow: 0 12px 28px -12px rgba(0,0,0,0.55), 0 2px 6px -2px rgba(0,0,0,0.4);
+
+    --truck-13:#5b9ce8; --truck-13-ink:#0e0e0c;
+    --truck-20:#e08a4f; --truck-20-ink:#0e0e0c;
+    --truck-32:#2fb589; --truck-32-ink:#0e0e0c;
+    --truck-17:#d1a233; --truck-17-ink:#0e0e0c;
+    --truck-41:#e08fac; --truck-41-ink:#0e0e0c;
+    --truck-4000:#a98bea; --truck-4000-ink:#0e0e0c;
+    --truck-x:#a6a294; --truck-x-ink:#0e0e0c;
+
+    --chart-route:#2fb589;
+    --chart-driver:#d1a233;
+    --chart-helper:#e08fac;
+    --chart-weekday:#3b9dfb;
+    --chart-source:#a6a294;
+    --chart-cargo:#a98bea;
+    --chart-branch:#e8837c;
+    --chart-company:#2fb589;
+    --chart-occasional:#bd93f0;
+    --chart-gastos:#3ecfe0;
+
+    --dest-1:#5b9ce8;  --dest-1-ink:#0e0e0c;
+    --dest-2:#e08a4f;  --dest-2-ink:#0e0e0c;
+    --dest-3:#2fb589;  --dest-3-ink:#0e0e0c;
+    --dest-4:#d1a233;  --dest-4-ink:#0e0e0c;
+    --dest-5:#e08fac;  --dest-5-ink:#0e0e0c;
+    --dest-6:#a98bea;  --dest-6-ink:#0e0e0c;
+    --dest-7:#4fc2c9;  --dest-7-ink:#0e0e0c;
+    --dest-8:#e8837c;  --dest-8-ink:#0e0e0c;
+    --dest-9:#9ec25a;  --dest-9-ink:#0e0e0c;
+    --dest-10:#bd93f0; --dest-10-ink:#0e0e0c;
+    --dest-11:#e6bd4d; --dest-11-ink:#0e0e0c;
+    --dest-12:#7ea8dd; --dest-12-ink:#0e0e0c;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;}
+  .num{font-family:"IBM Plex Mono","SF Mono",monospace; font-variant-numeric:tabular-nums;}
+
+  .shell{max-width:1180px; margin:0 auto; padding:20px 20px 64px;}
+
+  .topbar{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; padding-bottom:16px; border-bottom:1px solid var(--border); margin-bottom:18px;}
+  .brand{display:flex; flex-direction:row; align-items:center; gap:12px;}
+  .brand-logo{height:42px; width:auto; flex:none; display:block;}
+  .brand-text{display:flex; flex-direction:column; gap:2px;}
+  .brand h1{font-size:22px; font-weight:700; margin:0; letter-spacing:-0.01em;}
+  .brand .tag{font-size:12.5px; color:var(--ink-2);}
+  .who{display:flex; align-items:center; gap:8px;}
+  .who label{font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted);}
+  .who input{font-family:inherit; font-size:13px; border:1px solid var(--border); background:var(--surface); color:var(--ink); border-radius:7px; padding:6px 9px; width:150px;}
+  .who input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+
+  .toolbar{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px;}
+  .monthnav{display:flex; align-items:center; gap:10px;}
+  .monthnav button{width:32px; height:32px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--ink); font-size:15px; cursor:pointer;}
+  .monthnav button:hover{border-color:var(--border-strong);}
+  .monthnav .label{font-size:16px; font-weight:600; min-width:190px; text-align:center; text-transform:capitalize;}
+  .btn{font-family:inherit; font-size:13px; font-weight:600; border-radius:8px; border:1px solid var(--border-strong); background:var(--surface); color:var(--ink); padding:8px 13px; cursor:pointer; display:inline-flex; align-items:center; gap:7px;}
+  .btn:hover{border-color:var(--accent);}
+  .btn.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
+  .btn.primary:hover{filter:brightness(1.05);}
+  .btn.ghost{border-color:transparent; background:transparent;}
+  .btn.ghost:hover{background:var(--ghost-bg);}
+  .btn:disabled{opacity:0.5; cursor:default;}
+
+  .banner{display:none; align-items:center; gap:8px; font-size:13px; padding:9px 12px; border-radius:8px; background:var(--surface-2); border:1px solid var(--border); color:var(--ink-2); margin-bottom:14px;}
+  .banner.show{display:flex;}
+  .banner.err{color:var(--danger); border-color:var(--danger);}
+
+  .stripe{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px;}
+  .chip-stat{display:flex; align-items:center; gap:7px; background:var(--surface); border:1px solid var(--border); border-radius:999px; padding:5px 12px 5px 8px; font-size:12.5px;}
+  .swatch{width:11px; height:11px; border-radius:3px; flex:none;}
+  .chip-stat .n{font-weight:600; font-family:"IBM Plex Mono",monospace;}
+  .chip-stat .lbl{color:var(--ink-2);}
+  .chip-stat.total{background:var(--surface-2); font-weight:600;}
+
+  .gridwrap{background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:auto; box-shadow:0 1px 0 rgba(0,0,0,0.02); max-height:72vh;}
+  table.grid{border-collapse:separate; border-spacing:0; width:100%; font-size:12px;}
+  table.grid th, table.grid td{border-bottom:1px solid var(--border); border-right:1px solid var(--border); padding:0; white-space:nowrap;}
+  table.grid th{position:sticky; top:0; background:var(--surface-2); z-index:2; font-size:10px; text-transform:uppercase; letter-spacing:0.04em; color:var(--ink-2); padding:5px 5px; text-align:center; font-weight:600;}
+  table.grid th.corner{left:0; z-index:3; text-align:left;}
+  table.grid td.daycell{position:sticky; left:0; background:var(--surface); z-index:1; padding:3px 8px; text-align:left; min-width:82px;}
+  table.grid tr.today td.daycell, table.grid tr.today td{background:var(--today);}
+  table.grid tr.weekend td.daycell{color:var(--muted);}
+  .daynum{font-weight:600; font-family:"IBM Plex Mono",monospace; font-size:11.5px;}
+  .dayname{font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; margin-left:4px;}
+
+  td.cell{padding:2px; text-align:center; cursor:pointer; min-width:76px; vertical-align:middle;}
+  td.cell:hover{background:var(--ghost-bg);}
+  .pill{position:relative; display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; min-width:70px; min-height:24px; border-radius:6px; font-family:"IBM Plex Mono",monospace; font-weight:600; padding:3px 5px;}
+  .pill .truck-no{font-size:11.5px; line-height:1.1;}
+  .pill .crew{font-size:9px; font-weight:500; line-height:1.2; max-width:80px; white-space:normal; word-break:break-word; text-align:center; opacity:0.95;}
+  .pill .unit-tag{font-size:8.5px; font-weight:500; opacity:0.7; margin-left:2px;}
+  .pill.cargo::after{content:"📦"; position:absolute; top:-7px; right:-7px; width:19px; height:19px; display:flex; align-items:center; justify-content:center; font-size:12px; line-height:1; background:var(--surface); border:1.5px solid var(--border-strong); border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,0.3);}
+  .pill .note-badge{position:absolute; bottom:-7px; right:-7px; width:19px; height:19px; display:flex; align-items:center; justify-content:center; font-size:11px; line-height:1; background:var(--surface); border:1.5px solid var(--border-strong); border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,0.3); cursor:help;}
+  .pill.ghost{background:transparent; border:1.5px dashed var(--border-strong); color:var(--muted); font-weight:500;}
+  .cell.empty:hover::after{content:"+"; color:var(--muted); font-size:14px;}
+  .cell-pills{display:flex; flex-direction:column; align-items:center; gap:2px;}
+  .cell-add-btn{display:block; width:100%; max-width:70px; margin:3px auto 0; border:1.5px dashed var(--border-strong); background:transparent; color:var(--muted); font-family:inherit; font-size:11px; font-weight:600; border-radius:6px; padding:2px 0; cursor:pointer; opacity:0; transition:opacity .15s, border-color .15s, color .15s;}
+  .cell.multi:hover .cell-add-btn{opacity:1;}
+  .cell-add-btn:hover{border-color:var(--accent); color:var(--accent);}
+
+  .legend{display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:14px; font-size:12.5px; color:var(--ink-2);}
+  .legend .item{display:flex; align-items:center; gap:6px;}
+  .legend .ghostkey{width:14px; height:14px; border-radius:4px; border:1.5px dashed var(--border-strong);}
+
+  /* Pestaña con permiso "ver" (o sin permiso) para el perfil actual: se ve
+     pero no se puede crear, editar ni borrar nada ahí. */
+  body.tab-readonly .day-wrap tr.day-row,
+  body.tab-readonly table.day-table tr.day-row{cursor:default; pointer-events:none;}
+  body.tab-readonly .day-wrap tr.day-row:hover td,
+  body.tab-readonly table.day-table tr.day-row:hover td{background:inherit;}
+  body.tab-readonly td.cell{cursor:default; pointer-events:none;}
+  body.tab-readonly td.cell.empty:hover::after{content:none;}
+  body.tab-readonly .cell-add-btn{display:none;}
+  body.tab-readonly .edit-action{display:none;}
+  body.tab-readonly .legend{display:none;}
+
+  .overlay{position:fixed; inset:0; background:rgba(10,9,6,0.45); display:none; align-items:center; justify-content:center; z-index:50; padding:16px;}
+  .overlay.show{display:flex;}
+  #login-overlay{z-index:100; background:var(--bg);}
+  .modal{background:var(--surface); border-radius:14px; box-shadow:var(--shadow); width:100%; max-width:380px; padding:20px; border:1px solid var(--border);}
+  #cell-modal, #visit-modal{max-width:420px;}
+  .modal h3{margin:0 0 2px; font-size:16px;}
+  .modal .sub{font-size:12.5px; color:var(--ink-2); margin-bottom:14px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); margin-bottom:5px;}
+  .field select, .field textarea, .field input[type=text], .field input[type=password]{width:100%; font-family:inherit; font-size:14px; border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:8px; padding:8px 10px;}
+  .field textarea{resize:vertical; min-height:56px;}
+  .suggest-hint{font-size:12px; color:var(--accent); background:var(--ghost-bg); border-radius:7px; padding:6px 9px; margin-bottom:12px; display:flex; gap:6px; align-items:center;}
+  .modal-actions{display:flex; justify-content:space-between; gap:8px; margin-top:16px;}
+  .modal-actions .left{display:flex; gap:8px;}
+
+  .settings-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  @media (max-width:520px){ .settings-grid{grid-template-columns:1fr;} .modal.wide{max-width:480px;} }
+  .modal.wide{max-width:600px; max-height:calc(100vh - 32px); display:flex; flex-direction:column;}
+  .settings-body{overflow-y:auto; flex:1 1 auto; min-height:0; margin:0 -4px; padding:0 4px;}
+  /* Igual que .settings-body, para cualquier otro modal "wide" con contenido
+     que puede no entrar en la pantalla (p.ej. Factura): el título/subtítulo
+     y los botones de abajo quedan fijos, y solo el medio scrollea. */
+  .modal-scroll-body{overflow-y:auto; flex:1 1 auto; min-height:0; margin:0 -4px; padding:0 4px;}
+  .settings-col h4{font-size:12px; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); margin:0 0 8px;}
+  .setting-row{display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border);}
+  .setting-row input[type=text]{flex:1; font-size:13px; padding:5px 8px;}
+  .setting-row .scope-select, .truck-card-top .scope-select{flex:none; font-family:inherit; font-size:11.5px; border:1px solid var(--border); background:var(--bg); color:var(--ink-2); border-radius:6px; padding:5px 6px; max-width:150px;}
+  .toggle{width:30px; height:18px; border-radius:999px; background:var(--border-strong); position:relative; cursor:pointer; flex:none; border:none;}
+  .toggle.on{background:var(--accent);}
+  .toggle .knob{position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:var(--surface); transition:left .15s;}
+  .toggle.on .knob{left:14px;}
+  .addrow{display:flex; gap:6px; margin-top:8px;}
+  .addrow input{flex:1; font-size:13px; padding:6px 8px; border-radius:7px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-family:inherit;}
+
+  .truck-card{padding:8px 0; border-bottom:1px solid var(--border);}
+  .truck-card-top{display:flex; align-items:center; gap:8px;}
+  .truck-card-top input[type=text]{flex:1; font-size:13px; padding:5px 8px;}
+  .truck-card-sub{display:flex; gap:6px; margin-top:6px; padding-left:38px;}
+  .truck-card-sub input{flex:1; font-size:12px; padding:5px 7px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-family:inherit;}
+
+  .role-card{padding:12px 0; border-bottom:1px solid var(--border);}
+  .role-card-top{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .role-card-top input[type=text]{flex:1; min-width:120px; font-size:13px; padding:5px 8px;}
+  .role-card-top .role-password{flex:1; min-width:120px;}
+  .role-manage-row{display:flex; align-items:center; gap:6px; margin-top:8px; font-size:12px; color:var(--sub);}
+  .role-permisos-grid{display:grid; grid-template-columns:1fr auto; gap:6px 10px; margin-top:8px; padding-left:2px;}
+  .role-permiso-row{display:flex; align-items:center; font-size:12px; color:var(--ink);}
+  .role-permiso-select{font-size:12px; padding:4px 6px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-family:inherit;}
+  .role-card-del{margin-top:8px;}
+
+  .crew-fields{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .crew-fields.crew-fields-3{grid-template-columns:1fr 1fr 1fr;}
+
+  .cargo-header{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px;}
+  .cargo-unit-wrap{display:flex; align-items:center; gap:6px;}
+  .cargo-unit-wrap label{font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);}
+  .cargo-unit-wrap input{width:110px; font-family:inherit; font-size:12.5px; border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:6px; padding:5px 7px;}
+  .cargo-table-wrap{max-height:230px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;}
+  table.cargo-table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  table.cargo-table thead th{position:sticky; top:0; background:var(--surface-2); font-size:10.5px; text-transform:uppercase; letter-spacing:0.03em; color:var(--muted); font-weight:600; text-align:left; padding:6px 8px; border-bottom:1px solid var(--border);}
+  table.cargo-table thead th:last-child{text-align:right; width:84px;}
+  table.cargo-table td{padding:4px 8px; border-bottom:1px solid var(--border); color:var(--ink-2);}
+  table.cargo-table tr:last-child td{border-bottom:none;}
+  table.cargo-table tr:hover td{background:var(--ghost-bg);}
+  table.cargo-table td.cargo-qty-cell{width:84px;}
+  table.cargo-table input[type=number]{width:100%; font-family:inherit; font-size:12.5px; border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:6px; padding:4px 6px;}
+  .cargo-empty{font-size:12.5px; color:var(--muted); padding:8px;}
+
+  .viewtabs{display:flex; gap:4px; margin-bottom:14px; border-bottom:1px solid var(--border);}
+  .viewtab{font-family:inherit; font-size:13.5px; font-weight:600; color:var(--ink-2); background:transparent; border:none; border-bottom:2px solid transparent; padding:9px 4px; margin-right:18px; cursor:pointer;}
+  .viewtab:hover{color:var(--ink);}
+  .viewtab.active{color:var(--ink); border-bottom-color:var(--accent);}
+
+  .dash-toolbar{display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:14px; flex-wrap:wrap;}
+  .dash-toolbar label{font-size:12.5px; color:var(--ink-2);}
+  .dash-toolbar input[type=date]{font-family:inherit; font-size:13px; border:1px solid var(--border); background:var(--surface); color:var(--ink); border-radius:8px; padding:6px 9px;}
+  .dash-toolbar .dash-sep{color:var(--muted); font-size:12.5px;}
+  .dash-loading{font-size:12.5px; color:var(--ink-2); margin-bottom:12px;}
+
+  #toolbar-day input[type=date]{font-family:inherit; font-size:13px; border:1px solid var(--border); background:var(--surface); color:var(--ink); border-radius:8px; padding:6px 9px;}
+  .day-summary{font-size:12.5px; color:var(--ink-2); margin-bottom:10px;}
+  .day-wrap{background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:auto; box-shadow:0 1px 0 rgba(0,0,0,0.02);}
+  table.day-table{border-collapse:collapse; width:100%; font-size:13px;}
+  table.day-table th{position:sticky; top:0; background:var(--surface-2); z-index:1; font-size:11px; text-transform:uppercase; letter-spacing:0.04em; color:var(--ink-2); padding:10px 14px; text-align:left; font-weight:600; border-bottom:1px solid var(--border);}
+  table.day-table td{padding:12px 14px; border-bottom:1px solid var(--border); vertical-align:top;}
+  table.day-table tr:last-child td{border-bottom:none;}
+  table.day-table tr.day-row{cursor:pointer;}
+  table.day-table tr.day-row:hover td{background:var(--ghost-bg);}
+  table.day-table tr.day-row.empty td{color:var(--muted);}
+  td.day-route{font-weight:700; font-size:14px; white-space:nowrap;}
+  .day-truck-pill{display:inline-flex; align-items:center; justify-content:center; min-width:34px; padding:4px 9px; border-radius:7px; font-family:"IBM Plex Mono",monospace; font-weight:700; font-size:13px;}
+  .day-cargo-chip{display:inline-block; background:color-mix(in srgb, var(--accent) 14%, var(--surface)); border-radius:6px; padding:4px 11px; font-size:14px; font-weight:700; margin:0 6px 6px 0; color:var(--ink);}
+  td.day-note{color:var(--ink-2); font-size:12.5px; max-width:220px; white-space:normal;}
+  .day-muted{color:var(--muted);}
+  .day-empty{padding:16px; color:var(--muted); font-size:13px;}
+
+  /* Compras: proveedores y órdenes de compra */
+  .compras-section-head{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:26px 0 12px;}
+  .compras-section-head:first-of-type{margin-top:0;}
+  .compras-section-head h3{margin:0; font-size:13.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-2);}
+  .oc-badge{display:inline-flex; align-items:center; padding:3px 10px; border-radius:999px; font-size:11.5px; font-weight:600; white-space:nowrap;}
+  .oc-badge.pendiente{background:color-mix(in srgb, var(--chart-driver) 18%, var(--surface)); color:var(--chart-driver);}
+  .oc-badge.aprobada{background:color-mix(in srgb, var(--accent) 16%, var(--surface)); color:var(--accent);}
+  .oc-badge.recibida{background:color-mix(in srgb, var(--chart-route) 16%, var(--surface)); color:var(--chart-route);}
+  .oc-badge.pagada{background:color-mix(in srgb, var(--chart-route) 16%, var(--surface)); color:var(--chart-route);}
+  #pom-facturas-list{max-height:200px; overflow-y:auto; display:flex; flex-direction:column; gap:2px;}
+  #pom-facturas-list label.setting-row{cursor:pointer; gap:8px;}
+  #pom-facturas-list input[type=checkbox]{flex:none; width:16px; height:16px;}
+
+  /* Adjuntos (proveedores, facturas) */
+  .attach-list{display:flex; flex-direction:column; gap:6px; margin-bottom:8px;}
+  .attach-item{display:flex; align-items:center; gap:8px; font-size:12.5px; background:var(--surface-2); border-radius:7px; padding:6px 9px;}
+  .attach-item a{color:var(--accent); text-decoration:none; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .attach-item a:hover{text-decoration:underline;}
+  .attach-item .attach-size{color:var(--muted); font-size:11px; flex:none;}
+  .attach-item .attach-del{flex:none; border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:14px; line-height:1; padding:2px 5px; border-radius:4px;}
+  .attach-item .attach-del:hover{color:var(--danger); background:var(--ghost-bg);}
+  .attach-add-row input[type=file]{font-size:12px; color:var(--ink-2); max-width:100%;}
+  .attach-empty{font-size:12px; color:var(--muted); margin-bottom:8px;}
+  .factura-read-row{display:flex; align-items:center; gap:10px; margin-bottom:14px; padding:10px 12px; background:var(--ghost-bg); border-radius:8px;}
+  .factura-read-row .sub2{font-size:12px; color:var(--ink-2); flex:1; margin:0;}
+  .factura-read-row label.btn{white-space:nowrap;}
+
+  /* Buscador de proveedor (combo), para no tener que scrollear un <select> con miles */
+  .combo{position:relative;}
+  .combo-menu{position:absolute; z-index:40; left:0; right:0; top:calc(100% + 4px); max-height:220px; overflow-y:auto; background:var(--surface); border:1px solid var(--border-strong); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.16);}
+  .combo-item{padding:8px 10px; font-size:13.5px; cursor:pointer;}
+  .combo-item:hover, .combo-item.active{background:var(--ghost-bg);}
+  .combo-empty{padding:8px 10px; font-size:12.5px; color:var(--muted);}
+
+  /* Tesorería: cuentas y movimientos */
+  .mov-origen-badge{display:inline-flex; align-items:center; padding:2px 8px; border-radius:999px; font-size:10.5px; font-weight:600; white-space:nowrap; background:var(--surface-2); color:var(--ink-2);}
+  .mov-origen-badge.auto{background:color-mix(in srgb, var(--accent) 14%, var(--surface)); color:var(--accent);}
+  .cuenta-saldo-neg{color:var(--danger);}
+
+  .kpi-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px;}
+  @media (max-width:760px){ .kpi-grid{grid-template-columns:repeat(2,1fr);} }
+  .kpi-tile{position:relative; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px 14px 20px; overflow:hidden;}
+  .kpi-tile::before{content:''; position:absolute; left:0; top:0; bottom:0; width:4px;}
+  .kpi-tile.tile-total::before{background:var(--accent);}
+  .kpi-tile.tile-truck::before{background:var(--truck-13);}
+  .kpi-tile.tile-driver::before{background:var(--chart-driver);}
+  .kpi-tile.tile-route::before{background:var(--chart-route);}
+  .kpi-tile .kpi-label{font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); margin-bottom:6px;}
+  .kpi-tile .kpi-value{font-size:19px; font-weight:700; font-family:"IBM Plex Mono",monospace;}
+
+  .dash-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  @media (max-width:760px){ .dash-grid{grid-template-columns:1fr;} }
+  .panel{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px;}
+  .panel.panel-wide{grid-column:1 / -1;}
+  .panel h4{display:flex; align-items:center; gap:8px; font-size:12.5px; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); margin:0 0 12px;}
+  .panel h4::before{content:''; width:9px; height:9px; border-radius:3px; flex:none;}
+  .panel-truck h4::before{background:var(--truck-13);}
+  .panel-route h4::before{background:var(--chart-route);}
+  .panel-driver h4::before{background:var(--chart-driver);}
+  .panel-helper h4::before{background:var(--chart-helper);}
+  .panel-weekday h4::before{background:var(--chart-weekday);}
+  .panel-source h4::before{background:var(--chart-source);}
+  .panel-cargo h4::before{background:var(--chart-cargo);}
+  .panel-cross h4::before{background:var(--accent);}
+  .panel-branch h4::before{background:var(--chart-branch);}
+  .panel-company h4::before{background:var(--chart-company);}
+  .panel-occasional h4::before{background:var(--chart-occasional);}
+  .panel-gastos h4::before{background:var(--chart-gastos);}
+
+  .dash-section-title{font-size:13.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-2); margin:26px 0 12px; padding-top:18px; border-top:1px solid var(--border);}
+  .kpi-tile.tile-branch::before{background:var(--chart-branch);}
+  .kpi-tile.tile-company::before{background:var(--chart-company);}
+  .kpi-tile.tile-occasional::before{background:var(--chart-occasional);}
+  .kpi-tile.tile-gastos::before{background:var(--chart-gastos);}
+
+  .barrow{display:grid; grid-template-columns:120px 1fr 34px; align-items:center; gap:8px; padding:4px 6px; margin:0 -6px; border-radius:6px; font-size:12.5px;}
+  .barrow:hover{background:var(--ghost-bg);}
+  .barrow.money{grid-template-columns:140px 1fr 94px;}
+  .barrow.money .barcount{font-variant-numeric:tabular-nums; text-align:right;}
+  .barname{color:var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .bartrack{background:var(--surface-2); border-radius:5px; height:10px; overflow:hidden;}
+  .barfill{height:100%; border-radius:5px; transition:width .25s;}
+  .barcount{font-family:"IBM Plex Mono",monospace; font-weight:600; text-align:right;}
+  .bar-empty{font-size:12.5px; color:var(--muted); padding:8px 0;}
+  .bar-more{font-size:11.5px; color:var(--muted); padding-top:4px;}
+
+  .crosstab-wrap{overflow-x:auto; margin:0 -4px;}
+  table.crosstab{border-collapse:collapse; width:100%; font-size:12px; white-space:nowrap;}
+  table.crosstab th, table.crosstab td{padding:6px 10px; text-align:center; border-bottom:1px solid var(--border);}
+  table.crosstab thead th{font-size:10.5px; text-transform:uppercase; letter-spacing:0.03em; color:var(--muted); font-weight:600;}
+  table.crosstab th.corner, table.crosstab td.rowhead{position:sticky; left:0; background:var(--surface); text-align:left; font-weight:600; z-index:1;}
+  table.crosstab td.cnt{font-family:"IBM Plex Mono",monospace;}
+  table.crosstab td.total, table.crosstab th.total{font-weight:700; background:var(--surface-2);}
+  table.crosstab tbody tr:hover td{background:var(--ghost-bg);}
+  table.crosstab tbody tr:hover td.rowhead{background:var(--surface-2);}
+
+  .settings-tabs{display:flex; flex-wrap:wrap; gap:4px 16px; margin-bottom:14px; border-bottom:1px solid var(--border);}
+  .stabbtn{font-family:inherit; font-size:13px; font-weight:600; color:var(--ink-2); background:transparent; border:none; border-bottom:2px solid transparent; padding:8px 2px; margin:0; cursor:pointer; white-space:nowrap;}
+  .stabbtn:hover{color:var(--ink);}
+  .stabbtn.active{color:var(--ink); border-bottom-color:var(--accent);}
+
+  /* Configuración (⚙) — navegación por categorías a la izquierda, con
+     subpestañas por categoría a la derecha. Reemplaza la fila plana de 9
+     pestañas que había antes. */
+  .settings-layout{display:flex; gap:22px; align-items:stretch; flex:1 1 auto; min-height:0;}
+  .settings-nav{display:flex; flex-direction:column; gap:2px; width:196px; flex:0 0 196px; padding-right:16px; border-right:1px solid var(--border);}
+  .scatbtn{display:flex; align-items:center; gap:10px; font-family:inherit; font-size:13.5px; font-weight:600; color:var(--ink-2); background:transparent; border:none; border-left:3px solid transparent; border-radius:0 8px 8px 0; padding:10px 10px 10px 9px; margin:0; cursor:pointer; text-align:left; white-space:nowrap;}
+  .scatbtn .scat-icon{font-size:16px; line-height:1;}
+  .scatbtn:hover{background:var(--ghost-bg); color:var(--ink);}
+  .scatbtn.active{background:var(--ghost-bg); color:var(--ink); border-left-color:var(--accent);}
+  .settings-content{display:flex; flex-direction:column; flex:1 1 auto; min-width:0; min-height:0;}
+  .settings-subtabs{margin-bottom:14px; flex:0 0 auto;}
+  .settings-subtabs[hidden]{display:none;} /* .settings-tabs pone display:flex, que ganaría sobre [hidden] sin esto */
+  @media (max-width:640px){
+    .settings-layout{flex-direction:column;}
+    .settings-nav{flex-direction:row; flex-wrap:wrap; width:auto; padding-right:0; padding-bottom:12px; border-right:none; border-bottom:1px solid var(--border);}
+    .scatbtn{border-left:none; border-radius:8px;}
+    .scatbtn.active{border-left:none; box-shadow:inset 0 -3px 0 0 var(--accent);}
+  }
+
+  .toast{position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg); font-size:13px; padding:9px 16px; border-radius:8px; box-shadow:var(--shadow); z-index:60; opacity:0; transition:opacity .2s; pointer-events:none;}
+  .toast.show{opacity:1;}
+
+  ::selection{background:var(--accent); color:var(--accent-ink);}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <div class="topbar">
+    <div class="brand">
+      <img class="brand-logo" src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI2LjMuMSwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgeD0iMHB4IiB5PSIwcHgiCgkgdmlld0JveD0iMCAwIDU5NS4zIDI3OS44IiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA1OTUuMyAyNzkuODsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMyMjNDN0U7fQoJLnN0MXtmaWxsOiMwMDlGRTM7fQoJLnN0MntmaWxsOiNFMzA2MTM7fQo8L3N0eWxlPgo8ZyBpZD0iTGF5ZXJfMiI+CjwvZz4KPGcgaWQ9IkxheWVyXzEiPgoJPGc+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTE3My42LDE2NS4ydi0xMC43Yy0yLDEtNC44LDEuOS04LjYsMi43bC05LjksMi4xYy00LjIsMC45LTcuMSwxLjktOC44LDMuMWMtMi41LDEuNi0zLjcsNC0zLjcsNy4zCgkJCWMwLDIuOCwxLjEsNSwzLjQsNi43YzIuMiwxLjcsNSwyLjYsOC40LDIuNmM0LjksMCw5LjEtMS4xLDEyLjgtMy4zQzE3MS40LDE3My4xLDE3My42LDE2OS42LDE3My42LDE2NS4yIE0xOTEuNywxMzkuOHYzOS42CgkJCWMwLDUuNSwwLjksOS43LDIuOCwxMi42aC0xOS4xYy0xLjItMS44LTEuOC00LTEuOC02LjhjLTcuMSw1LjgtMTUuMyw4LjYtMjQuNSw4LjZjLTcuMywwLTEzLjQtMi4yLTE4LjMtNi41CgkJCWMtNC44LTQuMy03LjMtMTAtNy4zLTE3LjFjMC0xMi43LDcuNi0yMC41LDIyLjktMjMuNWw3LjYtMS41YzUuMS0xLDExLjYtMi41LDE5LjYtNC40di0yLjJjMC02LjMtNC43LTkuNS0xNC4zLTkuNQoJCQljLTUuMiwwLTguOSwwLjgtMTAuOSwyLjVjLTIsMS43LTMsNC42LTMsOC44bC0xOC4xLTAuN2MwLTguMiwzLjMtMTQuNSw5LjgtMTguOWM1LjctMy44LDEzLjItNS42LDIyLjMtNS42CgkJCWM5LjgsMCwxNy4yLDEuNCwyMi4zLDQuM0MxODguMywxMjMuMywxOTEuNywxMzAuMSwxOTEuNywxMzkuOCIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0yMDIuNCwxOTMuNHYtNzUuMWgxOC4xdjcuNGgwLjNjNS02LjEsMTEuOS05LjIsMjAuNS05LjJjMTcuMiwwLDI1LjgsOC41LDI1LjgsMjUuNXY1MS40SDI0OXYtNDUuOQoJCQljMC05LTQuMi0xMy41LTEyLjUtMTMuNWMtNC43LDAtOC40LDEuNi0xMS4zLDQuN2MtMy4yLDMuNS00LjgsOC41LTQuOCwxNXYzOS42SDIwMi40eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0zMjMuNywxNjUuMnYtMTAuN2MtMiwxLTQuOSwxLjktOC42LDIuN2wtMTAsMi4xYy00LjEsMC45LTcuMSwxLjktOC44LDMuMWMtMi41LDEuNi0zLjcsNC0zLjcsNy4zCgkJCWMwLDIuOCwxLjEsNSwzLjMsNi43YzIuMiwxLjcsNSwyLjYsOC40LDIuNmM0LjksMCw5LjEtMS4xLDEyLjgtMy4zQzMyMS41LDE3My4xLDMyMy43LDE2OS42LDMyMy43LDE2NS4yIE0zNDEuOCwxMzkuOHYzOS42CgkJCWMwLDUuNSwwLjksOS43LDIuOCwxMi42aC0xOS4yYy0xLjItMS44LTEuOC00LTEuOC02LjhjLTcuMSw1LjgtMTUuMyw4LjYtMjQuNSw4LjZjLTcuMywwLTEzLjQtMi4yLTE4LjMtNi41CgkJCWMtNC45LTQuMy03LjMtMTAtNy4zLTE3LjFjMC0xMi43LDcuNi0yMC41LDIyLjktMjMuNWw3LjYtMS41YzUuMS0xLDExLjYtMi41LDE5LjYtNC40di0yLjJjMC02LjMtNC44LTkuNS0xNC4zLTkuNQoJCQljLTUuMiwwLTguOSwwLjgtMTAuOSwyLjVjLTIsMS43LTMsNC42LTMsOC44bC0xOC4xLTAuN2MwLTguMiwzLjMtMTQuNSw5LjgtMTguOWM1LjctMy44LDEzLjItNS42LDIyLjMtNS42CgkJCWM5LjgsMCwxNy4yLDEuNCwyMi4zLDQuM0MzMzguNCwxMjMuMywzNDEuOCwxMzAuMSwzNDEuOCwxMzkuOCIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0zNTUuMiwxOTMuOXYtNjJoLTExdi0xMy4xaDExdi0xMS45YzAtMTIuNSw3LjQtMTguNywyMi4xLTE4LjdjNC4yLDAsOC4yLDAuMiwxMi4yLDAuNXYxNS43CgkJCWMtMS45LTAuMy0zLjgtMC40LTUuOS0wLjRjLTYuOCwwLTEwLjIsMy4yLTEwLjIsOS41djUuM2gxNi4ydjEzLjFoLTE2LjJ2NjJIMzU1LjJ6Ii8+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTQwNy4zLDE0NC44aDM2LjVjMC0yLjktMS4zLTUuOC00LTguOWMtMy40LTMuOS03LjctNS45LTEzLjEtNS45Yy01LDAtOS4zLDEuNC0xMi44LDQuMgoJCQlDNDEwLjUsMTM3LjEsNDA4LjMsMTQwLjYsNDA3LjMsMTQ0LjggTTQ2Mi44LDE1OC44aC01NS41YzAuMSw1LjMsMi4yLDkuOCw2LjIsMTMuNGMzLjcsMy40LDguMSw1LjEsMTMuMiw1LjEKCQkJYzkuNCwwLDE2LjYtMy42LDIxLjctMTAuN2wxNS4zLDguOWMtOCwxMi4zLTIwLjQsMTguNC0zNywxOC40Yy0xMS45LDAtMjEuMy0zLjctMjguMy0xMS4zYy02LjgtNy4yLTEwLjEtMTYuNi0xMC4xLTI4LjEKCQkJYzAtMTEuNSwzLjQtMjAuOSwxMC4zLTI4LjNjNi45LTcuNCwxNi4zLTExLjEsMjguMS0xMS4xQzQ1MC44LDExNS4yLDQ2Mi44LDEyOS43LDQ2Mi44LDE1OC44Ii8+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTQ2OS41LDE5My40di03NS4xaDE4LjF2MTAuNGgwLjNjNC4xLTguMSwxMS44LTEyLjIsMjMuMi0xMi4ydjE4LjRjLTYuOCwwLTEyLjMsMS42LTE2LjMsNC45CgkJCWMtNC44LDMuOC03LjEsOS42LTcuMSwxNy4ydjM2LjRINDY5LjV6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTE1OC4yLDQyYy00Ny4zLTAuMy04NS45LDM3LjktODYuMSw4NS4yYy0wLjEsMjAuNCw3LDM5LjIsMTguOCw1NGwxNy41LTEyYy05LjUtMTEuMy0xNS4yLTI1LjktMTUuMS00MS44CgkJCWMwLjItMzUuNiwyOS4yLTY0LjMsNjQuOC02NC4xYzMuNywwLDcuMywwLjQsMTAuOCwxVjQyLjdDMTY1LjQsNDIuMiwxNjEuOCw0MiwxNTguMiw0MiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yMTEuOSw5OS40Yy0xNi45LTI5LjEtNTQuMy0zOS04My40LTIyLjFjLTEyLjYsNy4zLTIxLjUsMTguNS0yNi4zLDMxLjFsMTMuNyw2LjQKCQkJYzMuNS05LjksMTAuNC0xOC43LDIwLjItMjQuNGMyMS45LTEyLjcsNTAtNS4zLDYyLjcsMTYuNmMxLjMsMi4zLDIuNCw0LjYsMy4zLDdsMTMuMi03LjhDMjE0LjMsMTAzLjksMjEzLjIsMTAxLjYsMjExLjksOTkuNCIvPgoJCTxwYXRoIGNsYXNzPSJzdDIiIGQ9Ik0yMjEsMjIxLjVsLTY4LjIsMGMtNDkuMS0zLjItODcuOS00NC04Ny45LTkzLjljMC0xOS4zLDUuOC0zNy4yLDE1LjctNTIuMUw1NS40LDU3LjYKCQkJYy0xMy41LDIwLTIxLjQsNDQuMS0yMS40LDcwYzAsNjcsNTIuNywxMjEuNywxMTguOCwxMjQuOWw2OC4yLTAuMVYyMjEuNXoiLz4KCQk8cGF0aCBkPSJNMjMzLjgsMjQ1LjhoNC4yYzMuMywwLDQuNC0yLjIsNC40LTQuNmMwLTMuNC0yLjItNC44LTQuOS00LjhoLTMuN1YyNDUuOHogTTIzMy44LDIzNC4xaDMuNWMxLjMsMCw0LjMtMC4zLDQuMy00LjIKCQkJYzAtMi42LTEuMy00LjEtNC4zLTQuMWgtMy41VjIzNC4xeiBNMjMwLjcsMjIzLjNoNy43YzMuMywwLDYuNCwxLjUsNi40LDYuNGMwLDIuMy0xLjQsNC42LTMuNyw1LjJ2MC4xYzMuMSwwLjcsNC41LDMuMSw0LjUsNi4yCgkJCWMwLDUuMS0yLjksNy4yLTguMSw3LjJoLTYuOFYyMjMuM3oiLz4KCQk8cGF0aCBkPSJNMjUzLjUsMjM5aDYuN2wtMy4yLTEyLjFoLTAuMUwyNTMuNSwyMzl6IE0yNTUsMjIzLjNoNC4ybDYuOCwyNS4xaC0zLjJsLTEuOC02LjloLThsLTEuOSw2LjloLTMuMkwyNTUsMjIzLjN6Ii8+CgkJPHBhdGggZD0iTTI3OS42LDI0MS4yYzAsNC40LTEuMSw3LjctNi4zLDcuN2MtNC4yLDAtNS45LTIuNy01LjktNS43di0yLjFoM3YxLjhjMCwyLDAuOCwzLjQsMi45LDMuNGMyLjgsMCwzLjItMS44LDMuMi01LjN2LTE3LjgKCQkJaDMuMVYyNDEuMnoiLz4KCQk8cGF0aCBkPSJNMjg3LjYsMjM1LjhjMCw1LjgsMC42LDEwLjUsNC45LDEwLjVjNC4zLDAsNC45LTQuNyw0LjktMTAuNWMwLTUuOC0wLjYtMTAuNS00LjktMTAuNUMyODguMiwyMjUuMywyODcuNiwyMzAsMjg3LjYsMjM1LjgKCQkJIE0zMDAuNSwyMzUuOGMwLDYuMy0xLjIsMTMuMS04LjEsMTMuMWMtNi45LDAtOC4xLTYuNy04LjEtMTMuMWMwLTYuMywxLjItMTMsOC4xLTEzQzI5OS40LDIyMi44LDMwMC41LDIyOS41LDMwMC41LDIzNS44Ii8+CgkJPHBvbHlnb24gcG9pbnRzPSIzMTQuOCwyMjMuMyAzMTguOCwyMjMuMyAzMjcuMSwyNDQuMiAzMjcuMiwyNDQuMiAzMjcuMiwyMjMuMyAzMzAuMywyMjMuMyAzMzAuMywyNDguNCAzMjYsMjQ4LjQgMzE4LDIyOC4xCgkJCTMxNy45LDIyOC4xIDMxNy45LDI0OC40IDMxNC44LDI0OC40IAkJIi8+CgkJPHBhdGggZD0iTTMzOC4zLDIzNS44YzAsNS44LDAuNiwxMC41LDQuOCwxMC41YzQuMywwLDQuOS00LjcsNC45LTEwLjVjMC01LjgtMC42LTEwLjUtNC45LTEwLjVDMzM4LjgsMjI1LjMsMzM4LjMsMjMwLDMzOC4zLDIzNS44CgkJCSBNMzUxLjIsMjM1LjhjMCw2LjMtMS4yLDEzLjEtOC4xLDEzLjFjLTYuOSwwLTguMS02LjctOC4xLTEzLjFjMC02LjMsMS4xLTEzLDguMS0xM0MzNTAuMSwyMjIuOCwzNTEuMiwyMjkuNSwzNTEuMiwyMzUuOCIvPgoJCTxwYXRoIGQ9Ik0zNTkuMSwyMzQuN2gzLjFjMS44LDAsNS4yLDAsNS4yLTQuOWMwLTIuNS0xLjctNC00LjUtNGgtMy43VjIzNC43eiBNMzU2LDIyMy4zaDguMWMzLjksMCw2LjQsMi4zLDYuNCw2LjMKCQkJYzAsMi43LTEsNS42LTMuOSw2LjN2MC4xYzIuMiwwLjIsMy40LDIsMy42LDQuMmwwLjIsNC4zYzAuMSwyLjgsMC42LDMuNSwxLjMsNGgtMy43Yy0wLjUtMC41LTAuOC0yLjQtMC44LTMuNmwtMC4yLTMuOQoJCQljLTAuMi0zLjQtMi4xLTMuNi0zLjctMy42aC00LjJ2MTEuMkgzNTZWMjIzLjN6Ii8+CgkJPHBvbHlnb24gcG9pbnRzPSIzNzUuNCwyMjMuMyAzODAuNiwyMjMuMyAzODUuNiwyNDMuMiAzODUuNywyNDMuMiAzOTAuNywyMjMuMyAzOTUuOSwyMjMuMyAzOTUuOSwyNDguNCAzOTIuOCwyNDguNCAzOTIuOCwyMjYuNAoJCQkzOTIuOCwyMjYuNCAzODcuMiwyNDguNCAzODQuMSwyNDguNCAzNzguNiwyMjYuNCAzNzguNSwyMjYuNCAzNzguNSwyNDguNCAzNzUuNCwyNDguNCAJCSIvPgoJCTxwYXRoIGQ9Ik00MDQuNSwyMzloNi44bC0zLjItMTIuMUg0MDhMNDA0LjUsMjM5eiBNNDA2LjEsMjIzLjNoNC4xbDYuNywyNS4xaC0zLjJsLTEuOC02LjloLThsLTEuOSw2LjloLTMuM0w0MDYuMSwyMjMuM3oiLz4KCQk8cGF0aCBkPSJNNDMwLjQsMjI5LjhjMC0yLjYtMS00LjUtMy45LTQuNWMtMi42LDAtNC4xLDEuNC00LjEsNC4xYzAsNy4xLDExLjgsMi45LDExLjgsMTJjMCw1LjgtNC4yLDcuNS03LjgsNy41CgkJCWMtNS45LDAtNy42LTMtNy42LTguNGgzLjFjMCwyLjgsMC4xLDUuOCw0LjcsNS44YzIuNSwwLDQuNC0xLjgsNC40LTQuNGMwLTcuMS0xMS45LTMtMTEuOS0xMi4yYzAtMi4zLDEtNi45LDcuMy02LjkKCQkJYzQuOCwwLDcsMi40LDcsN0g0MzAuNHoiLz4KCQk8cmVjdCB4PSI0NDcuMiIgeT0iMjIwLjUiIHdpZHRoPSI2LjEiIGhlaWdodD0iMjcuOSIvPgoJCTxwb2x5Z29uIHBvaW50cz0iNDcyLjUsMjQ4LjQgNDY1LjUsMjQ4LjQgNDU2LjUsMjIwLjUgNDYyLjgsMjIwLjUgNDY5LDI0MC4xIDQ2OS4xLDI0MC4xIDQ3NS40LDIyMC41IDQ4MS43LDIyMC41IAkJIi8+CgkJPHBvbHlnb24gcG9pbnRzPSI0ODQuOSwyMjAuNSA1MDUuOCwyMjAuNSA1MDUuOCwyMjUuNiA0OTEsMjI1LjYgNDkxLDIzMS42IDUwNC41LDIzMS42IDUwNC41LDIzNi40IDQ5MSwyMzYuNCA0OTEsMjQzLjIKCQkJNTA2LjEsMjQzLjIgNTA2LjEsMjQ4LjQgNDg0LjksMjQ4LjQgCQkiLz4KCQk8cGF0aCBkPSJNNTE1LjIsMjM5LjFjMCwzLjcsMi45LDUuMiw2LjIsNS4yYzIuMiwwLDUuNC0wLjYsNS40LTMuNWMwLTMtNC4yLTMuNS04LjMtNC42Yy00LjEtMS4xLTguMy0yLjctOC4zLTcuOQoJCQljMC01LjcsNS40LTguNCwxMC40LTguNGM1LjgsMCwxMS4yLDIuNSwxMS4yLDloLTUuOWMtMC4yLTMuMy0yLjYtNC4yLTUuNS00LjJjLTEuOSwwLTQuMiwwLjgtNC4yLDMuMmMwLDIuMSwxLjMsMi40LDguMyw0LjIKCQkJYzIsMC41LDguMywxLjgsOC4zLDguMWMwLDUuMS00LDktMTEuNiw5Yy02LjIsMC0xMi0zLjEtMTEuOS05LjlINTE1LjJ6Ii8+CgkJPHBhdGggZD0iTTU0MS4zLDIzOS4xYzAsMy43LDIuOSw1LjIsNi4yLDUuMmMyLjIsMCw1LjQtMC42LDUuNC0zLjVjMC0zLTQuMi0zLjUtOC4zLTQuNmMtNC4xLTEuMS04LjMtMi43LTguMy03LjkKCQkJYzAtNS43LDUuNC04LjQsMTAuNC04LjRjNS44LDAsMTEuMiwyLjUsMTEuMiw5SDU1MmMtMC4yLTMuMy0yLjYtNC4yLTUuNS00LjJjLTIsMC00LjIsMC44LTQuMiwzLjJjMCwyLjEsMS4zLDIuNCw4LjMsNC4yCgkJCWMyLDAuNSw4LjMsMS44LDguMyw4LjFjMCw1LjEtNCw5LTExLjYsOWMtNi4yLDAtMTItMy4xLTExLjktOS45SDU0MS4zeiIvPgoJCTxwYXRoIGQ9Ik01MjEuMiwxNzQuNGMwLTIuNy0xLTQuNS00LTQuNWMtMi42LDAtNC4yLDEuNC00LjIsNC4xYzAsNy4yLDEyLDIuOSwxMiwxMi4yYzAsNS45LTQuMyw3LjYtNy45LDcuNmMtNiwwLTcuNy0zLjEtNy43LTguNQoJCQloMy4xYzAsMi45LDAuMiw1LjksNC44LDUuOWMyLjUsMCw0LjQtMS44LDQuNC00LjVjMC03LjItMTItMy0xMi0xMi40YzAtMi4zLDEtNyw3LjUtN2M0LjksMCw3LjEsMi40LDcuMSw3LjFINTIxLjJ6Ii8+CgkJPHJlY3QgeD0iNTI4LjgiIHk9IjE4OS41IiB3aWR0aD0iMy4zIiBoZWlnaHQ9IjMuOCIvPgoJCTxwYXRoIGQ9Ik01NDAuMiwxODMuOGg2LjlsLTMuMy0xMi4zaC0wLjFMNTQwLjIsMTgzLjh6IE01NDEuOCwxNjcuOWg0LjJsNi44LDI1LjVoLTMuM2wtMS44LTdoLTguMWwtMS45LDdoLTMuM0w1NDEuOCwxNjcuOXoiLz4KCQk8cmVjdCB4PSI1NTUuMiIgeT0iMTg5LjUiIHdpZHRoPSIzLjMiIGhlaWdodD0iMy44Ii8+Cgk8L2c+CjwvZz4KPC9zdmc+Cg==" alt="Anafer S.A.">
+      <div class="brand-text">
+        <h1>Gestión Anafer</h1>
+        <div class="tag">Viajes, compras, pagos y tesorería en un solo lugar</div>
+      </div>
+    </div>
+    <div class="who">
+      <span id="who-fields" style="display:contents;">
+        <label for="who-input">Cargado por</label>
+        <input id="who-input" type="text" placeholder="tu nombre" maxlength="30">
+      </span>
+      <button class="btn ghost" id="settings-btn" title="Configuración">⚙</button>
+      <button class="btn ghost" id="logout-btn" title="Cerrar sesión">Salir</button>
+    </div>
+  </div>
+
+  <div class="banner" id="conn-banner">⚠ No se pudo conectar a Supabase. Revisá config.js (URL y anon key) y la consola del navegador.</div>
+
+  <div class="viewtabs" id="viewtabs">
+    <button class="viewtab active" id="tab-grid">FlotaPesada</button>
+    <button class="viewtab" id="tab-branches">Sucursales</button>
+    <button class="viewtab" id="tab-company">Empresas</button>
+    <button class="viewtab" id="tab-occasional">Eventuales</button>
+    <button class="viewtab" id="tab-compras">Compras</button>
+    <button class="viewtab" id="tab-pagos">Pagos</button>
+    <button class="viewtab" id="tab-tesoreria">Tesorería</button>
+    <button class="viewtab" id="tab-day">Día</button>
+    <button class="viewtab" id="tab-dashboard">Dashboard</button>
+  </div>
+
+  <div id="view-grid">
+    <div class="toolbar" id="toolbar-grid">
+      <div class="monthnav">
+        <button id="prev-month" aria-label="Mes anterior">‹</button>
+        <div class="label" id="month-label">—</div>
+        <button id="next-month" aria-label="Mes siguiente">›</button>
+        <button class="btn ghost" id="today-btn" style="margin-left:4px;">Hoy</button>
+      </div>
+      <button class="btn primary edit-action" id="autoplan-btn">✨ Planificar automáticamente</button>
+    </div>
+
+    <div class="stripe" id="stats-stripe"></div>
+
+    <div class="gridwrap">
+      <table class="grid" id="grid-table">
+        <thead><tr id="grid-head"></tr></thead>
+        <tbody id="grid-body"></tbody>
+      </table>
+    </div>
+
+    <div class="legend">
+      <div class="item"><span class="ghostkey"></span> sugerido por el historial — hacé clic para confirmarlo o cambiarlo</div>
+      <div class="item">El nombre debajo del número de camión es el chofer cargado ese día (puede variar de un día a otro)</div>
+      <div class="item">Si dos camiones hacen la misma ruta el mismo día, pasá el mouse sobre la celda y tocá "+ camión" para agregar el segundo</div>
+      <div class="item">Los datos se guardan en Supabase y se comparten entre todos los que abren esta página</div>
+    </div>
+  </div>
+
+  <div id="view-day" hidden>
+    <div class="toolbar" id="toolbar-day">
+      <div class="monthnav">
+        <button id="prev-day" aria-label="Día anterior">‹</button>
+        <div class="label" id="day-label">—</div>
+        <button id="next-day" aria-label="Día siguiente">›</button>
+        <button class="btn ghost" id="day-today-btn" style="margin-left:4px;">Hoy</button>
+      </div>
+      <input type="date" id="day-picker">
+    </div>
+    <div class="dash-loading" id="day-loading" hidden>Cargando...</div>
+    <div class="day-summary" id="day-summary"></div>
+    <div class="day-wrap">
+      <table class="day-table" id="day-table">
+        <thead><tr><th>Ruta</th><th>Camión</th><th>Chofer</th><th>Ayudante</th><th>Carga</th><th>Nota</th></tr></thead>
+        <tbody id="day-body"></tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <div class="item">Hacé clic en cualquier fila para cargar o editar ese viaje</div>
+    </div>
+
+    <h3 class="dash-section-title">Sucursales</h3>
+    <div class="day-summary" id="day-branch-summary"></div>
+    <div class="day-wrap">
+      <table class="day-table" id="day-branch-table">
+        <thead><tr><th>Sucursal</th><th>Camión</th><th>Chofer</th><th>Ayudante</th><th>Carga</th><th>Nota</th></tr></thead>
+        <tbody id="day-branch-body"></tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <div class="item">Hacé clic en cualquier fila para cargar o editar ese envío</div>
+    </div>
+
+    <h3 class="dash-section-title">Empresas</h3>
+    <div class="day-summary" id="day-company-summary"></div>
+    <div class="day-wrap">
+      <table class="day-table" id="day-company-table">
+        <thead><tr><th>Empresa</th><th>Camión</th><th>Chofer</th><th>Ayudante</th><th>Carga</th><th>Nota</th></tr></thead>
+        <tbody id="day-company-body"></tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <div class="item">Hacé clic en cualquier fila para cargar o editar ese envío</div>
+    </div>
+
+    <h3 class="dash-section-title">Eventuales</h3>
+    <div class="day-summary" id="day-occasional-summary"></div>
+    <div class="day-wrap">
+      <table class="day-table" id="day-occasional-table">
+        <thead><tr><th>Eventual</th><th>Camión</th><th>Chofer</th><th>Ayudante</th><th>Carga</th><th>Nota</th></tr></thead>
+        <tbody id="day-occasional-body"></tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <div class="item">Hacé clic en cualquier fila para cargar o editar ese envío</div>
+    </div>
+  </div>
+
+  <div id="view-dashboard" hidden>
+    <div class="dash-toolbar" id="toolbar-dashboard">
+      <label for="dash-from">Desde</label>
+      <input type="date" id="dash-from">
+      <span class="dash-sep">→</span>
+      <label for="dash-to">Hasta</label>
+      <input type="date" id="dash-to">
+    </div>
+    <div class="dash-loading" id="dashboard-loading" hidden>Cargando...</div>
+
+    <div class="settings-tabs">
+      <button class="stabbtn active" id="dashsubbtn-viajes">Viajes</button>
+      <button class="stabbtn" id="dashsubbtn-gastos">Gastos</button>
+    </div>
+
+    <div id="dash-sub-viajes">
+    <div class="kpi-grid">
+      <div class="kpi-tile tile-total"><div class="kpi-label">Viajes en el período</div><div class="kpi-value" id="kpi-total">0</div></div>
+      <div class="kpi-tile tile-truck"><div class="kpi-label">Camión con más viajes</div><div class="kpi-value" id="kpi-truck">—</div></div>
+      <div class="kpi-tile tile-driver"><div class="kpi-label">Chofer con más viajes</div><div class="kpi-value" id="kpi-driver">—</div></div>
+      <div class="kpi-tile tile-route"><div class="kpi-label">Ruta con más viajes</div><div class="kpi-value" id="kpi-route">—</div></div>
+    </div>
+
+    <div class="dash-grid">
+      <div class="panel panel-truck"><h4>Viajes por camión</h4><div id="bar-truck"></div></div>
+      <div class="panel panel-route"><h4>Viajes por ruta</h4><div id="bar-route"></div></div>
+      <div class="panel panel-driver"><h4>Viajes por chofer</h4><div id="bar-driver"></div></div>
+      <div class="panel panel-helper"><h4>Viajes por ayudante</h4><div id="bar-helper"></div></div>
+      <div class="panel panel-weekday"><h4>Viajes por día de la semana</h4><div id="bar-weekday"></div></div>
+      <div class="panel panel-source"><h4>Origen de la carga</h4><div id="bar-source"></div></div>
+      <div class="panel panel-cargo panel-wide"><h4>Cantidad despachada por tipo de carga</h4><div id="bar-cargo"></div></div>
+      <div class="panel panel-cross panel-wide"><h4>Viajes por chofer y ruta</h4><div id="crosstab"></div></div>
+    </div>
+
+    <h3 class="dash-section-title">Sucursales</h3>
+    <div class="kpi-grid" style="margin-bottom:16px;">
+      <div class="kpi-tile tile-branch"><div class="kpi-label">Envíos a sucursales en el período</div><div class="kpi-value" id="kpi-branch-visits">0</div></div>
+    </div>
+    <div class="dash-grid">
+      <div class="panel panel-branch"><h4>Cantidad despachada por sucursal</h4><div id="bar-branch"></div></div>
+      <div class="panel panel-branch panel-wide"><h4>Cantidad despachada a sucursales por producto</h4><div id="bar-branch-cargo"></div></div>
+    </div>
+
+    <h3 class="dash-section-title">Empresas</h3>
+    <div class="kpi-grid" style="margin-bottom:16px;">
+      <div class="kpi-tile tile-company"><div class="kpi-label">Envíos a empresas en el período</div><div class="kpi-value" id="kpi-company-visits">0</div></div>
+    </div>
+    <div class="dash-grid">
+      <div class="panel panel-company"><h4>Cantidad despachada por empresa</h4><div id="bar-company"></div></div>
+      <div class="panel panel-company panel-wide"><h4>Cantidad despachada a empresas por producto</h4><div id="bar-company-cargo"></div></div>
+    </div>
+
+    <h3 class="dash-section-title">Eventuales</h3>
+    <div class="kpi-grid" style="margin-bottom:16px;">
+      <div class="kpi-tile tile-occasional"><div class="kpi-label">Envíos a eventuales en el período</div><div class="kpi-value" id="kpi-occasional-visits">0</div></div>
+    </div>
+    <div class="dash-grid">
+      <div class="panel panel-occasional"><h4>Cantidad despachada por eventual</h4><div id="bar-occasional"></div></div>
+      <div class="panel panel-occasional panel-wide"><h4>Cantidad despachada a eventuales por producto</h4><div id="bar-occasional-cargo"></div></div>
+    </div>
+    </div>
+
+    <div id="dash-sub-gastos" hidden>
+    <div class="kpi-grid" style="margin-bottom:16px;">
+      <div class="kpi-tile tile-gastos"><div class="kpi-label">Gasto total en el período</div><div class="kpi-value" id="kpi-gastos-total">$0,00</div></div>
+      <div class="kpi-tile tile-gastos"><div class="kpi-label">Facturas en el período</div><div class="kpi-value" id="kpi-gastos-facturas">0</div></div>
+      <div class="kpi-tile tile-gastos"><div class="kpi-label">Centro de costo con más gasto</div><div class="kpi-value" id="kpi-gastos-centro">—</div></div>
+      <div class="kpi-tile tile-gastos"><div class="kpi-label">Concepto con más gasto</div><div class="kpi-value" id="kpi-gastos-concepto">—</div></div>
+    </div>
+    <div class="dash-grid">
+      <div class="panel panel-gastos"><h4>Gasto por centro de costo</h4><div id="bar-gastos-centro"></div></div>
+      <div class="panel panel-gastos"><h4>Gasto por concepto</h4><div id="bar-gastos-concepto"></div></div>
+      <div class="panel panel-gastos panel-wide"><h4>Gasto por proveedor</h4><div id="bar-gastos-proveedor"></div></div>
+    </div>
+    </div>
+  </div>
+
+  <div id="view-branches" hidden>
+    <div class="toolbar" id="toolbar-branches">
+      <div class="monthnav">
+        <button id="prev-branch-month" aria-label="Mes anterior">‹</button>
+        <div class="label" id="branch-month-label">—</div>
+        <button id="next-branch-month" aria-label="Mes siguiente">›</button>
+        <button class="btn ghost" id="branch-today-btn" style="margin-left:4px;">Hoy</button>
+      </div>
+      <button class="btn primary edit-action" id="branch-autoplan-btn">✨ Planificar automáticamente</button>
+    </div>
+
+    <div class="gridwrap">
+      <table class="grid" id="branch-grid-table">
+        <thead><tr id="branch-grid-head"></tr></thead>
+        <tbody id="branch-grid-body"></tbody>
+      </table>
+    </div>
+
+    <div class="legend">
+      <div class="item">Hacé clic en una celda para cargar o editar el envío de ese día a esa sucursal</div>
+      <div class="item">El número en la celda es la cantidad total despachada ese día (todos los productos)</div>
+      <div class="item">Si hay dos envíos distintos a la misma sucursal el mismo día, pasá el mouse sobre la celda y tocá "+ envío" para agregar el segundo</div>
+      <div class="item">✨ Planificar automáticamente sugiere visitas en los días de la semana que históricamente le corresponden a cada sucursal (por ejemplo, "lunes y jueves"), con las cantidades promedio de esa sucursal por visita — podés editarlas o borrarlas después</div>
+    </div>
+  </div>
+
+  <div id="view-company" hidden>
+    <div class="toolbar" id="toolbar-company">
+      <div class="monthnav">
+        <button id="prev-company-month" aria-label="Mes anterior">‹</button>
+        <div class="label" id="company-month-label">—</div>
+        <button id="next-company-month" aria-label="Mes siguiente">›</button>
+        <button class="btn ghost" id="company-today-btn" style="margin-left:4px;">Hoy</button>
+      </div>
+    </div>
+
+    <div class="gridwrap">
+      <table class="grid" id="company-grid-table">
+        <thead><tr id="company-grid-head"></tr></thead>
+        <tbody id="company-grid-body"></tbody>
+      </table>
+    </div>
+
+    <div class="legend">
+      <div class="item">Hacé clic en una celda para cargar o editar el envío de ese día a esa empresa</div>
+      <div class="item">El número en la celda es la cantidad total despachada ese día (todos los productos)</div>
+      <div class="item">Si hay dos envíos distintos a la misma empresa el mismo día, pasá el mouse sobre la celda y tocá "+ envío" para agregar el segundo</div>
+      <div class="item">Las empresas se agregan y desactivan desde ⚙ → Empresas</div>
+    </div>
+  </div>
+
+  <div id="view-occasional" hidden>
+    <div class="toolbar" id="toolbar-occasional">
+      <div class="monthnav">
+        <button id="prev-occasional-month" aria-label="Mes anterior">‹</button>
+        <div class="label" id="occasional-month-label">—</div>
+        <button id="next-occasional-month" aria-label="Mes siguiente">›</button>
+        <button class="btn ghost" id="occasional-today-btn" style="margin-left:4px;">Hoy</button>
+      </div>
+    </div>
+
+    <div class="gridwrap">
+      <table class="grid" id="occasional-grid-table">
+        <thead><tr id="occasional-grid-head"></tr></thead>
+        <tbody id="occasional-grid-body"></tbody>
+      </table>
+    </div>
+
+    <div class="legend">
+      <div class="item">Hacé clic en una celda para cargar o editar el envío de ese día a ese eventual</div>
+      <div class="item">El número en la celda es la cantidad total despachada ese día (todos los productos)</div>
+      <div class="item">Si hay dos envíos distintos al mismo eventual el mismo día, pasá el mouse sobre la celda y tocá "+ envío" para agregar el segundo</div>
+      <div class="item">Los eventuales se agregan y desactivan desde ⚙ → Eventuales</div>
+    </div>
+  </div>
+
+  <div id="view-compras" hidden>
+    <div class="toolbar" id="toolbar-compras">
+      <div style="font-size:12.5px; color:var(--ink-2);">Proveedores y órdenes de compra</div>
+    </div>
+
+    <div class="compras-section-head">
+      <h3>Proveedores</h3>
+      <button class="btn primary edit-action" id="new-proveedor-btn">+ Nuevo proveedor</button>
+    </div>
+    <div class="day-wrap">
+      <table class="day-table" id="proveedores-table">
+        <thead><tr><th>Proveedor</th><th>Rubro</th><th>Contacto</th><th>Teléfono</th><th></th></tr></thead>
+        <tbody id="proveedores-body"></tbody>
+      </table>
+    </div>
+
+    <div class="compras-section-head">
+      <h3>Órdenes de compra</h3>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select id="oc-filter-estado" class="scope-select" style="max-width:170px;">
+          <option value="">Todos los estados</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="aprobada">Aprobada</option>
+          <option value="recibida">Recibida</option>
+        </select>
+        <button class="btn primary edit-action" id="new-oc-btn">+ Nueva orden de compra</button>
+      </div>
+    </div>
+    <div class="day-wrap">
+      <table class="day-table" id="oc-table">
+        <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Descripción</th><th>Monto</th><th>Estado</th></tr></thead>
+        <tbody id="oc-body"></tbody>
+      </table>
+    </div>
+
+    <div class="legend">
+      <div class="item">Hacé clic en un proveedor o una orden de compra para editarlo</div>
+      <div class="item">Centros de costo y Conceptos se administran desde ⚙ → Compras</div>
+    </div>
+  </div>
+
+  <div id="view-pagos" hidden>
+    <div class="toolbar" id="toolbar-pagos">
+      <div style="font-size:12.5px; color:var(--ink-2);">Facturas y órdenes de pago</div>
+    </div>
+
+    <div class="compras-section-head">
+      <h3>Facturas</h3>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select id="factura-filter-estado" class="scope-select" style="max-width:170px;">
+          <option value="">Todos los estados</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="pagada">Pagada</option>
+        </select>
+        <button class="btn primary edit-action" id="new-factura-btn">+ Nueva factura</button>
+      </div>
+    </div>
+    <div class="day-wrap">
+      <table class="day-table" id="facturas-table">
+        <thead><tr><th>Proveedor</th><th>N° Factura</th><th>Fecha</th><th>Orden de compra</th><th>Monto</th><th>Estado</th></tr></thead>
+        <tbody id="facturas-body"></tbody>
+      </table>
+    </div>
+
+    <div class="compras-section-head">
+      <h3>Órdenes de pago</h3>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select id="pago-filter-estado" class="scope-select" style="max-width:170px;">
+          <option value="">Todos los estados</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="pagada">Pagada</option>
+        </select>
+        <button class="btn primary edit-action" id="new-pago-btn">+ Nueva orden de pago</button>
+      </div>
+    </div>
+    <div class="day-wrap">
+      <table class="day-table" id="pagos-table">
+        <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Facturas</th><th>Monto</th><th>Estado</th></tr></thead>
+        <tbody id="pagos-body"></tbody>
+      </table>
+    </div>
+
+    <div class="legend">
+      <div class="item">Una factura no necesita tener una orden de compra asociada</div>
+      <div class="item">Una orden de pago puede agrupar varias facturas pendientes del mismo proveedor</div>
+      <div class="item">Hacé clic en una factura o una orden de pago para editarla</div>
+    </div>
+  </div>
+
+  <div id="view-tesoreria" hidden>
+    <div class="toolbar" id="toolbar-tesoreria">
+      <div style="font-size:12.5px; color:var(--ink-2);">Cuentas y movimientos de caja/banco</div>
+    </div>
+
+    <div class="compras-section-head">
+      <h3>Cuentas</h3>
+      <button class="btn primary edit-action" id="new-cuenta-btn">+ Nueva cuenta</button>
+    </div>
+    <div class="day-wrap">
+      <table class="day-table" id="cuentas-table">
+        <thead><tr><th>Cuenta</th><th>Tipo</th><th>Saldo inicial</th><th>Saldo actual</th><th>Notas</th></tr></thead>
+        <tbody id="cuentas-body"></tbody>
+      </table>
+    </div>
+
+    <div class="compras-section-head">
+      <h3>Movimientos</h3>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select id="mov-filter-cuenta" class="scope-select" style="max-width:200px;">
+          <option value="">Todas las cuentas</option>
+        </select>
+        <button class="btn primary edit-action" id="new-movimiento-btn">+ Nuevo movimiento</button>
+      </div>
+    </div>
+    <div class="day-wrap">
+      <table class="day-table" id="movimientos-table">
+        <thead><tr><th>Fecha</th><th>Cuenta</th><th>Concepto</th><th>Origen</th><th>Monto</th></tr></thead>
+        <tbody id="movimientos-body"></tbody>
+      </table>
+    </div>
+
+    <div class="legend">
+      <div class="item">El saldo actual de cada cuenta es el saldo inicial menos todos sus egresos cargados</div>
+      <div class="item">Al marcar una orden de pago como Pagada se elige la cuenta y se genera el egreso automáticamente — esos movimientos no se pueden editar ni borrar desde acá, solo cambiando la orden de pago</div>
+      <div class="item">Los movimientos cargados a mano (no ligados a una orden de pago) sí se pueden editar o borrar</div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="cell-overlay">
+  <div class="modal" id="cell-modal">
+    <h3 id="cm-title">Ruta</h3>
+    <div class="sub" id="cm-sub">Fecha</div>
+    <div class="suggest-hint" id="cm-suggest" style="display:none;">💡 Sugerido según el historial de esta ruta</div>
+    <div class="field">
+      <label for="cm-truck">Camión</label>
+      <select id="cm-truck"></select>
+    </div>
+    <div class="crew-fields">
+      <div class="field">
+        <label for="cm-driver">Chofer</label>
+        <select id="cm-driver"></select>
+      </div>
+      <div class="field">
+        <label for="cm-helper">Ayudante</label>
+        <select id="cm-helper"></select>
+      </div>
+    </div>
+    <div class="field">
+      <div class="cargo-header">
+        <label style="margin-bottom:0;">Carga</label>
+        <div class="cargo-unit-wrap">
+          <label for="cm-cargo-unit" style="margin-bottom:0;">Unidad</label>
+          <input type="text" id="cm-cargo-unit" placeholder="ej: pallets" maxlength="20">
+        </div>
+      </div>
+      <div class="cargo-table-wrap"><table class="cargo-table" id="cm-cargo-table">
+        <thead><tr><th>Producto</th><th>Cant.</th></tr></thead>
+        <tbody id="cm-cargo-body"></tbody>
+      </table></div>
+    </div>
+    <div class="field">
+      <label for="cm-note">Nota (opcional)</label>
+      <textarea id="cm-note" placeholder="Instrucciones para este viaje..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="cm-cancel">Cancelar</button>
+        <button class="btn" id="cm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="cm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="visit-overlay">
+  <div class="modal" id="visit-modal">
+    <h3 id="vm-title">Sucursal</h3>
+    <div class="sub" id="vm-sub">Fecha</div>
+    <div class="field">
+      <label for="vm-truck">Camión</label>
+      <select id="vm-truck"></select>
+    </div>
+    <div class="crew-fields crew-fields-3">
+      <div class="field">
+        <label for="vm-driver">Chofer</label>
+        <select id="vm-driver"></select>
+      </div>
+      <div class="field">
+        <label for="vm-helper">Ayudante</label>
+        <select id="vm-helper"></select>
+      </div>
+      <div class="field">
+        <label for="vm-helper2">Subayudante (opcional)</label>
+        <select id="vm-helper2"></select>
+      </div>
+    </div>
+    <div class="field">
+      <div class="cargo-header">
+        <label style="margin-bottom:0;">Carga</label>
+      </div>
+      <div class="cargo-table-wrap"><table class="cargo-table" id="vm-cargo-table">
+        <thead><tr><th>Producto</th><th>Cant.</th></tr></thead>
+        <tbody id="vm-cargo-body"></tbody>
+      </table></div>
+    </div>
+    <div class="field">
+      <label for="vm-note">Nota (opcional)</label>
+      <textarea id="vm-note" placeholder="Observaciones de este envío..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="vm-cancel">Cancelar</button>
+        <button class="btn" id="vm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="vm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="companyvisit-overlay">
+  <div class="modal" id="companyvisit-modal">
+    <h3 id="cvm-title">Empresa</h3>
+    <div class="sub" id="cvm-sub">Fecha</div>
+    <div class="field">
+      <label for="cvm-truck">Camión</label>
+      <select id="cvm-truck"></select>
+    </div>
+    <div class="crew-fields crew-fields-3">
+      <div class="field">
+        <label for="cvm-driver">Chofer</label>
+        <select id="cvm-driver"></select>
+      </div>
+      <div class="field">
+        <label for="cvm-helper">Ayudante</label>
+        <select id="cvm-helper"></select>
+      </div>
+      <div class="field">
+        <label for="cvm-helper2">Subayudante (opcional)</label>
+        <select id="cvm-helper2"></select>
+      </div>
+    </div>
+    <div class="field">
+      <div class="cargo-header">
+        <label style="margin-bottom:0;">Carga</label>
+      </div>
+      <div class="cargo-table-wrap"><table class="cargo-table" id="cvm-cargo-table">
+        <thead><tr><th>Producto</th><th>Cant.</th></tr></thead>
+        <tbody id="cvm-cargo-body"></tbody>
+      </table></div>
+    </div>
+    <div class="field">
+      <label for="cvm-note">Nota (opcional)</label>
+      <textarea id="cvm-note" placeholder="Observaciones de este envío..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="cvm-cancel">Cancelar</button>
+        <button class="btn" id="cvm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="cvm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="occasionalvisit-overlay">
+  <div class="modal" id="occasionalvisit-modal">
+    <h3 id="ovm-title">Eventual</h3>
+    <div class="sub" id="ovm-sub">Fecha</div>
+    <div class="field">
+      <label for="ovm-truck">Camión</label>
+      <select id="ovm-truck"></select>
+    </div>
+    <div class="crew-fields crew-fields-3">
+      <div class="field">
+        <label for="ovm-driver">Chofer</label>
+        <select id="ovm-driver"></select>
+      </div>
+      <div class="field">
+        <label for="ovm-helper">Ayudante</label>
+        <select id="ovm-helper"></select>
+      </div>
+      <div class="field">
+        <label for="ovm-helper2">Subayudante (opcional)</label>
+        <select id="ovm-helper2"></select>
+      </div>
+    </div>
+    <div class="field">
+      <div class="cargo-header">
+        <label style="margin-bottom:0;">Carga</label>
+      </div>
+      <div class="cargo-table-wrap"><table class="cargo-table" id="ovm-cargo-table">
+        <thead><tr><th>Producto</th><th>Cant.</th></tr></thead>
+        <tbody id="ovm-cargo-body"></tbody>
+      </table></div>
+    </div>
+    <div class="field">
+      <label for="ovm-note">Nota (opcional)</label>
+      <textarea id="ovm-note" placeholder="Observaciones de este envío..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="ovm-cancel">Cancelar</button>
+        <button class="btn" id="ovm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="ovm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="proveedor-overlay">
+  <div class="modal" id="proveedor-modal" style="max-width:460px;">
+    <h3 id="pm-title">Nuevo proveedor</h3>
+    <div class="sub">Datos del proveedor</div>
+    <div class="field">
+      <label for="pm-nombre">Nombre / Razón social</label>
+      <input type="text" id="pm-nombre" maxlength="80" placeholder="Ej: Repuestos del Sur S.A.">
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label for="pm-cuit">CUIT</label><input type="text" id="pm-cuit" maxlength="20" placeholder="20-12345678-9"></div>
+      <div class="field"><label for="pm-rubro">Rubro</label><input type="text" id="pm-rubro" maxlength="40" placeholder="Ej: Repuestos"></div>
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label for="pm-contacto">Contacto</label><input type="text" id="pm-contacto" maxlength="60" placeholder="Persona de contacto"></div>
+      <div class="field"><label for="pm-telefono">Teléfono</label><input type="text" id="pm-telefono" maxlength="30"></div>
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label for="pm-email">Email</label><input type="text" id="pm-email" maxlength="80"></div>
+      <div class="field"><label for="pm-direccion">Dirección</label><input type="text" id="pm-direccion" maxlength="100"></div>
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label for="pm-banco">Banco</label><input type="text" id="pm-banco" maxlength="60"></div>
+      <div class="field"><label for="pm-cbu">CBU / Alias</label><input type="text" id="pm-cbu" maxlength="60"></div>
+    </div>
+    <div class="field">
+      <label for="pm-notas">Notas (opcional)</label>
+      <textarea id="pm-notas" placeholder="Observaciones..."></textarea>
+    </div>
+    <div class="field">
+      <label>Archivos adjuntos</label>
+      <div class="attach-list" id="pm-archivos-list"></div>
+      <div class="attach-add-row">
+        <input type="file" id="pm-archivo-input" accept="application/pdf,image/*" multiple>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="pm-cancel">Cancelar</button>
+        <button class="btn" id="pm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="pm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="centro-costo-overlay">
+  <div class="modal" id="centro-costo-modal" style="max-width:380px;">
+    <h3 id="ccm-title">Nuevo centro de costo</h3>
+    <div class="sub">Se usa para clasificar las facturas y después poder separar los gastos en el dashboard</div>
+    <div class="field"><label for="ccm-codigo">Código</label><input type="text" id="ccm-codigo" maxlength="20" placeholder="Ej: 100"></div>
+    <div class="field"><label for="ccm-descripcion">Descripción</label><input type="text" id="ccm-descripcion" maxlength="80" placeholder="Ej: Administración"></div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="ccm-cancel">Cancelar</button>
+        <button class="btn" id="ccm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="ccm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="concepto-overlay">
+  <div class="modal" id="concepto-modal" style="max-width:380px;">
+    <h3 id="cpm-title">Nuevo concepto</h3>
+    <div class="sub">Se usa para clasificar las facturas y después poder separar los gastos en el dashboard</div>
+    <div class="field"><label for="cpm-nombre">Concepto</label><input type="text" id="cpm-nombre" maxlength="60" placeholder="Ej: Combustible"></div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="cpm-cancel">Cancelar</button>
+        <button class="btn" id="cpm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="cpm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="oc-overlay">
+  <div class="modal" id="oc-modal" style="max-width:420px;">
+    <h3 id="ocm-title">Nueva orden de compra</h3>
+    <div class="sub" id="ocm-sub">—</div>
+    <div class="field">
+      <label for="ocm-proveedor-input">Proveedor</label>
+      <div class="combo" id="ocm-proveedor-combo">
+        <input type="text" id="ocm-proveedor-input" placeholder="Buscar proveedor por nombre..." autocomplete="off">
+        <input type="hidden" id="ocm-proveedor">
+        <div class="combo-menu" id="ocm-proveedor-menu" hidden></div>
+      </div>
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label for="ocm-fecha">Fecha</label><input type="date" id="ocm-fecha"></div>
+      <div class="field"><label for="ocm-monto">Monto</label><input type="text" id="ocm-monto" inputmode="decimal" placeholder="0,00"></div>
+    </div>
+    <div class="field">
+      <label for="ocm-descripcion">Descripción</label>
+      <textarea id="ocm-descripcion" placeholder="Qué se compra..."></textarea>
+    </div>
+    <div class="field">
+      <label for="ocm-estado">Estado</label>
+      <select id="ocm-estado">
+        <option value="pendiente">Pendiente</option>
+        <option value="aprobada">Aprobada</option>
+        <option value="recibida">Recibida</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="ocm-notas">Notas (opcional)</label>
+      <textarea id="ocm-notas" placeholder="Observaciones..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="ocm-cancel">Cancelar</button>
+        <button class="btn" id="ocm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="ocm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="factura-overlay">
+  <div class="modal wide" id="factura-modal" style="max-width:660px;">
+    <h3 id="fm-title">Nueva factura</h3>
+    <div class="sub">Datos de la factura — cargalos a mano o subí el archivo para completarlos automáticamente</div>
+    <div class="modal-scroll-body">
+    <div class="factura-read-row" id="fm-read-row" hidden>
+      <div class="sub2">Subí el PDF o la foto de la factura y complete los campos por vos. Revisá los datos antes de guardar.</div>
+      <label class="btn" for="fm-read-input" id="fm-read-label" style="cursor:pointer;">📄 Leer desde archivo</label>
+      <input type="file" id="fm-read-input" accept="application/pdf,image/*" style="display:none;">
+    </div>
+    <div class="crew-fields">
+      <div class="field">
+        <label for="fm-proveedor-input">Proveedor</label>
+        <div class="combo" id="fm-proveedor-combo">
+          <input type="text" id="fm-proveedor-input" placeholder="Buscar proveedor por nombre..." autocomplete="off">
+          <input type="hidden" id="fm-proveedor">
+          <div class="combo-menu" id="fm-proveedor-menu" hidden></div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="fm-oc">Orden de compra (opcional)</label>
+        <select id="fm-oc"></select>
+      </div>
+    </div>
+    <div class="crew-fields">
+      <div class="field">
+        <label for="fm-centro-costo">Centro de costo</label>
+        <select id="fm-centro-costo"></select>
+      </div>
+      <div class="field">
+        <label for="fm-concepto">Concepto</label>
+        <select id="fm-concepto"></select>
+      </div>
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label for="fm-numero">N° de factura</label><input type="text" id="fm-numero" maxlength="40" placeholder="Ej: A-0001-00012345"></div>
+      <div class="field"><label for="fm-fecha">Fecha</label><input type="date" id="fm-fecha"></div>
+    </div>
+    <div class="crew-fields">
+      <div class="field">
+        <label for="fm-monto">Monto</label>
+        <input type="text" id="fm-monto" inputmode="decimal" placeholder="0,00">
+      </div>
+      <div class="field">
+        <label>Archivos adjuntos</label>
+        <div class="attach-list" id="fm-archivos-list"></div>
+        <div class="attach-add-row">
+          <input type="file" id="fm-archivo-input" accept="application/pdf,image/*" multiple>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label for="fm-notas">Notas (opcional)</label>
+      <textarea id="fm-notas" placeholder="Observaciones..."></textarea>
+    </div>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="fm-cancel">Cancelar</button>
+        <button class="btn" id="fm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="fm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="pago-overlay">
+  <div class="modal wide" id="pago-modal" style="max-width:640px;">
+    <h3 id="pom-title">Nueva orden de pago</h3>
+    <div class="sub" id="pom-sub">—</div>
+    <div class="modal-scroll-body">
+    <div class="crew-fields">
+      <div class="field">
+        <label for="pom-proveedor-input">Proveedor</label>
+        <div class="combo" id="pom-proveedor-combo">
+          <input type="text" id="pom-proveedor-input" placeholder="Buscar proveedor por nombre..." autocomplete="off">
+          <input type="hidden" id="pom-proveedor">
+          <div class="combo-menu" id="pom-proveedor-menu" hidden></div>
+        </div>
+      </div>
+      <div class="field">
+        <label style="margin-bottom:2px;">Monto total</label>
+        <div class="num" id="pom-monto-total" style="font-size:16px; font-weight:700; padding:8px 0;">$0,00</div>
+      </div>
+    </div>
+    <div class="field">
+      <label style="margin-bottom:5px;">Facturas a pagar</label>
+      <div class="cargo-table-wrap" id="pom-facturas-list" style="padding:6px 8px;"></div>
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label for="pom-fecha">Fecha</label><input type="date" id="pom-fecha"></div>
+      <div class="field">
+        <label for="pom-medio">Medio de pago</label>
+        <select id="pom-medio">
+          <option value="transferencia">Transferencia</option>
+          <option value="efectivo">Efectivo</option>
+          <option value="cheque">Cheque</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="crew-fields">
+      <div class="field">
+        <label for="pom-estado">Estado</label>
+        <select id="pom-estado">
+          <option value="pendiente">Pendiente</option>
+          <option value="pagada">Pagada</option>
+        </select>
+      </div>
+      <div class="field" id="pom-cuenta-field" style="display:none;">
+        <label for="pom-cuenta">Cuenta de pago</label>
+        <select id="pom-cuenta"></select>
+      </div>
+    </div>
+    <div class="field">
+      <label for="pom-notas">Notas (opcional)</label>
+      <textarea id="pom-notas" placeholder="Observaciones..."></textarea>
+    </div>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="pom-cancel">Cancelar</button>
+        <button class="btn" id="pom-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="pom-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="cuenta-overlay">
+  <div class="modal" id="cuenta-modal" style="max-width:420px;">
+    <h3 id="ctam-title">Nueva cuenta</h3>
+    <div class="sub">Cuenta de caja o banco</div>
+    <div class="field">
+      <label for="ctam-nombre">Nombre</label>
+      <input type="text" id="ctam-nombre" maxlength="60" placeholder="Ej: Caja principal, Banco Nación">
+    </div>
+    <div class="crew-fields">
+      <div class="field">
+        <label for="ctam-tipo">Tipo</label>
+        <select id="ctam-tipo">
+          <option value="caja">Caja</option>
+          <option value="banco">Banco</option>
+        </select>
+      </div>
+      <div class="field"><label for="ctam-saldo-inicial">Saldo inicial</label><input type="text" id="ctam-saldo-inicial" inputmode="decimal" placeholder="0,00"></div>
+    </div>
+    <div class="field">
+      <label for="ctam-notas">Notas (opcional)</label>
+      <textarea id="ctam-notas" placeholder="Observaciones..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="ctam-cancel">Cancelar</button>
+        <button class="btn" id="ctam-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="ctam-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="movimiento-overlay">
+  <div class="modal" id="movimiento-modal" style="max-width:420px;">
+    <h3 id="movm-title">Nuevo movimiento</h3>
+    <div class="sub">Egreso manual (no ligado a una orden de pago)</div>
+    <div class="field">
+      <label for="movm-cuenta">Cuenta</label>
+      <select id="movm-cuenta"></select>
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label for="movm-fecha">Fecha</label><input type="date" id="movm-fecha"></div>
+      <div class="field"><label for="movm-monto">Monto</label><input type="text" id="movm-monto" inputmode="decimal" placeholder="0,00"></div>
+    </div>
+    <div class="field">
+      <label for="movm-concepto">Concepto</label>
+      <input type="text" id="movm-concepto" maxlength="80" placeholder="Ej: Sueldos, Impuestos, Combustible">
+    </div>
+    <div class="field">
+      <label for="movm-notas">Notas (opcional)</label>
+      <textarea id="movm-notas" placeholder="Observaciones..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="movm-cancel">Cancelar</button>
+        <button class="btn" id="movm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="movm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="settings-overlay">
+  <div class="modal wide" id="settings-modal" style="max-width:760px;">
+    <h3>Configuración</h3>
+    <div class="sub">Elegí una categoría a la izquierda para administrar sus datos.</div>
+
+    <div class="settings-layout">
+      <div class="settings-nav">
+        <button class="scatbtn active" id="scatbtn-flota"><span class="scat-icon">🚛</span> Flota y viajes</button>
+        <button class="scatbtn" id="scatbtn-sucursales"><span class="scat-icon">🏢</span> Sucursales y empresas</button>
+        <button class="scatbtn" id="scatbtn-compras"><span class="scat-icon">🧾</span> Compras</button>
+        <button class="scatbtn" id="scatbtn-acceso"><span class="scat-icon">🔐</span> Acceso</button>
+      </div>
+
+      <div class="settings-content">
+        <div class="settings-tabs settings-subtabs" id="settings-subtabs-flota">
+          <button class="stabbtn active" id="stabbtn-routes">Rutas</button>
+          <button class="stabbtn" id="stabbtn-trucks">Camiones</button>
+          <button class="stabbtn" id="stabbtn-drivers">Choferes</button>
+          <button class="stabbtn" id="stabbtn-helpers">Ayudantes</button>
+          <button class="stabbtn" id="stabbtn-cargo">Cargas</button>
+        </div>
+        <div class="settings-tabs settings-subtabs" id="settings-subtabs-sucursales" hidden>
+          <button class="stabbtn" id="stabbtn-branches">Sucursales</button>
+          <button class="stabbtn" id="stabbtn-companies">Empresas</button>
+          <button class="stabbtn" id="stabbtn-occasionals">Eventuales</button>
+        </div>
+        <div class="settings-tabs settings-subtabs" id="settings-subtabs-compras" hidden>
+          <button class="stabbtn" id="stabbtn-centros-costo">Centros de costo</button>
+          <button class="stabbtn" id="stabbtn-conceptos">Conceptos</button>
+        </div>
+        <div class="settings-tabs settings-subtabs" id="settings-subtabs-acceso" hidden>
+          <button class="stabbtn" id="stabbtn-auth">Perfiles y permisos</button>
+        </div>
+
+        <div class="settings-body">
+        <div id="stab-routes">
+          <div class="sub" style="margin-bottom:10px;">El chofer y ayudante de los camiones son solo el habitual: se sugieren al cargar un viaje, pero se puede cambiar cada día en esa carga.</div>
+          <div id="routes-list"></div>
+          <div class="addrow"><input type="text" id="new-route-input" placeholder="Nueva ruta (ej: 60)" maxlength="16"><button class="btn" id="add-route-btn">+</button></div>
+        </div>
+        <div id="stab-trucks" hidden>
+          <div id="trucks-list"></div>
+          <div class="addrow"><input type="text" id="new-truck-input" placeholder="N° de camión" maxlength="10"><button class="btn" id="add-truck-btn">+</button></div>
+        </div>
+        <div id="stab-drivers" hidden>
+          <div id="drivers-list"></div>
+          <div class="addrow"><input type="text" id="new-driver-input" placeholder="Nombre del chofer" maxlength="60"><button class="btn" id="add-driver-btn">+</button></div>
+        </div>
+        <div id="stab-helpers" hidden>
+          <div id="helpers-list"></div>
+          <div class="addrow"><input type="text" id="new-helper-input" placeholder="Nombre del ayudante" maxlength="60"><button class="btn" id="add-helper-btn">+</button></div>
+        </div>
+        <div id="stab-cargo" hidden>
+          <div id="cargo-list"></div>
+          <div class="addrow"><input type="text" id="new-cargo-input" placeholder="Nuevo tipo de carga (ej: S1500)" maxlength="40"><button class="btn" id="add-cargo-btn">+</button></div>
+        </div>
+        <div id="stab-branches" hidden>
+          <div id="branches-list"></div>
+          <div class="addrow"><input type="text" id="new-branch-input" placeholder="Nueva sucursal (ej: KM 15)" maxlength="40"><button class="btn" id="add-branch-btn">+</button></div>
+        </div>
+        <div id="stab-companies" hidden>
+          <div id="companies-list"></div>
+          <div class="addrow"><input type="text" id="new-company-input" placeholder="Nueva empresa (ej: Acme S.A.)" maxlength="60"><button class="btn" id="add-company-btn">+</button></div>
+        </div>
+        <div id="stab-occasionals" hidden>
+          <div id="occasionals-list"></div>
+          <div class="addrow"><input type="text" id="new-occasional-input" placeholder="Nuevo eventual" maxlength="60"><button class="btn" id="add-occasional-btn">+</button></div>
+        </div>
+        <div id="stab-centros-costo" hidden>
+          <div class="sub" style="margin-bottom:10px;">Se usan para clasificar las facturas y separar los gastos en el Dashboard.</div>
+          <div class="day-wrap">
+            <table class="day-table" id="centros-costo-table">
+              <thead><tr><th>Código</th><th>Descripción</th></tr></thead>
+              <tbody id="centros-costo-body"></tbody>
+            </table>
+          </div>
+          <div class="addrow"><button class="btn primary" id="new-centro-costo-btn">+ Nuevo centro de costo</button></div>
+        </div>
+        <div id="stab-conceptos" hidden>
+          <div class="sub" style="margin-bottom:10px;">Se usan para clasificar las facturas y separar los gastos en el Dashboard.</div>
+          <div class="day-wrap">
+            <table class="day-table" id="conceptos-table">
+              <thead><tr><th>Concepto</th></tr></thead>
+              <tbody id="conceptos-body"></tbody>
+            </table>
+          </div>
+          <div class="addrow"><button class="btn primary" id="new-concepto-btn">+ Nuevo concepto</button></div>
+        </div>
+        <div id="stab-auth" hidden>
+          <div class="sub" style="margin-bottom:14px;">Cada perfil tiene su propia contraseña y sus propios permisos por pestaña. "Ver" deja mirar esa pestaña sin poder crear, editar ni borrar nada ahí; "Editar" da acceso completo. Los cambios se guardan recién al tocar "Guardar perfiles" — a quien uses una contraseña que cambiaste hay que avisarle la nueva.</div>
+          <div id="roles-list"></div>
+          <div class="addrow"><button class="btn" id="add-role-btn">+ Nuevo perfil</button></div>
+          <div class="modal-actions"><div></div><button class="btn primary" id="auth-save-btn">Guardar perfiles</button></div>
+        </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions"><div></div><button class="btn primary" id="settings-close">Listo</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="login-overlay">
+  <div class="modal" id="login-modal" style="max-width:320px;">
+    <img class="brand-logo" style="height:44px; margin-bottom:10px;" src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI2LjMuMSwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgeD0iMHB4IiB5PSIwcHgiCgkgdmlld0JveD0iMCAwIDU5NS4zIDI3OS44IiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA1OTUuMyAyNzkuODsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMyMjNDN0U7fQoJLnN0MXtmaWxsOiMwMDlGRTM7fQoJLnN0MntmaWxsOiNFMzA2MTM7fQo8L3N0eWxlPgo8ZyBpZD0iTGF5ZXJfMiI+CjwvZz4KPGcgaWQ9IkxheWVyXzEiPgoJPGc+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTE3My42LDE2NS4ydi0xMC43Yy0yLDEtNC44LDEuOS04LjYsMi43bC05LjksMi4xYy00LjIsMC45LTcuMSwxLjktOC44LDMuMWMtMi41LDEuNi0zLjcsNC0zLjcsNy4zCgkJCWMwLDIuOCwxLjEsNSwzLjQsNi43YzIuMiwxLjcsNSwyLjYsOC40LDIuNmM0LjksMCw5LjEtMS4xLDEyLjgtMy4zQzE3MS40LDE3My4xLDE3My42LDE2OS42LDE3My42LDE2NS4yIE0xOTEuNywxMzkuOHYzOS42CgkJCWMwLDUuNSwwLjksOS43LDIuOCwxMi42aC0xOS4xYy0xLjItMS44LTEuOC00LTEuOC02LjhjLTcuMSw1LjgtMTUuMyw4LjYtMjQuNSw4LjZjLTcuMywwLTEzLjQtMi4yLTE4LjMtNi41CgkJCWMtNC44LTQuMy03LjMtMTAtNy4zLTE3LjFjMC0xMi43LDcuNi0yMC41LDIyLjktMjMuNWw3LjYtMS41YzUuMS0xLDExLjYtMi41LDE5LjYtNC40di0yLjJjMC02LjMtNC43LTkuNS0xNC4zLTkuNQoJCQljLTUuMiwwLTguOSwwLjgtMTAuOSwyLjVjLTIsMS43LTMsNC42LTMsOC44bC0xOC4xLTAuN2MwLTguMiwzLjMtMTQuNSw5LjgtMTguOWM1LjctMy44LDEzLjItNS42LDIyLjMtNS42CgkJCWM5LjgsMCwxNy4yLDEuNCwyMi4zLDQuM0MxODguMywxMjMuMywxOTEuNywxMzAuMSwxOTEuNywxMzkuOCIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0yMDIuNCwxOTMuNHYtNzUuMWgxOC4xdjcuNGgwLjNjNS02LjEsMTEuOS05LjIsMjAuNS05LjJjMTcuMiwwLDI1LjgsOC41LDI1LjgsMjUuNXY1MS40SDI0OXYtNDUuOQoJCQljMC05LTQuMi0xMy41LTEyLjUtMTMuNWMtNC43LDAtOC40LDEuNi0xMS4zLDQuN2MtMy4yLDMuNS00LjgsOC41LTQuOCwxNXYzOS42SDIwMi40eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0zMjMuNywxNjUuMnYtMTAuN2MtMiwxLTQuOSwxLjktOC42LDIuN2wtMTAsMi4xYy00LjEsMC45LTcuMSwxLjktOC44LDMuMWMtMi41LDEuNi0zLjcsNC0zLjcsNy4zCgkJCWMwLDIuOCwxLjEsNSwzLjMsNi43YzIuMiwxLjcsNSwyLjYsOC40LDIuNmM0LjksMCw5LjEtMS4xLDEyLjgtMy4zQzMyMS41LDE3My4xLDMyMy43LDE2OS42LDMyMy43LDE2NS4yIE0zNDEuOCwxMzkuOHYzOS42CgkJCWMwLDUuNSwwLjksOS43LDIuOCwxMi42aC0xOS4yYy0xLjItMS44LTEuOC00LTEuOC02LjhjLTcuMSw1LjgtMTUuMyw4LjYtMjQuNSw4LjZjLTcuMywwLTEzLjQtMi4yLTE4LjMtNi41CgkJCWMtNC45LTQuMy03LjMtMTAtNy4zLTE3LjFjMC0xMi43LDcuNi0yMC41LDIyLjktMjMuNWw3LjYtMS41YzUuMS0xLDExLjYtMi41LDE5LjYtNC40di0yLjJjMC02LjMtNC44LTkuNS0xNC4zLTkuNQoJCQljLTUuMiwwLTguOSwwLjgtMTAuOSwyLjVjLTIsMS43LTMsNC42LTMsOC44bC0xOC4xLTAuN2MwLTguMiwzLjMtMTQuNSw5LjgtMTguOWM1LjctMy44LDEzLjItNS42LDIyLjMtNS42CgkJCWM5LjgsMCwxNy4yLDEuNCwyMi4zLDQuM0MzMzguNCwxMjMuMywzNDEuOCwxMzAuMSwzNDEuOCwxMzkuOCIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0zNTUuMiwxOTMuOXYtNjJoLTExdi0xMy4xaDExdi0xMS45YzAtMTIuNSw3LjQtMTguNywyMi4xLTE4LjdjNC4yLDAsOC4yLDAuMiwxMi4yLDAuNXYxNS43CgkJCWMtMS45LTAuMy0zLjgtMC40LTUuOS0wLjRjLTYuOCwwLTEwLjIsMy4yLTEwLjIsOS41djUuM2gxNi4ydjEzLjFoLTE2LjJ2NjJIMzU1LjJ6Ii8+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTQwNy4zLDE0NC44aDM2LjVjMC0yLjktMS4zLTUuOC00LTguOWMtMy40LTMuOS03LjctNS45LTEzLjEtNS45Yy01LDAtOS4zLDEuNC0xMi44LDQuMgoJCQlDNDEwLjUsMTM3LjEsNDA4LjMsMTQwLjYsNDA3LjMsMTQ0LjggTTQ2Mi44LDE1OC44aC01NS41YzAuMSw1LjMsMi4yLDkuOCw2LjIsMTMuNGMzLjcsMy40LDguMSw1LjEsMTMuMiw1LjEKCQkJYzkuNCwwLDE2LjYtMy42LDIxLjctMTAuN2wxNS4zLDguOWMtOCwxMi4zLTIwLjQsMTguNC0zNywxOC40Yy0xMS45LDAtMjEuMy0zLjctMjguMy0xMS4zYy02LjgtNy4yLTEwLjEtMTYuNi0xMC4xLTI4LjEKCQkJYzAtMTEuNSwzLjQtMjAuOSwxMC4zLTI4LjNjNi45LTcuNCwxNi4zLTExLjEsMjguMS0xMS4xQzQ1MC44LDExNS4yLDQ2Mi44LDEyOS43LDQ2Mi44LDE1OC44Ii8+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTQ2OS41LDE5My40di03NS4xaDE4LjF2MTAuNGgwLjNjNC4xLTguMSwxMS44LTEyLjIsMjMuMi0xMi4ydjE4LjRjLTYuOCwwLTEyLjMsMS42LTE2LjMsNC45CgkJCWMtNC44LDMuOC03LjEsOS42LTcuMSwxNy4ydjM2LjRINDY5LjV6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTE1OC4yLDQyYy00Ny4zLTAuMy04NS45LDM3LjktODYuMSw4NS4yYy0wLjEsMjAuNCw3LDM5LjIsMTguOCw1NGwxNy41LTEyYy05LjUtMTEuMy0xNS4yLTI1LjktMTUuMS00MS44CgkJCWMwLjItMzUuNiwyOS4yLTY0LjMsNjQuOC02NC4xYzMuNywwLDcuMywwLjQsMTAuOCwxVjQyLjdDMTY1LjQsNDIuMiwxNjEuOCw0MiwxNTguMiw0MiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yMTEuOSw5OS40Yy0xNi45LTI5LjEtNTQuMy0zOS04My40LTIyLjFjLTEyLjYsNy4zLTIxLjUsMTguNS0yNi4zLDMxLjFsMTMuNyw2LjQKCQkJYzMuNS05LjksMTAuNC0xOC43LDIwLjItMjQuNGMyMS45LTEyLjcsNTAtNS4zLDYyLjcsMTYuNmMxLjMsMi4zLDIuNCw0LjYsMy4zLDdsMTMuMi03LjhDMjE0LjMsMTAzLjksMjEzLjIsMTAxLjYsMjExLjksOTkuNCIvPgoJCTxwYXRoIGNsYXNzPSJzdDIiIGQ9Ik0yMjEsMjIxLjVsLTY4LjIsMGMtNDkuMS0zLjItODcuOS00NC04Ny45LTkzLjljMC0xOS4zLDUuOC0zNy4yLDE1LjctNTIuMUw1NS40LDU3LjYKCQkJYy0xMy41LDIwLTIxLjQsNDQuMS0yMS40LDcwYzAsNjcsNTIuNywxMjEuNywxMTguOCwxMjQuOWw2OC4yLTAuMVYyMjEuNXoiLz4KCQk8cGF0aCBkPSJNMjMzLjgsMjQ1LjhoNC4yYzMuMywwLDQuNC0yLjIsNC40LTQuNmMwLTMuNC0yLjItNC44LTQuOS00LjhoLTMuN1YyNDUuOHogTTIzMy44LDIzNC4xaDMuNWMxLjMsMCw0LjMtMC4zLDQuMy00LjIKCQkJYzAtMi42LTEuMy00LjEtNC4zLTQuMWgtMy41VjIzNC4xeiBNMjMwLjcsMjIzLjNoNy43YzMuMywwLDYuNCwxLjUsNi40LDYuNGMwLDIuMy0xLjQsNC42LTMuNyw1LjJ2MC4xYzMuMSwwLjcsNC41LDMuMSw0LjUsNi4yCgkJCWMwLDUuMS0yLjksNy4yLTguMSw3LjJoLTYuOFYyMjMuM3oiLz4KCQk8cGF0aCBkPSJNMjUzLjUsMjM5aDYuN2wtMy4yLTEyLjFoLTAuMUwyNTMuNSwyMzl6IE0yNTUsMjIzLjNoNC4ybDYuOCwyNS4xaC0zLjJsLTEuOC02LjloLThsLTEuOSw2LjloLTMuMkwyNTUsMjIzLjN6Ii8+CgkJPHBhdGggZD0iTTI3OS42LDI0MS4yYzAsNC40LTEuMSw3LjctNi4zLDcuN2MtNC4yLDAtNS45LTIuNy01LjktNS43di0yLjFoM3YxLjhjMCwyLDAuOCwzLjQsMi45LDMuNGMyLjgsMCwzLjItMS44LDMuMi01LjN2LTE3LjgKCQkJaDMuMVYyNDEuMnoiLz4KCQk8cGF0aCBkPSJNMjg3LjYsMjM1LjhjMCw1LjgsMC42LDEwLjUsNC45LDEwLjVjNC4zLDAsNC45LTQuNyw0LjktMTAuNWMwLTUuOC0wLjYtMTAuNS00LjktMTAuNUMyODguMiwyMjUuMywyODcuNiwyMzAsMjg3LjYsMjM1LjgKCQkJIE0zMDAuNSwyMzUuOGMwLDYuMy0xLjIsMTMuMS04LjEsMTMuMWMtNi45LDAtOC4xLTYuNy04LjEtMTMuMWMwLTYuMywxLjItMTMsOC4xLTEzQzI5OS40LDIyMi44LDMwMC41LDIyOS41LDMwMC41LDIzNS44Ii8+CgkJPHBvbHlnb24gcG9pbnRzPSIzMTQuOCwyMjMuMyAzMTguOCwyMjMuMyAzMjcuMSwyNDQuMiAzMjcuMiwyNDQuMiAzMjcuMiwyMjMuMyAzMzAuMywyMjMuMyAzMzAuMywyNDguNCAzMjYsMjQ4LjQgMzE4LDIyOC4xCgkJCTMxNy45LDIyOC4xIDMxNy45LDI0OC40IDMxNC44LDI0OC40IAkJIi8+CgkJPHBhdGggZD0iTTMzOC4zLDIzNS44YzAsNS44LDAuNiwxMC41LDQuOCwxMC41YzQuMywwLDQuOS00LjcsNC45LTEwLjVjMC01LjgtMC42LTEwLjUtNC45LTEwLjVDMzM4LjgsMjI1LjMsMzM4LjMsMjMwLDMzOC4zLDIzNS44CgkJCSBNMzUxLjIsMjM1LjhjMCw2LjMtMS4yLDEzLjEtOC4xLDEzLjFjLTYuOSwwLTguMS02LjctOC4xLTEzLjFjMC02LjMsMS4xLTEzLDguMS0xM0MzNTAuMSwyMjIuOCwzNTEuMiwyMjkuNSwzNTEuMiwyMzUuOCIvPgoJCTxwYXRoIGQ9Ik0zNTkuMSwyMzQuN2gzLjFjMS44LDAsNS4yLDAsNS4yLTQuOWMwLTIuNS0xLjctNC00LjUtNGgtMy43VjIzNC43eiBNMzU2LDIyMy4zaDguMWMzLjksMCw2LjQsMi4zLDYuNCw2LjMKCQkJYzAsMi43LTEsNS42LTMuOSw2LjN2MC4xYzIuMiwwLjIsMy40LDIsMy42LDQuMmwwLjIsNC4zYzAuMSwyLjgsMC42LDMuNSwxLjMsNGgtMy43Yy0wLjUtMC41LTAuOC0yLjQtMC44LTMuNmwtMC4yLTMuOQoJCQljLTAuMi0zLjQtMi4xLTMuNi0zLjctMy42aC00LjJ2MTEuMkgzNTZWMjIzLjN6Ii8+CgkJPHBvbHlnb24gcG9pbnRzPSIzNzUuNCwyMjMuMyAzODAuNiwyMjMuMyAzODUuNiwyNDMuMiAzODUuNywyNDMuMiAzOTAuNywyMjMuMyAzOTUuOSwyMjMuMyAzOTUuOSwyNDguNCAzOTIuOCwyNDguNCAzOTIuOCwyMjYuNAoJCQkzOTIuOCwyMjYuNCAzODcuMiwyNDguNCAzODQuMSwyNDguNCAzNzguNiwyMjYuNCAzNzguNSwyMjYuNCAzNzguNSwyNDguNCAzNzUuNCwyNDguNCAJCSIvPgoJCTxwYXRoIGQ9Ik00MDQuNSwyMzloNi44bC0zLjItMTIuMUg0MDhMNDA0LjUsMjM5eiBNNDA2LjEsMjIzLjNoNC4xbDYuNywyNS4xaC0zLjJsLTEuOC02LjloLThsLTEuOSw2LjloLTMuM0w0MDYuMSwyMjMuM3oiLz4KCQk8cGF0aCBkPSJNNDMwLjQsMjI5LjhjMC0yLjYtMS00LjUtMy45LTQuNWMtMi42LDAtNC4xLDEuNC00LjEsNC4xYzAsNy4xLDExLjgsMi45LDExLjgsMTJjMCw1LjgtNC4yLDcuNS03LjgsNy41CgkJCWMtNS45LDAtNy42LTMtNy42LTguNGgzLjFjMCwyLjgsMC4xLDUuOCw0LjcsNS44YzIuNSwwLDQuNC0xLjgsNC40LTQuNGMwLTcuMS0xMS45LTMtMTEuOS0xMi4yYzAtMi4zLDEtNi45LDcuMy02LjkKCQkJYzQuOCwwLDcsMi40LDcsN0g0MzAuNHoiLz4KCQk8cmVjdCB4PSI0NDcuMiIgeT0iMjIwLjUiIHdpZHRoPSI2LjEiIGhlaWdodD0iMjcuOSIvPgoJCTxwb2x5Z29uIHBvaW50cz0iNDcyLjUsMjQ4LjQgNDY1LjUsMjQ4LjQgNDU2LjUsMjIwLjUgNDYyLjgsMjIwLjUgNDY5LDI0MC4xIDQ2OS4xLDI0MC4xIDQ3NS40LDIyMC41IDQ4MS43LDIyMC41IAkJIi8+CgkJPHBvbHlnb24gcG9pbnRzPSI0ODQuOSwyMjAuNSA1MDUuOCwyMjAuNSA1MDUuOCwyMjUuNiA0OTEsMjI1LjYgNDkxLDIzMS42IDUwNC41LDIzMS42IDUwNC41LDIzNi40IDQ5MSwyMzYuNCA0OTEsMjQzLjIKCQkJNTA2LjEsMjQzLjIgNTA2LjEsMjQ4LjQgNDg0LjksMjQ4LjQgCQkiLz4KCQk8cGF0aCBkPSJNNTE1LjIsMjM5LjFjMCwzLjcsMi45LDUuMiw2LjIsNS4yYzIuMiwwLDUuNC0wLjYsNS40LTMuNWMwLTMtNC4yLTMuNS04LjMtNC42Yy00LjEtMS4xLTguMy0yLjctOC4zLTcuOQoJCQljMC01LjcsNS40LTguNCwxMC40LTguNGM1LjgsMCwxMS4yLDIuNSwxMS4yLDloLTUuOWMtMC4yLTMuMy0yLjYtNC4yLTUuNS00LjJjLTEuOSwwLTQuMiwwLjgtNC4yLDMuMmMwLDIuMSwxLjMsMi40LDguMyw0LjIKCQkJYzIsMC41LDguMywxLjgsOC4zLDguMWMwLDUuMS00LDktMTEuNiw5Yy02LjIsMC0xMi0zLjEtMTEuOS05LjlINTE1LjJ6Ii8+CgkJPHBhdGggZD0iTTU0MS4zLDIzOS4xYzAsMy43LDIuOSw1LjIsNi4yLDUuMmMyLjIsMCw1LjQtMC42LDUuNC0zLjVjMC0zLTQuMi0zLjUtOC4zLTQuNmMtNC4xLTEuMS04LjMtMi43LTguMy03LjkKCQkJYzAtNS43LDUuNC04LjQsMTAuNC04LjRjNS44LDAsMTEuMiwyLjUsMTEuMiw5SDU1MmMtMC4yLTMuMy0yLjYtNC4yLTUuNS00LjJjLTIsMC00LjIsMC44LTQuMiwzLjJjMCwyLjEsMS4zLDIuNCw4LjMsNC4yCgkJCWMyLDAuNSw4LjMsMS44LDguMyw4LjFjMCw1LjEtNCw5LTExLjYsOWMtNi4yLDAtMTItMy4xLTExLjktOS45SDU0MS4zeiIvPgoJCTxwYXRoIGQ9Ik01MjEuMiwxNzQuNGMwLTIuNy0xLTQuNS00LTQuNWMtMi42LDAtNC4yLDEuNC00LjIsNC4xYzAsNy4yLDEyLDIuOSwxMiwxMi4yYzAsNS45LTQuMyw3LjYtNy45LDcuNmMtNiwwLTcuNy0zLjEtNy43LTguNQoJCQloMy4xYzAsMi45LDAuMiw1LjksNC44LDUuOWMyLjUsMCw0LjQtMS44LDQuNC00LjVjMC03LjItMTItMy0xMi0xMi40YzAtMi4zLDEtNyw3LjUtN2M0LjksMCw3LjEsMi40LDcuMSw3LjFINTIxLjJ6Ii8+CgkJPHJlY3QgeD0iNTI4LjgiIHk9IjE4OS41IiB3aWR0aD0iMy4zIiBoZWlnaHQ9IjMuOCIvPgoJCTxwYXRoIGQ9Ik01NDAuMiwxODMuOGg2LjlsLTMuMy0xMi4zaC0wLjFMNTQwLjIsMTgzLjh6IE01NDEuOCwxNjcuOWg0LjJsNi44LDI1LjVoLTMuM2wtMS44LTdoLTguMWwtMS45LDdoLTMuM0w1NDEuOCwxNjcuOXoiLz4KCQk8cmVjdCB4PSI1NTUuMiIgeT0iMTg5LjUiIHdpZHRoPSIzLjMiIGhlaWdodD0iMy44Ii8+Cgk8L2c+CjwvZz4KPC9zdmc+Cg==" alt="Anafer S.A.">
+    <h3>Gestión Anafer</h3>
+    <div class="sub">Ingresá la contraseña de acceso</div>
+    <div class="field">
+      <label for="login-password">Contraseña</label>
+      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <div id="login-error" style="display:none; color:var(--danger); font-size:12.5px; margin:-6px 0 12px;">Contraseña incorrecta.</div>
+    <div class="modal-actions"><div></div><button class="btn primary" id="login-btn">Ingresar</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
