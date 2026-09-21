@@ -2870,8 +2870,10 @@
   }
 
   function refreshFacturaReadAvailability(){
+    // La lectura la hace el servidor (función leer-factura); acá solo se decide si se muestra el botón.
     var row = document.getElementById('fm-read-row');
-    if(row) row.hidden = !window.ANTHROPIC_API_KEY;
+    if(row) row.hidden = !(state.sb && state.started && (canEdit('compras') || canEdit('pagos')));
+    if(typeof setReadStatus==='function') setReadStatus(null);
   }
 
   wireAttachInput('pm-archivo-input', 'pm-archivos-list', function(){ return state.editingProveedorArchivos; });
@@ -2953,15 +2955,68 @@
     if(data.notas) document.getElementById('fm-notas').value = data.notas;
   }
 
+  // Prepara la imagen para mandarla al servidor: si es muy grande la achica y la pasa a JPG.
+  function normalizeInvoiceImage(blob){
+    var ok = ['image/png','image/jpeg','image/webp','image/gif'];
+    var passthrough = function(){
+      if(ok.indexOf(blob.type)===-1) return Promise.reject(new Error('formato'));
+      return blobToBase64(blob).then(function(b64){ return {base64:b64, mediaType:blob.type}; });
+    };
+    if(typeof createImageBitmap!=='function') return passthrough();
+    return createImageBitmap(blob).then(function(bmp){
+      var maxDim = 2200;
+      var scale = Math.min(1, maxDim/Math.max(bmp.width, bmp.height));
+      if(scale===1 && blob.size<=3500000 && ok.indexOf(blob.type)!==-1){ if(bmp.close) bmp.close(); return passthrough(); }
+      var cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(bmp.width*scale)); cv.height = Math.max(1, Math.round(bmp.height*scale));
+      var ctx = cv.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
+      if(bmp.close) bmp.close();
+      return new Promise(function(resolve, reject){
+        cv.toBlob(function(b){
+          if(!b){ reject(new Error('convertir')); return; }
+          blobToBase64(b).then(function(b64){ resolve({base64:b64, mediaType:'image/jpeg'}); }, reject);
+        }, 'image/jpeg', 0.88);
+      });
+    }, function(){ return passthrough(); });
+  }
+
+  // Estado de la lectura, visible DENTRO del modal (el aviso de abajo dura pocos segundos y es fácil de perder)
+  function setReadStatus(kind, msg){
+    var el = document.getElementById('fm-read-status');
+    var inp = document.getElementById('fm-read-input');
+    var lbl = document.getElementById('fm-read-label');
+    if(inp) inp.disabled = (kind==='busy');
+    if(lbl) lbl.classList.toggle('disabled', kind==='busy');
+    if(!el) return;
+    if(!kind){ el.hidden = true; el.textContent = ''; el.className = 'factura-read-status'; return; }
+    el.hidden = false;
+    el.className = 'factura-read-status ' + kind;
+    el.textContent = (kind==='busy' ? '⏳ ' : kind==='ok' ? '✅ ' : '⚠ ') + msg;
+  }
+  function readFail(msg){ setReadStatus('error', msg); showToast(msg); }
+
+  async function facturaReadErrorMessage(error){
+    var status = error && error.context && error.context.status;
+    var detail = '';
+    try{ var j = await error.context.json(); detail = (j && j.error) || ''; }catch(e){}
+    console.error('leer-factura falló', status, detail, error);
+    if(status===404) return 'La lectura automática todavía no está activada en el servidor (falta desplegar la función leer-factura).';
+    if(status===401 || status===403) return detail || 'No tenés permiso para leer facturas automáticamente.';
+    if(status===429) return 'Demasiados pedidos por ahora — probá de nuevo en un momento.';
+    return 'No se pudo leer la factura automáticamente' + (detail ? ': '+detail : '') + ' — completá los datos a mano.';
+  }
+
   async function readFacturaFromFile(file){
-    if(!window.ANTHROPIC_API_KEY){ showToast('La lectura automática no está configurada (falta la clave en config.js).'); return; }
-    showToast('Leyendo factura...');
+    if(!state.sb){ readFail('Sin conexión con el servidor.'); return; }
+    setReadStatus('busy', 'Leyendo la factura…');
     try{
       var imageBlob = file;
       if(file.type === 'application/pdf'){
         imageBlob = await pdfFirstPageToImageBlob(file);
       }else if(!/^image\//.test(file.type)){
-        showToast('Elegí un PDF o una imagen de la factura.');
+        readFail('Elegí un PDF o una imagen de la factura.');
         return;
       }
       // el archivo original queda como adjunto pendiente; se sube a Drive
@@ -2969,53 +3024,24 @@
       state.editingFacturaArchivos.push({ pending:true, file:file, name:file.name, contentType:file.type||'', sizeBytes:file.size||0 });
       renderAttachList('fm-archivos-list', function(){ return state.editingFacturaArchivos; });
 
-      var base64 = await blobToBase64(imageBlob);
-      var proveedorNombres = state.proveedores.map(function(p){ return p.nombre; });
-      var prompt = 'Esta imagen es una foto o escaneo de una factura de proveedor. Leé los datos y devolvé SOLO un objeto JSON con esta forma exacta, sin texto adicional:\n'
-        + '{"proveedor_nombre": string o null, "numero": string o null, "fecha": "YYYY-MM-DD" o null, "monto": number o null, "notas": string o null}\n'
-        + 'Los proveedores ya cargados en el sistema son: ' + JSON.stringify(proveedorNombres) + '. '
-        + 'Si el nombre del proveedor de la factura coincide (aunque sea parcialmente) con alguno de esa lista, devolvé el nombre EXACTO tal como aparece en la lista. '
-        + 'Si no coincide con ninguno, devolvé el nombre tal como figura impreso en la factura. '
-        + '"monto" es el monto TOTAL de la factura, como número (sin separador de miles, con punto decimal, sin símbolo de moneda). '
-        + 'Si algún dato no se puede leer con confianza, devolvé null en ese campo en vez de inventarlo.';
+      var img;
+      try{ img = await normalizeInvoiceImage(imageBlob); }
+      catch(e){ readFail('No se pudo leer esa imagen — probá con un PDF, JPG o PNG, o completá los datos a mano.'); return; }
 
-      var aiHeaders = {
-        'Content-Type': 'application/json',
-        'x-api-key': window.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      };
-      if(window.ANTHROPIC_WORKSPACE_ID) aiHeaders['anthropic-workspace-id'] = window.ANTHROPIC_WORKSPACE_ID;
-      var resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: aiHeaders,
-        body: JSON.stringify({
-          model: window.ANTHROPIC_MODEL || 'claude-sonnet-4-5',
-          max_tokens: 1024,
-          messages: [{
-            role: 'user',
-            content: [
-              {type:'image', source:{type:'base64', media_type:'image/png', data: base64}},
-              {type:'text', text: prompt}
-            ]
-          }]
-        })
+      // La lectura la hace el servidor: la clave de Anthropic nunca pasa por el navegador.
+      var proveedorNombres = state.proveedores.map(function(p){ return p.nombre; });
+      var res = await state.sb.functions.invoke('leer-factura', {
+        body: { imagen: img.base64, mediaType: img.mediaType, proveedores: proveedorNombres }
       });
-      var body = await resp.json();
-      if(!resp.ok){
-        var msg = (body && body.error && body.error.message) || ('HTTP '+resp.status);
-        if(resp.status===401) showToast('La clave de la API de Anthropic no es válida — revisá config.js.');
-        else if(resp.status===429) showToast('Demasiados pedidos por ahora — probá de nuevo en un momento.');
-        else showToast('No se pudo leer la factura automáticamente: '+msg);
-        return;
-      }
-      var text = body && body.content && body.content[0] && body.content[0].text;
-      var data = extractJsonFromText(text);
-      if(!data){ showToast('No se pudo interpretar la respuesta — completá los datos a mano.'); return; }
+      if(res.error){ readFail(await facturaReadErrorMessage(res.error)); return; }
+      var data = res.data && res.data.data;
+      if(!data){ readFail('No se pudo interpretar la respuesta — completá los datos a mano.'); return; }
       applyFacturaReadResult(data);
+      setReadStatus('ok', 'Factura leída — revisá los datos antes de guardar.');
       showToast('Factura leída — revisá los datos antes de guardar.');
     }catch(e){
-      showToast('No se pudo leer la factura automáticamente — completá los datos a mano.');
+      console.error('lectura de factura', e);
+      readFail('No se pudo leer la factura automáticamente — completá los datos a mano.');
     }
   }
 

@@ -497,6 +497,7 @@
   }
   body{font-family:"Inter","IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
   ::selection{background:rgba(0,159,227,0.25);}
+  [hidden]{display:none !important;}
 
   /* Encabezado: tarjeta blanca con el logo arriba a la izquierda y franja tricolor */
   .topbar{position:relative; overflow:hidden; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:20px 22px 14px; margin-bottom:12px; box-shadow:var(--card-shadow);}
@@ -537,12 +538,22 @@
   /* Campos: fondo gris claro y esquinas redondeadas */
   input[type=text], input[type=password], input[type=date], input[type=number], input[type=email], input[type=search], select, textarea{background:var(--surface-2); border-color:var(--border); border-radius:10px; color:var(--ink);}
   .field input[type=text], .field input[type=password], .field select, .field textarea, .who input, .addrow input{border-radius:10px; background:var(--surface-2);}
+  .field input[type=date], .field input[type=number], .field input[type=email]{width:100%; box-sizing:border-box; font-family:inherit; font-size:14px; border:1px solid var(--border); border-radius:10px; padding:8px 10px; background:var(--surface-2); color:var(--ink);}
+  .field input[type=file]{font-family:inherit; font-size:12.5px; color:var(--ink-2); max-width:100%;}
+  .field input[type=file]::file-selector-button{font-family:inherit; font-weight:600; font-size:12.5px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink); border-radius:10px; padding:7px 12px; margin-right:10px; cursor:pointer;}
+  .field input[type=file]::file-selector-button:hover{background:#e9eef6; border-color:var(--border-strong);}
   input:focus, select:focus, textarea:focus{outline:2px solid rgba(0,159,227,0.55); outline-offset:1px; border-color:var(--brand-cyan);}
   .who input:focus{outline-color:rgba(0,159,227,0.55);}
   .field label, .settings-col h4{color:var(--muted);}
   select.scope-select{border:1px solid var(--border); background:var(--surface-2); border-radius:10px; padding:7px 10px; font-family:inherit; font-size:12.5px; color:var(--ink);}
   .toggle.on{background:var(--brand-cyan);}
   .suggest-hint{color:var(--brand-navy);}
+
+  /* Estado de la lectura de facturas */
+  .factura-read-status{margin:-6px 0 14px; padding:9px 12px; border-radius:10px; font-size:12.5px; background:var(--surface-2); color:var(--ink-2);}
+  .factura-read-status.ok{background:rgba(21,138,99,0.10); color:#0f6e4f;}
+  .factura-read-status.error{background:rgba(227,6,19,0.08); color:#b3050f;}
+  .factura-read-row label.btn.disabled{opacity:0.5; pointer-events:none;}
 
   /* Login */
   #login-modal{max-width:380px !important; padding:34px 30px 26px; border-radius:24px; position:relative; overflow:hidden; box-shadow:var(--shadow);}
@@ -1275,6 +1286,7 @@
       <label class="btn" for="fm-read-input" id="fm-read-label" style="cursor:pointer;">📄 Leer desde archivo</label>
       <input type="file" id="fm-read-input" accept="application/pdf,image/*" style="display:none;">
     </div>
+    <div class="factura-read-status" id="fm-read-status" role="status" hidden></div>
     <div class="crew-fields">
       <div class="field">
         <label for="fm-proveedor-input">Proveedor</label>
