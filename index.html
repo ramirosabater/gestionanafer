@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#223C7E">
 <title>Gestión Anafer</title>
 <link rel="icon" type="image/svg+xml" href="assets/anafer-logo.svg">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
   :root{
     color-scheme: light;
@@ -465,10 +466,98 @@
 
   ::selection{background:var(--accent); color:var(--accent-ink);}
   #password-overlay{z-index:110;}
-  .user-email{font-size:12px; color:var(--ink-2); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .user-email{font-size:12px; color:var(--ink-2); max-width:290px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .acceso-h{margin:22px 0 6px; font-size:13px;}
   .usuario-row .usuario-email{flex:1; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   @media (max-width:640px){ .user-email{display:none;} }
+
+  /* =====================================================================
+     TEMA ANAFER — colores del logo: azul #223C7E · celeste #009FE3 · rojo #E30613
+     Estilo: fondo gris azulado, tarjetas blancas redondeadas y pestañas en
+     forma de píldora con la activa en rojo. Va al final para pisar lo anterior.
+     ===================================================================== */
+  :root{
+    --brand-navy:#223C7E; --brand-cyan:#009FE3; --brand-red:#E30613;
+    --bg:#edf0f4;
+    --surface:#ffffff;
+    --surface-2:#f3f5f9;
+    --ink:#1a2338;
+    --ink-2:#56627d;
+    --muted:#8b96ad;
+    --border:#e1e6ee;
+    --border-strong:#c9d2e0;
+    --accent:#223C7E;
+    --accent-ink:#ffffff;
+    --ghost-bg:rgba(34,60,126,0.07);
+    --today:rgba(0,159,227,0.10);
+    --danger:#E30613;
+    --shadow:0 18px 40px -18px rgba(26,35,56,0.38), 0 3px 8px -3px rgba(26,35,56,0.14);
+    --card-shadow:0 1px 2px rgba(26,35,56,0.05), 0 8px 24px -16px rgba(26,35,56,0.22);
+    --chart-weekday:#223C7E;
+  }
+  body{font-family:"Inter","IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+  ::selection{background:rgba(0,159,227,0.25);}
+
+  /* Encabezado: tarjeta blanca con el logo arriba a la izquierda y franja tricolor */
+  .topbar{position:relative; overflow:hidden; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:20px 22px 14px; margin-bottom:12px; box-shadow:var(--card-shadow);}
+  .topbar::before{content:""; position:absolute; left:0; right:0; top:0; height:5px; background:linear-gradient(90deg,var(--brand-navy) 0 55%,var(--brand-cyan) 55% 80%,var(--brand-red) 80% 100%);}
+  .brand-logo{height:50px;}
+  .brand h1{font-size:22px; font-weight:800; color:var(--brand-navy); letter-spacing:-0.02em;}
+  .brand .tag{color:var(--ink-2);}
+  .user-email{background:var(--surface-2); border:1px solid var(--border); border-radius:999px; padding:6px 12px; font-size:12px; color:var(--ink-2);}
+  .who .btn.ghost{border-radius:10px;}
+
+  /* Pestañas: barra blanca redondeada; la activa en rojo */
+  .viewtabs{background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:8px; gap:4px; margin-bottom:16px; flex-wrap:wrap; box-shadow:var(--card-shadow);}
+  .viewtab{border:0; border-radius:12px; padding:11px 16px; margin:0; font-size:13.5px; font-weight:600; color:var(--ink-2); transition:background .12s,color .12s;}
+  .viewtab:hover{background:var(--surface-2); color:var(--ink);}
+  .viewtab.active{background:var(--brand-red); color:#fff; box-shadow:0 6px 14px -8px rgba(227,6,19,0.7);}
+
+  /* Botones */
+  .btn{border-radius:12px; padding:8px 14px; background:var(--surface-2); color:var(--ink); border:1px solid var(--border); font-weight:600;}
+  .btn:hover{border-color:var(--border-strong); background:#e9eef6;}
+  .btn.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
+  .btn.primary:hover{background:#2c4b99; border-color:#2c4b99; filter:none;}
+  .btn.ghost{background:transparent; border-color:transparent;}
+  .btn.ghost:hover{background:var(--ghost-bg);}
+  .monthnav button{border-radius:10px; background:var(--surface);}
+  .monthnav .label{color:var(--brand-navy); font-weight:700;}
+
+  /* Tarjetas y tablas */
+  .gridwrap, .day-wrap{border-radius:20px; box-shadow:var(--card-shadow); border-color:var(--border);}
+  .chip-stat{border-radius:999px; background:var(--surface); border-color:var(--border); box-shadow:0 1px 2px rgba(26,35,56,0.04);}
+  .chip-stat.total{background:var(--brand-navy); color:#fff; border-color:var(--brand-navy);}
+  .chip-stat.total .lbl, .chip-stat.total .n{color:#fff;}
+  table.grid th{color:var(--ink-2);}
+  .modal{border-radius:20px; border:1px solid var(--border);}
+  .overlay{background:rgba(20,30,52,0.48);}
+  #login-overlay{background:var(--bg);}
+  .banner{border-radius:12px;}
+
+  /* Campos: fondo gris claro y esquinas redondeadas */
+  input[type=text], input[type=password], input[type=date], input[type=number], input[type=email], input[type=search], select, textarea{background:var(--surface-2); border-color:var(--border); border-radius:10px; color:var(--ink);}
+  .field input[type=text], .field input[type=password], .field select, .field textarea, .who input, .addrow input{border-radius:10px; background:var(--surface-2);}
+  input:focus, select:focus, textarea:focus{outline:2px solid rgba(0,159,227,0.55); outline-offset:1px; border-color:var(--brand-cyan);}
+  .who input:focus{outline-color:rgba(0,159,227,0.55);}
+  .field label, .settings-col h4{color:var(--muted);}
+  select.scope-select{border:1px solid var(--border); background:var(--surface-2); border-radius:10px; padding:7px 10px; font-family:inherit; font-size:12.5px; color:var(--ink);}
+  .toggle.on{background:var(--brand-cyan);}
+  .suggest-hint{color:var(--brand-navy);}
+
+  /* Login */
+  #login-modal{max-width:380px !important; padding:34px 30px 26px; border-radius:24px; position:relative; overflow:hidden; box-shadow:var(--shadow);}
+  #login-modal::before{content:""; position:absolute; left:0; right:0; top:0; height:5px; background:linear-gradient(90deg,var(--brand-navy) 0 55%,var(--brand-cyan) 55% 80%,var(--brand-red) 80% 100%);}
+  #login-modal .brand-logo{height:62px !important; margin:0 auto 8px !important; display:block;}
+  #login-modal h3{text-align:center; font-size:20px; font-weight:800; color:var(--brand-navy); margin-bottom:4px;}
+  #login-modal .sub{text-align:center; margin-bottom:18px;}
+  #login-modal .modal-actions{align-items:center;}
+  #password-overlay .modal{border-radius:22px;}
+
+  @media (max-width:640px){
+    .topbar{padding:18px 16px 12px;}
+    .viewtabs{padding:6px; border-radius:16px;}
+    .viewtab{padding:9px 12px;}
+  }
 </style>
 </head>
 <body>
