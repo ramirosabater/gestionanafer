@@ -464,6 +464,11 @@
   .toast.show{opacity:1;}
 
   ::selection{background:var(--accent); color:var(--accent-ink);}
+  #password-overlay{z-index:110;}
+  .user-email{font-size:12px; color:var(--ink-2); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .acceso-h{margin:22px 0 6px; font-size:13px;}
+  .usuario-row .usuario-email{flex:1; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  @media (max-width:640px){ .user-email{display:none;} }
 </style>
 </head>
 <body>
@@ -478,10 +483,12 @@
       </div>
     </div>
     <div class="who">
-      <span id="who-fields" style="display:contents;">
+      <span id="who-fields" style="display:none;">
         <label for="who-input">Cargado por</label>
         <input id="who-input" type="text" placeholder="tu nombre" maxlength="30">
       </span>
+      <span class="user-email" id="user-email"></span>
+      <button class="btn ghost" id="pwd-btn" title="Cambiar mi contraseña">🔑</button>
       <button class="btn ghost" id="settings-btn" title="Configuración">⚙</button>
       <button class="btn ghost" id="logout-btn" title="Cerrar sesión">Salir</button>
     </div>
@@ -1449,10 +1456,18 @@
           <div class="addrow"><button class="btn primary" id="new-concepto-btn">+ Nuevo concepto</button></div>
         </div>
         <div id="stab-auth" hidden>
-          <div class="sub" style="margin-bottom:14px;">Cada perfil tiene su propia contraseña y sus propios permisos por pestaña. "Ver" deja mirar esa pestaña sin poder crear, editar ni borrar nada ahí; "Editar" da acceso completo. Los cambios se guardan recién al tocar "Guardar perfiles" — a quien uses una contraseña que cambiaste hay que avisarle la nueva.</div>
+          <div class="sub" style="margin-bottom:14px;">Cada perfil tiene sus propios permisos por pestaña. "Ver" deja mirar esa pestaña sin poder crear, editar ni borrar nada ahí; "Editar" da acceso completo; "Oculta" la esconde. Estos permisos los controla también la base de datos, no solo la pantalla.</div>
           <div id="roles-list"></div>
           <div class="addrow"><button class="btn" id="add-role-btn">+ Nuevo perfil</button></div>
           <div class="modal-actions"><div></div><button class="btn primary" id="auth-save-btn">Guardar perfiles</button></div>
+          <h4 class="acceso-h">Personas con acceso</h4>
+          <div class="sub" style="margin-bottom:8px;">Cada persona entra con su email y su propia contraseña. Para dar acceso a alguien nuevo hacen falta dos pasos: agregarla acá con su perfil, y crearle la cuenta en Supabase (Authentication &gt; Users).</div>
+          <div id="usuarios-list"></div>
+          <div class="addrow">
+            <input type="text" id="new-usuario-email" placeholder="email@anafer-ivess.com.ar" autocomplete="off">
+            <select id="new-usuario-perfil" class="scope-select"></select>
+            <button class="btn" id="add-usuario-btn">+ Agregar</button>
+          </div>
         </div>
         </div>
       </div>
@@ -1463,16 +1478,38 @@
 </div>
 
 <div class="overlay" id="login-overlay">
-  <div class="modal" id="login-modal" style="max-width:320px;">
+  <div class="modal" id="login-modal" style="max-width:340px;">
     <img class="brand-logo" style="height:44px; margin-bottom:10px;" src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI2LjMuMSwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgeD0iMHB4IiB5PSIwcHgiCgkgdmlld0JveD0iMCAwIDU5NS4zIDI3OS44IiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA1OTUuMyAyNzkuODsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMyMjNDN0U7fQoJLnN0MXtmaWxsOiMwMDlGRTM7fQoJLnN0MntmaWxsOiNFMzA2MTM7fQo8L3N0eWxlPgo8ZyBpZD0iTGF5ZXJfMiI+CjwvZz4KPGcgaWQ9IkxheWVyXzEiPgoJPGc+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTE3My42LDE2NS4ydi0xMC43Yy0yLDEtNC44LDEuOS04LjYsMi43bC05LjksMi4xYy00LjIsMC45LTcuMSwxLjktOC44LDMuMWMtMi41LDEuNi0zLjcsNC0zLjcsNy4zCgkJCWMwLDIuOCwxLjEsNSwzLjQsNi43YzIuMiwxLjcsNSwyLjYsOC40LDIuNmM0LjksMCw5LjEtMS4xLDEyLjgtMy4zQzE3MS40LDE3My4xLDE3My42LDE2OS42LDE3My42LDE2NS4yIE0xOTEuNywxMzkuOHYzOS42CgkJCWMwLDUuNSwwLjksOS43LDIuOCwxMi42aC0xOS4xYy0xLjItMS44LTEuOC00LTEuOC02LjhjLTcuMSw1LjgtMTUuMyw4LjYtMjQuNSw4LjZjLTcuMywwLTEzLjQtMi4yLTE4LjMtNi41CgkJCWMtNC44LTQuMy03LjMtMTAtNy4zLTE3LjFjMC0xMi43LDcuNi0yMC41LDIyLjktMjMuNWw3LjYtMS41YzUuMS0xLDExLjYtMi41LDE5LjYtNC40di0yLjJjMC02LjMtNC43LTkuNS0xNC4zLTkuNQoJCQljLTUuMiwwLTguOSwwLjgtMTAuOSwyLjVjLTIsMS43LTMsNC42LTMsOC44bC0xOC4xLTAuN2MwLTguMiwzLjMtMTQuNSw5LjgtMTguOWM1LjctMy44LDEzLjItNS42LDIyLjMtNS42CgkJCWM5LjgsMCwxNy4yLDEuNCwyMi4zLDQuM0MxODguMywxMjMuMywxOTEuNywxMzAuMSwxOTEuNywxMzkuOCIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0yMDIuNCwxOTMuNHYtNzUuMWgxOC4xdjcuNGgwLjNjNS02LjEsMTEuOS05LjIsMjAuNS05LjJjMTcuMiwwLDI1LjgsOC41LDI1LjgsMjUuNXY1MS40SDI0OXYtNDUuOQoJCQljMC05LTQuMi0xMy41LTEyLjUtMTMuNWMtNC43LDAtOC40LDEuNi0xMS4zLDQuN2MtMy4yLDMuNS00LjgsOC41LTQuOCwxNXYzOS42SDIwMi40eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0zMjMuNywxNjUuMnYtMTAuN2MtMiwxLTQuOSwxLjktOC42LDIuN2wtMTAsMi4xYy00LjEsMC45LTcuMSwxLjktOC44LDMuMWMtMi41LDEuNi0zLjcsNC0zLjcsNy4zCgkJCWMwLDIuOCwxLjEsNSwzLjMsNi43YzIuMiwxLjcsNSwyLjYsOC40LDIuNmM0LjksMCw5LjEtMS4xLDEyLjgtMy4zQzMyMS41LDE3My4xLDMyMy43LDE2OS42LDMyMy43LDE2NS4yIE0zNDEuOCwxMzkuOHYzOS42CgkJCWMwLDUuNSwwLjksOS43LDIuOCwxMi42aC0xOS4yYy0xLjItMS44LTEuOC00LTEuOC02LjhjLTcuMSw1LjgtMTUuMyw4LjYtMjQuNSw4LjZjLTcuMywwLTEzLjQtMi4yLTE4LjMtNi41CgkJCWMtNC45LTQuMy03LjMtMTAtNy4zLTE3LjFjMC0xMi43LDcuNi0yMC41LDIyLjktMjMuNWw3LjYtMS41YzUuMS0xLDExLjYtMi41LDE5LjYtNC40di0yLjJjMC02LjMtNC44LTkuNS0xNC4zLTkuNQoJCQljLTUuMiwwLTguOSwwLjgtMTAuOSwyLjVjLTIsMS43LTMsNC42LTMsOC44bC0xOC4xLTAuN2MwLTguMiwzLjMtMTQuNSw5LjgtMTguOWM1LjctMy44LDEzLjItNS42LDIyLjMtNS42CgkJCWM5LjgsMCwxNy4yLDEuNCwyMi4zLDQuM0MzMzguNCwxMjMuMywzNDEuOCwxMzAuMSwzNDEuOCwxMzkuOCIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0zNTUuMiwxOTMuOXYtNjJoLTExdi0xMy4xaDExdi0xMS45YzAtMTIuNSw3LjQtMTguNywyMi4xLTE4LjdjNC4yLDAsOC4yLDAuMiwxMi4yLDAuNXYxNS43CgkJCWMtMS45LTAuMy0zLjgtMC40LTUuOS0wLjRjLTYuOCwwLTEwLjIsMy4yLTEwLjIsOS41djUuM2gxNi4ydjEzLjFoLTE2LjJ2NjJIMzU1LjJ6Ii8+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTQwNy4zLDE0NC44aDM2LjVjMC0yLjktMS4zLTUuOC00LTguOWMtMy40LTMuOS03LjctNS45LTEzLjEtNS45Yy01LDAtOS4zLDEuNC0xMi44LDQuMgoJCQlDNDEwLjUsMTM3LjEsNDA4LjMsMTQwLjYsNDA3LjMsMTQ0LjggTTQ2Mi44LDE1OC44aC01NS41YzAuMSw1LjMsMi4yLDkuOCw2LjIsMTMuNGMzLjcsMy40LDguMSw1LjEsMTMuMiw1LjEKCQkJYzkuNCwwLDE2LjYtMy42LDIxLjctMTAuN2wxNS4zLDguOWMtOCwxMi4zLTIwLjQsMTguNC0zNywxOC40Yy0xMS45LDAtMjEuMy0zLjctMjguMy0xMS4zYy02LjgtNy4yLTEwLjEtMTYuNi0xMC4xLTI4LjEKCQkJYzAtMTEuNSwzLjQtMjAuOSwxMC4zLTI4LjNjNi45LTcuNCwxNi4zLTExLjEsMjguMS0xMS4xQzQ1MC44LDExNS4yLDQ2Mi44LDEyOS43LDQ2Mi44LDE1OC44Ii8+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTQ2OS41LDE5My40di03NS4xaDE4LjF2MTAuNGgwLjNjNC4xLTguMSwxMS44LTEyLjIsMjMuMi0xMi4ydjE4LjRjLTYuOCwwLTEyLjMsMS42LTE2LjMsNC45CgkJCWMtNC44LDMuOC03LjEsOS42LTcuMSwxNy4ydjM2LjRINDY5LjV6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTE1OC4yLDQyYy00Ny4zLTAuMy04NS45LDM3LjktODYuMSw4NS4yYy0wLjEsMjAuNCw3LDM5LjIsMTguOCw1NGwxNy41LTEyYy05LjUtMTEuMy0xNS4yLTI1LjktMTUuMS00MS44CgkJCWMwLjItMzUuNiwyOS4yLTY0LjMsNjQuOC02NC4xYzMuNywwLDcuMywwLjQsMTAuOCwxVjQyLjdDMTY1LjQsNDIuMiwxNjEuOCw0MiwxNTguMiw0MiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yMTEuOSw5OS40Yy0xNi45LTI5LjEtNTQuMy0zOS04My40LTIyLjFjLTEyLjYsNy4zLTIxLjUsMTguNS0yNi4zLDMxLjFsMTMuNyw2LjQKCQkJYzMuNS05LjksMTAuNC0xOC43LDIwLjItMjQuNGMyMS45LTEyLjcsNTAtNS4zLDYyLjcsMTYuNmMxLjMsMi4zLDIuNCw0LjYsMy4zLDdsMTMuMi03LjhDMjE0LjMsMTAzLjksMjEzLjIsMTAxLjYsMjExLjksOTkuNCIvPgoJCTxwYXRoIGNsYXNzPSJzdDIiIGQ9Ik0yMjEsMjIxLjVsLTY4LjIsMGMtNDkuMS0zLjItODcuOS00NC04Ny45LTkzLjljMC0xOS4zLDUuOC0zNy4yLDE1LjctNTIuMUw1NS40LDU3LjYKCQkJYy0xMy41LDIwLTIxLjQsNDQuMS0yMS40LDcwYzAsNjcsNTIuNywxMjEuNywxMTguOCwxMjQuOWw2OC4yLTAuMVYyMjEuNXoiLz4KCQk8cGF0aCBkPSJNMjMzLjgsMjQ1LjhoNC4yYzMuMywwLDQuNC0yLjIsNC40LTQuNmMwLTMuNC0yLjItNC44LTQuOS00LjhoLTMuN1YyNDUuOHogTTIzMy44LDIzNC4xaDMuNWMxLjMsMCw0LjMtMC4zLDQuMy00LjIKCQkJYzAtMi42LTEuMy00LjEtNC4zLTQuMWgtMy41VjIzNC4xeiBNMjMwLjcsMjIzLjNoNy43YzMuMywwLDYuNCwxLjUsNi40LDYuNGMwLDIuMy0xLjQsNC42LTMuNyw1LjJ2MC4xYzMuMSwwLjcsNC41LDMuMSw0LjUsNi4yCgkJCWMwLDUuMS0yLjksNy4yLTguMSw3LjJoLTYuOFYyMjMuM3oiLz4KCQk8cGF0aCBkPSJNMjUzLjUsMjM5aDYuN2wtMy4yLTEyLjFoLTAuMUwyNTMuNSwyMzl6IE0yNTUsMjIzLjNoNC4ybDYuOCwyNS4xaC0zLjJsLTEuOC02LjloLThsLTEuOSw2LjloLTMuMkwyNTUsMjIzLjN6Ii8+CgkJPHBhdGggZD0iTTI3OS42LDI0MS4yYzAsNC40LTEuMSw3LjctNi4zLDcuN2MtNC4yLDAtNS45LTIuNy01LjktNS43di0yLjFoM3YxLjhjMCwyLDAuOCwzLjQsMi45LDMuNGMyLjgsMCwzLjItMS44LDMuMi01LjN2LTE3LjgKCQkJaDMuMVYyNDEuMnoiLz4KCQk8cGF0aCBkPSJNMjg3LjYsMjM1LjhjMCw1LjgsMC42LDEwLjUsNC45LDEwLjVjNC4zLDAsNC45LTQuNyw0LjktMTAuNWMwLTUuOC0wLjYtMTAuNS00LjktMTAuNUMyODguMiwyMjUuMywyODcuNiwyMzAsMjg3LjYsMjM1LjgKCQkJIE0zMDAuNSwyMzUuOGMwLDYuMy0xLjIsMTMuMS04LjEsMTMuMWMtNi45LDAtOC4xLTYuNy04LjEtMTMuMWMwLTYuMywxLjItMTMsOC4xLTEzQzI5OS40LDIyMi44LDMwMC41LDIyOS41LDMwMC41LDIzNS44Ii8+CgkJPHBvbHlnb24gcG9pbnRzPSIzMTQuOCwyMjMuMyAzMTguOCwyMjMuMyAzMjcuMSwyNDQuMiAzMjcuMiwyNDQuMiAzMjcuMiwyMjMuMyAzMzAuMywyMjMuMyAzMzAuMywyNDguNCAzMjYsMjQ4LjQgMzE4LDIyOC4xCgkJCTMxNy45LDIyOC4xIDMxNy45LDI0OC40IDMxNC44LDI0OC40IAkJIi8+CgkJPHBhdGggZD0iTTMzOC4zLDIzNS44YzAsNS44LDAuNiwxMC41LDQuOCwxMC41YzQuMywwLDQuOS00LjcsNC45LTEwLjVjMC01LjgtMC42LTEwLjUtNC45LTEwLjVDMzM4LjgsMjI1LjMsMzM4LjMsMjMwLDMzOC4zLDIzNS44CgkJCSBNMzUxLjIsMjM1LjhjMCw2LjMtMS4yLDEzLjEtOC4xLDEzLjFjLTYuOSwwLTguMS02LjctOC4xLTEzLjFjMC02LjMsMS4xLTEzLDguMS0xM0MzNTAuMSwyMjIuOCwzNTEuMiwyMjkuNSwzNTEuMiwyMzUuOCIvPgoJCTxwYXRoIGQ9Ik0zNTkuMSwyMzQuN2gzLjFjMS44LDAsNS4yLDAsNS4yLTQuOWMwLTIuNS0xLjctNC00LjUtNGgtMy43VjIzNC43eiBNMzU2LDIyMy4zaDguMWMzLjksMCw2LjQsMi4zLDYuNCw2LjMKCQkJYzAsMi43LTEsNS42LTMuOSw2LjN2MC4xYzIuMiwwLjIsMy40LDIsMy42LDQuMmwwLjIsNC4zYzAuMSwyLjgsMC42LDMuNSwxLjMsNGgtMy43Yy0wLjUtMC41LTAuOC0yLjQtMC44LTMuNmwtMC4yLTMuOQoJCQljLTAuMi0zLjQtMi4xLTMuNi0zLjctMy42aC00LjJ2MTEuMkgzNTZWMjIzLjN6Ii8+CgkJPHBvbHlnb24gcG9pbnRzPSIzNzUuNCwyMjMuMyAzODAuNiwyMjMuMyAzODUuNiwyNDMuMiAzODUuNywyNDMuMiAzOTAuNywyMjMuMyAzOTUuOSwyMjMuMyAzOTUuOSwyNDguNCAzOTIuOCwyNDguNCAzOTIuOCwyMjYuNAoJCQkzOTIuOCwyMjYuNCAzODcuMiwyNDguNCAzODQuMSwyNDguNCAzNzguNiwyMjYuNCAzNzguNSwyMjYuNCAzNzguNSwyNDguNCAzNzUuNCwyNDguNCAJCSIvPgoJCTxwYXRoIGQ9Ik00MDQuNSwyMzloNi44bC0zLjItMTIuMUg0MDhMNDA0LjUsMjM5eiBNNDA2LjEsMjIzLjNoNC4xbDYuNywyNS4xaC0zLjJsLTEuOC02LjloLThsLTEuOSw2LjloLTMuM0w0MDYuMSwyMjMuM3oiLz4KCQk8cGF0aCBkPSJNNDMwLjQsMjI5LjhjMC0yLjYtMS00LjUtMy45LTQuNWMtMi42LDAtNC4xLDEuNC00LjEsNC4xYzAsNy4xLDExLjgsMi45LDExLjgsMTJjMCw1LjgtNC4yLDcuNS03LjgsNy41CgkJCWMtNS45LDAtNy42LTMtNy42LTguNGgzLjFjMCwyLjgsMC4xLDUuOCw0LjcsNS44YzIuNSwwLDQuNC0xLjgsNC40LTQuNGMwLTcuMS0xMS45LTMtMTEuOS0xMi4yYzAtMi4zLDEtNi45LDcuMy02LjkKCQkJYzQuOCwwLDcsMi40LDcsN0g0MzAuNHoiLz4KCQk8cmVjdCB4PSI0NDcuMiIgeT0iMjIwLjUiIHdpZHRoPSI2LjEiIGhlaWdodD0iMjcuOSIvPgoJCTxwb2x5Z29uIHBvaW50cz0iNDcyLjUsMjQ4LjQgNDY1LjUsMjQ4LjQgNDU2LjUsMjIwLjUgNDYyLjgsMjIwLjUgNDY5LDI0MC4xIDQ2OS4xLDI0MC4xIDQ3NS40LDIyMC41IDQ4MS43LDIyMC41IAkJIi8+CgkJPHBvbHlnb24gcG9pbnRzPSI0ODQuOSwyMjAuNSA1MDUuOCwyMjAuNSA1MDUuOCwyMjUuNiA0OTEsMjI1LjYgNDkxLDIzMS42IDUwNC41LDIzMS42IDUwNC41LDIzNi40IDQ5MSwyMzYuNCA0OTEsMjQzLjIKCQkJNTA2LjEsMjQzLjIgNTA2LjEsMjQ4LjQgNDg0LjksMjQ4LjQgCQkiLz4KCQk8cGF0aCBkPSJNNTE1LjIsMjM5LjFjMCwzLjcsMi45LDUuMiw2LjIsNS4yYzIuMiwwLDUuNC0wLjYsNS40LTMuNWMwLTMtNC4yLTMuNS04LjMtNC42Yy00LjEtMS4xLTguMy0yLjctOC4zLTcuOQoJCQljMC01LjcsNS40LTguNCwxMC40LTguNGM1LjgsMCwxMS4yLDIuNSwxMS4yLDloLTUuOWMtMC4yLTMuMy0yLjYtNC4yLTUuNS00LjJjLTEuOSwwLTQuMiwwLjgtNC4yLDMuMmMwLDIuMSwxLjMsMi40LDguMyw0LjIKCQkJYzIsMC41LDguMywxLjgsOC4zLDguMWMwLDUuMS00LDktMTEuNiw5Yy02LjIsMC0xMi0zLjEtMTEuOS05LjlINTE1LjJ6Ii8+CgkJPHBhdGggZD0iTTU0MS4zLDIzOS4xYzAsMy43LDIuOSw1LjIsNi4yLDUuMmMyLjIsMCw1LjQtMC42LDUuNC0zLjVjMC0zLTQuMi0zLjUtOC4zLTQuNmMtNC4xLTEuMS04LjMtMi43LTguMy03LjkKCQkJYzAtNS43LDUuNC04LjQsMTAuNC04LjRjNS44LDAsMTEuMiwyLjUsMTEuMiw5SDU1MmMtMC4yLTMuMy0yLjYtNC4yLTUuNS00LjJjLTIsMC00LjIsMC44LTQuMiwzLjJjMCwyLjEsMS4zLDIuNCw4LjMsNC4yCgkJCWMyLDAuNSw4LjMsMS44LDguMyw4LjFjMCw1LjEtNCw5LTExLjYsOWMtNi4yLDAtMTItMy4xLTExLjktOS45SDU0MS4zeiIvPgoJCTxwYXRoIGQ9Ik01MjEuMiwxNzQuNGMwLTIuNy0xLTQuNS00LTQuNWMtMi42LDAtNC4yLDEuNC00LjIsNC4xYzAsNy4yLDEyLDIuOSwxMiwxMi4yYzAsNS45LTQuMyw3LjYtNy45LDcuNmMtNiwwLTcuNy0zLjEtNy43LTguNQoJCQloMy4xYzAsMi45LDAuMiw1LjksNC44LDUuOWMyLjUsMCw0LjQtMS44LDQuNC00LjVjMC03LjItMTItMy0xMi0xMi40YzAtMi4zLDEtNyw3LjUtN2M0LjksMCw3LjEsMi40LDcuMSw3LjFINTIxLjJ6Ii8+CgkJPHJlY3QgeD0iNTI4LjgiIHk9IjE4OS41IiB3aWR0aD0iMy4zIiBoZWlnaHQ9IjMuOCIvPgoJCTxwYXRoIGQ9Ik01NDAuMiwxODMuOGg2LjlsLTMuMy0xMi4zaC0wLjFMNTQwLjIsMTgzLjh6IE01NDEuOCwxNjcuOWg0LjJsNi44LDI1LjVoLTMuM2wtMS44LTdoLTguMWwtMS45LDdoLTMuM0w1NDEuOCwxNjcuOXoiLz4KCQk8cmVjdCB4PSI1NTUuMiIgeT0iMTg5LjUiIHdpZHRoPSIzLjMiIGhlaWdodD0iMy44Ii8+Cgk8L2c+CjwvZz4KPC9zdmc+Cg==" alt="Anafer S.A.">
     <h3>Gestión Anafer</h3>
-    <div class="sub">Ingresá la contraseña de acceso</div>
+    <div class="sub">Ingresá con tu email y tu contraseña</div>
+    <div class="field">
+      <label for="login-email">Email</label>
+      <input type="text" id="login-email" placeholder="nombre@anafer-ivess.com.ar" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false">
+    </div>
     <div class="field">
       <label for="login-password">Contraseña</label>
       <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
     </div>
-    <div id="login-error" style="display:none; color:var(--danger); font-size:12.5px; margin:-6px 0 12px;">Contraseña incorrecta.</div>
-    <div class="modal-actions"><div></div><button class="btn primary" id="login-btn">Ingresar</button></div>
+    <div id="login-error" style="display:none; color:var(--danger); font-size:12.5px; margin:-6px 0 12px;"></div>
+    <div id="login-info" style="display:none; color:var(--ink-2); font-size:12.5px; margin:-6px 0 12px;"></div>
+    <div class="modal-actions"><button class="btn ghost" id="login-forgot" type="button">Olvidé mi contraseña</button><button class="btn primary" id="login-btn">Ingresar</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="password-overlay">
+  <div class="modal" style="max-width:340px;">
+    <h3 id="password-title">Cambiar mi contraseña</h3>
+    <div class="sub">Elegí una contraseña nueva. Tiene que tener al menos 8 caracteres.</div>
+    <div class="field">
+      <label for="password-new">Contraseña nueva</label>
+      <input type="password" id="password-new" autocomplete="new-password">
+    </div>
+    <div class="field">
+      <label for="password-new2">Repetila</label>
+      <input type="password" id="password-new2" autocomplete="new-password">
+    </div>
+    <div id="password-error" style="display:none; color:var(--danger); font-size:12.5px; margin:-6px 0 12px;"></div>
+    <div class="modal-actions"><button class="btn ghost" id="password-cancel" type="button">Cancelar</button><button class="btn primary" id="password-save">Guardar</button></div>
   </div>
 </div>
 
