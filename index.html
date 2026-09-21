@@ -555,6 +555,12 @@
   .factura-read-status.error{background:rgba(227,6,19,0.08); color:#b3050f;}
   .factura-read-row label.btn.disabled{opacity:0.5; pointer-events:none;}
 
+  /* Arreglo: los modales que se abren DESDE Configuración (nuevo centro de costo / concepto)
+     quedaban tapados por el panel de Configuración porque tenían la misma capa. */
+  #centro-costo-overlay, #concepto-overlay{z-index:70;}
+  /* Los avisos siempre por encima de cualquier modal */
+  .toast{z-index:300;}
+
   /* Login */
   #login-modal{max-width:380px !important; padding:34px 30px 26px; border-radius:24px; position:relative; overflow:hidden; box-shadow:var(--shadow);}
   #login-modal::before{content:""; position:absolute; left:0; right:0; top:0; height:5px; background:linear-gradient(90deg,var(--brand-navy) 0 55%,var(--brand-cyan) 55% 80%,var(--brand-red) 80% 100%);}
