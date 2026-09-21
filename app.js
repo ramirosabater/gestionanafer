@@ -2822,6 +2822,7 @@
     el.innerHTML = '';
     if(!arr.length){
       el.innerHTML = '<div class="attach-empty">Sin archivos adjuntos.</div>';
+      if(containerId==='fm-archivos-list') syncFacturaPreview();
       return;
     }
     arr.forEach(function(a, idx){
@@ -2830,7 +2831,15 @@
       if(a.pending){
         var span = document.createElement('span');
         span.textContent = (a.name || 'archivo') + ' (se sube a Drive al guardar)';
+        span.style.flex = '1'; span.style.minWidth = '0';
         row.appendChild(span);
+        if(containerId==='fm-archivos-list' && isPreviewableFile(a.file)){
+          var verBtn = document.createElement('button');
+          verBtn.type = 'button'; verBtn.className = 'attach-view'; verBtn.textContent = '👁 Ver';
+          verBtn.title = 'Mostrar este archivo al costado del formulario';
+          verBtn.addEventListener('click', function(){ fmPreview.dismissed = false; showFacturaPreview(a.file); });
+          row.appendChild(verBtn);
+        }
       } else {
         var link = document.createElement('a');
         link.href = a.url; link.target = '_blank'; link.rel = 'noopener';
@@ -2852,6 +2861,7 @@
       row.appendChild(del);
       el.appendChild(row);
     });
+    if(containerId==='fm-archivos-list') syncFacturaPreview();
   }
 
   function wireAttachInput(inputId, containerId, getArr){
@@ -3012,17 +3022,21 @@
     if(!state.sb){ readFail('Sin conexión con el servidor.'); return; }
     setReadStatus('busy', 'Leyendo la factura…');
     try{
-      var imageBlob = file;
-      if(file.type === 'application/pdf'){
-        imageBlob = await pdfFirstPageToImageBlob(file);
-      }else if(!/^image\//.test(file.type)){
+      var isPdf = (file.type === 'application/pdf');
+      if(!isPdf && !/^image\//.test(file.type)){
         readFail('Elegí un PDF o una imagen de la factura.');
         return;
       }
       // el archivo original queda como adjunto pendiente; se sube a Drive
-      // recién al Guardar, porque ahí ya sabemos a qué proveedor pertenece
+      // recién al Guardar, porque ahí ya sabemos a qué proveedor pertenece.
+      // Al agregarlo se muestra al costado del formulario para poder controlarlo.
       state.editingFacturaArchivos.push({ pending:true, file:file, name:file.name, contentType:file.type||'', sizeBytes:file.size||0 });
       renderAttachList('fm-archivos-list', function(){ return state.editingFacturaArchivos; });
+
+      var imageBlob = file;
+      if(isPdf){
+        imageBlob = await pdfFirstPageToImageBlob(file);
+      }
 
       var img;
       try{ img = await normalizeInvoiceImage(imageBlob); }
@@ -3606,12 +3620,13 @@
   function renderFacturasList(){
     var body = document.getElementById('facturas-body');
     if(!body) return;
+    closeFileMenu();
     body.innerHTML = '';
     var list = state.facturas.slice();
     if(state.facturaFilterEstado) list = list.filter(function(f){ return f.estado===state.facturaFilterEstado; });
     list.sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
     if(list.length===0){
-      body.innerHTML = '<tr class="day-row empty"><td colspan="6">No hay facturas'+(state.facturaFilterEstado?' con ese estado':' cargadas')+'.</td></tr>';
+      body.innerHTML = '<tr class="day-row empty"><td colspan="7">No hay facturas'+(state.facturaFilterEstado?' con ese estado':' cargadas')+'.</td></tr>';
       return;
     }
     list.forEach(function(f){
@@ -3625,6 +3640,10 @@
         +'<td>'+(oc ? esc(ocNumeroLabel(oc.numero)) : '—')+'</td>'
         +'<td class="num">$'+montoStr+'</td>'
         +'<td><span class="oc-badge '+esc(f.estado||'pendiente')+'">'+facturaEstadoLabel(f.estado)+'</span></td>';
+      var tdArchivo = document.createElement('td');
+      tdArchivo.className = 'file-cell';
+      tdArchivo.appendChild(buildFileLinks((f.archivos||[]).filter(function(x){ return !x.pending && archivoUrl(x); })));
+      tr.appendChild(tdArchivo);
       tr.addEventListener('click', function(){ openFacturaModal(f.id); });
       body.appendChild(tr);
     });
@@ -3695,8 +3714,137 @@
     sel.value = current;
   }
 
+  // ---------- Archivos de Drive: acceso directo desde la lista de facturas ----------
+  function archivoUrl(x){
+    if(!x) return '';
+    if(x.url) return x.url;
+    return x.id ? 'https://drive.google.com/file/d/'+x.id+'/view' : '';
+  }
+  var fileMenuEl = null;
+  function closeFileMenu(){ if(fileMenuEl){ fileMenuEl.remove(); fileMenuEl = null; } }
+  function toggleFileMenu(btn, files){
+    var same = fileMenuEl && fileMenuEl._btn===btn;
+    closeFileMenu();
+    if(same) return;
+    var m = document.createElement('div');
+    m.className = 'file-menu';
+    m._btn = btn;
+    files.forEach(function(f){
+      var lk = document.createElement('a');
+      lk.href = archivoUrl(f); lk.target = '_blank'; lk.rel = 'noopener';
+      lk.textContent = f.name || 'archivo'; lk.title = f.name || 'archivo';
+      lk.addEventListener('click', function(e){ e.stopPropagation(); setTimeout(closeFileMenu, 0); });
+      m.appendChild(lk);
+    });
+    document.body.appendChild(m);
+    var r = btn.getBoundingClientRect();
+    m.style.top = (r.bottom + 4) + 'px';
+    m.style.left = Math.max(8, r.right - m.offsetWidth) + 'px';
+    fileMenuEl = m;
+  }
+  document.addEventListener('click', closeFileMenu);
+  window.addEventListener('resize', closeFileMenu);
+  window.addEventListener('scroll', closeFileMenu, true);
+
+  // Celda "Archivo": sin adjuntos un guion; con uno, enlace directo; con varios, un menú
+  function buildFileLinks(files){
+    var wrap = document.createElement('span');
+    if(!files.length){ wrap.className = 'file-none'; wrap.textContent = '—'; return wrap; }
+    if(files.length===1){
+      var lk = document.createElement('a');
+      lk.className = 'file-link'; lk.href = archivoUrl(files[0]); lk.target = '_blank'; lk.rel = 'noopener';
+      lk.title = files[0].name || 'Abrir archivo en Drive'; lk.textContent = '📎 Ver';
+      lk.addEventListener('click', function(e){ e.stopPropagation(); });
+      wrap.appendChild(lk);
+      return wrap;
+    }
+    var btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'file-link'; btn.title = 'Ver los '+files.length+' archivos';
+    btn.textContent = '📎 '+files.length;
+    btn.addEventListener('click', function(e){ e.stopPropagation(); toggleFileMenu(btn, files); });
+    wrap.appendChild(btn);
+    return wrap;
+  }
+
+  // ---------- Vista previa del archivo al costado del formulario de factura ----------
+  var fmPreview = { url:null, file:null, dismissed:false, lastCount:0 };
+  function isPreviewableFile(file){
+    if(!file) return false;
+    var t = file.type || '';
+    var n = (file.name || '').toLowerCase();
+    return t==='application/pdf' || t.indexOf('image/')===0 || n.slice(-4)==='.pdf';
+  }
+  function fmPreviewRelease(){
+    if(fmPreview.url){ try{ URL.revokeObjectURL(fmPreview.url); }catch(e){} }
+    fmPreview.url = null; fmPreview.file = null;
+  }
+  function hideFacturaPreview(){
+    fmPreviewRelease();
+    var panel = document.getElementById('fm-preview');
+    var body = document.getElementById('fm-preview-body');
+    var modal = document.getElementById('factura-modal');
+    if(body) body.innerHTML = '';
+    if(panel) panel.hidden = true;
+    if(modal) modal.classList.remove('has-preview');
+  }
+  function resetFacturaPreview(){
+    fmPreview.dismissed = false; fmPreview.lastCount = 0;
+    hideFacturaPreview();
+  }
+  function showFacturaPreview(file){
+    var panel = document.getElementById('fm-preview');
+    var body = document.getElementById('fm-preview-body');
+    var modal = document.getElementById('factura-modal');
+    var title = document.getElementById('fm-preview-name');
+    if(!panel || !body || !modal || !isPreviewableFile(file)) return;
+    if(typeof URL==='undefined' || !URL.createObjectURL) return;
+    fmPreviewRelease();
+    body.innerHTML = '';
+    var url = URL.createObjectURL(file);
+    fmPreview.url = url; fmPreview.file = file;
+    var isPdf = (file.type==='application/pdf') || (file.name||'').toLowerCase().slice(-4)==='.pdf';
+    title.textContent = file.name || 'Archivo';
+    if(isPdf){
+      var fr = document.createElement('iframe');
+      fr.className = 'fm-preview-frame'; fr.title = 'Vista previa de la factura'; fr.src = url + '#view=FitH';
+      body.appendChild(fr);
+    } else {
+      var img = document.createElement('img');
+      img.className = 'fm-preview-img'; img.alt = 'Vista previa de la factura'; img.src = url;
+      img.title = 'Clic para acercar o alejar';
+      img.addEventListener('click', function(){ img.classList.toggle('zoom'); });
+      img.addEventListener('error', function(){
+        body.innerHTML = '<div class="fm-preview-fallback">No se puede mostrar esta imagen acá. Usá «Abrir» para verla en otra pestaña.</div>';
+      });
+      body.appendChild(img);
+    }
+    panel.hidden = false;
+    modal.classList.add('has-preview');
+  }
+  // Decide qué archivo pendiente mostrar cada vez que cambia la lista de adjuntos:
+  // el último que se agregó; si se quitan todos, se cierra el panel.
+  function syncFacturaPreview(){
+    var pend = (state.editingFacturaArchivos || []).filter(function(x){ return x.pending && isPreviewableFile(x.file); });
+    var count = pend.length;
+    var increased = count > (fmPreview.lastCount || 0);
+    fmPreview.lastCount = count;
+    if(increased) fmPreview.dismissed = false;
+    if(!count){ hideFacturaPreview(); return; }
+    if(fmPreview.dismissed) return;
+    var want = increased ? pend[pend.length-1] : (pend.filter(function(x){ return x.file===fmPreview.file; })[0] || pend[pend.length-1]);
+    if(want.file !== fmPreview.file) showFacturaPreview(want.file);
+  }
+  document.getElementById('fm-preview-close').addEventListener('click', function(){
+    fmPreview.dismissed = true;
+    hideFacturaPreview();
+  });
+  document.getElementById('fm-preview-open').addEventListener('click', function(){
+    if(fmPreview.url) window.open(fmPreview.url, '_blank');
+  });
+
   function openFacturaModal(id){
     state.editingFacturaId = id || null;
+    resetFacturaPreview();
     var f = id ? facturaById(id) : null;
     document.getElementById('fm-title').textContent = f ? 'Editar factura' : 'Nueva factura';
     setProveedorComboValue('fm-proveedor', f ? f.proveedorId : '');
@@ -3718,6 +3866,7 @@
   }
   function closeFacturaModal(){
     document.getElementById('factura-overlay').classList.remove('show');
+    resetFacturaPreview();
   }
 
   document.getElementById('new-factura-btn').addEventListener('click', function(){ openFacturaModal(null); });

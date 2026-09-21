@@ -471,6 +471,38 @@
   .usuario-row .usuario-email{flex:1; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   @media (max-width:640px){ .user-email{display:none;} }
 
+  /* ---- Factura: vista previa del archivo al costado del formulario ---- */
+  .factura-layout{display:flex; gap:16px; flex:1 1 auto; min-height:0;}
+  .factura-layout .modal-scroll-body{flex:1 1 0; min-width:0;}
+  #factura-modal.has-preview{max-width:min(1320px, calc(100vw - 32px)) !important; height:calc(100vh - 32px);}
+  #factura-modal.has-preview .modal-scroll-body{flex:0 0 470px; max-width:470px;}
+  .factura-preview{flex:1 1 0; min-width:0; display:flex; flex-direction:column; border:1px solid var(--border); border-radius:14px; background:var(--surface-2); overflow:hidden;}
+  .fm-preview-head{display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--surface); border-bottom:1px solid var(--border);}
+  .fm-preview-name{flex:1; min-width:0; font-size:12.5px; font-weight:600; color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .fm-pv-btn{flex:none; border:1px solid var(--border); background:var(--surface-2); color:var(--ink); border-radius:8px; padding:5px 10px; font:inherit; font-size:12px; font-weight:600; cursor:pointer;}
+  .fm-pv-btn:hover{background:#e9eef6;}
+  .fm-preview-body{flex:1 1 auto; min-height:0; overflow:auto;}
+  .fm-preview-frame{display:block; width:100%; height:100%; border:0;}
+  .fm-preview-img{display:block; width:100%; height:auto; cursor:zoom-in;}
+  .fm-preview-img.zoom{width:200%; max-width:none; cursor:zoom-out;}
+  .fm-preview-fallback{padding:24px; font-size:13px; color:var(--ink-2);}
+  .attach-view{flex:none; border:0; background:var(--ghost-bg); color:var(--accent); font:inherit; font-size:11.5px; font-weight:600; padding:3px 8px; border-radius:6px; cursor:pointer;}
+  .attach-view:hover{background:rgba(34,60,126,0.14);}
+  @media (max-width:900px){
+    .factura-layout{flex-direction:column;}
+    .factura-preview{order:-1; flex:0 0 40vh;}
+    #factura-modal.has-preview .modal-scroll-body{flex:1 1 0; max-width:none;}
+  }
+
+  /* ---- Lista de facturas: acceso directo al archivo de Drive ---- */
+  .file-cell{white-space:nowrap;}
+  .file-none{color:var(--muted);}
+  .file-link{display:inline-block; font:inherit; font-size:12.5px; font-weight:600; color:var(--accent); text-decoration:none; background:var(--ghost-bg); border:0; padding:4px 10px; border-radius:999px; cursor:pointer;}
+  .file-link:hover{background:rgba(34,60,126,0.14);}
+  .file-menu{position:fixed; z-index:400; min-width:200px; max-width:320px; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:6px;}
+  .file-menu a{display:block; padding:7px 10px; border-radius:8px; color:var(--ink); text-decoration:none; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .file-menu a:hover{background:var(--surface-2); color:var(--accent);}
+
   /* =====================================================================
      TEMA ANAFER — colores del logo: azul #223C7E · celeste #009FE3 · rojo #E30613
      Estilo: fondo gris azulado, tarjetas blancas redondeadas y pestañas en
@@ -913,7 +945,7 @@
     </div>
     <div class="day-wrap">
       <table class="day-table" id="facturas-table">
-        <thead><tr><th>Proveedor</th><th>N° Factura</th><th>Fecha</th><th>Orden de compra</th><th>Monto</th><th>Estado</th></tr></thead>
+        <thead><tr><th>Proveedor</th><th>N° Factura</th><th>Fecha</th><th>Orden de compra</th><th>Monto</th><th>Estado</th><th>Archivo</th></tr></thead>
         <tbody id="facturas-body"></tbody>
       </table>
     </div>
@@ -1286,6 +1318,7 @@
   <div class="modal wide" id="factura-modal" style="max-width:660px;">
     <h3 id="fm-title">Nueva factura</h3>
     <div class="sub">Datos de la factura — cargalos a mano o subí el archivo para completarlos automáticamente</div>
+    <div class="factura-layout">
     <div class="modal-scroll-body">
     <div class="factura-read-row" id="fm-read-row" hidden>
       <div class="sub2">Subí el PDF o la foto de la factura y complete los campos por vos. Revisá los datos antes de guardar.</div>
@@ -1338,6 +1371,15 @@
       <label for="fm-notas">Notas (opcional)</label>
       <textarea id="fm-notas" placeholder="Observaciones..."></textarea>
     </div>
+    </div>
+    <aside class="factura-preview" id="fm-preview" hidden>
+      <div class="fm-preview-head">
+        <span class="fm-preview-name" id="fm-preview-name"></span>
+        <button type="button" class="fm-pv-btn" id="fm-preview-open" title="Abrir en una pestaña nueva">↗ Abrir</button>
+        <button type="button" class="fm-pv-btn" id="fm-preview-close" title="Ocultar la vista previa">✕</button>
+      </div>
+      <div class="fm-preview-body" id="fm-preview-body"></div>
+    </aside>
     </div>
     <div class="modal-actions">
       <div class="left">
