@@ -70,6 +70,7 @@
     <div class="card"><div class="sec">Top productos</div><div style="padding:6px 8px 14px"><table id="top"></table></div></div>
   </div>
   <div class="card" style="margin-top:16px"><div class="sec">Participación por unidad de negocio</div><div id="pie" style="padding:14px 18px"></div></div>
+  <div class="card" style="margin-top:16px"><div class="sec">Diferencia 2026 vs 2025 · Top 10 productos</div><div style="padding:6px 8px 14px"><table id="dif"></table></div></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
@@ -126,7 +127,17 @@ document.getElementById('login-password').addEventListener('keydown', function(e
 document.getElementById('login-email').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('login-password').focus(); });
 const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const $=(id)=>document.getElementById(id);
-let REF=[], REAL=[], medida="monto";
+let REF=[], REAL=[], PROD=[], medida="monto";
+function productosDe(unidad){
+  const med = medida==='monto'?'monto':'qty';
+  const rows = PROD.filter(p=> unidad==='Compañía' || p.unidad===unidad);
+  const mesReal=new Set();
+  rows.forEach(p=>{ if(Number(p['real2026_'+med])>0) mesReal.add(p.mes); });
+  const agg={};
+  rows.forEach(p=>{ const e=agg[p.producto]=agg[p.producto]||{real:0,presu:0,r2025:0};
+    if(mesReal.has(p.mes)){ e.real+=Number(p['real2026_'+med])||0; e.presu+=Number(p['presu_'+med])||0; e.r2025+=Number(p['real2025_'+med])||0; } });
+  return Object.entries(agg).map(([producto,v])=>({producto,...v})).filter(x=>x.real||x.presu||x.r2025);
+}
 
 const fmtMonto=(n)=>'$'+(n/1e6).toFixed(1)+'M';
 const fmtQty=(n)=> n>=1000 ? (n/1000).toFixed(1)+' K u' : Math.round(n)+' u';
@@ -134,11 +145,12 @@ const fmt=(n)=> medida==='monto'? fmtMonto(n) : fmtQty(n);
 
 async function cargar(){
   try{
-    const [r1,r2]=await Promise.all([
+    const [r1,r2,r3]=await Promise.all([
       fetch(SUPABASE_URL+'/rest/v1/comercial_referencia?select=*',{headers:H()}).then(r=>r.json()),
       fetch(SUPABASE_URL+'/rest/v1/comercial_real?select=periodo,unidad,producto,venta_bruta,cantidad&limit=200000',{headers:H()}).then(r=>r.json()),
+      fetch(SUPABASE_URL+'/rest/v1/comercial_producto_ref?select=*&limit=200000',{headers:H()}).then(r=>r.json()),
     ]);
-    REF=r1||[]; REAL=Array.isArray(r2)?r2:[];
+    REF=r1||[]; REAL=Array.isArray(r2)?r2:[]; PROD=Array.isArray(r3)?r3:[];
     $("estado").textContent = REAL.length? (new Set(REAL.map(x=>x.periodo)).size)+" mes(es) desde la carga mensual · el resto del maestro" : "Mostrando datos del maestro (cargá meses con la carga mensual para el dato fresco)";
     const unidades=[...new Set(REF.map(r=>r.unidad))];
     $("unidad").innerHTML=unidades.map(u=>'<option>'+u+'</option>').join('');
@@ -234,10 +246,20 @@ function render(){
   });
   $("pie").innerHTML='<div style="display:flex;gap:26px;align-items:center;flex-wrap:wrap"><div style="width:160px;height:160px;border-radius:50%;background:conic-gradient('+stops.join(',')+');position:relative;flex-shrink:0"><div style="position:absolute;inset:36px;background:#fff;border-radius:50%"></div></div><div style="flex:1;min-width:220px">'+leg+'</div></div>';
 
-  const prod={};
-  REAL.filter(x=> u==='Compañía' || x.unidad===u).forEach(x=>{ if(x.producto) prod[x.producto]=(prod[x.producto]||0)+ (medida==='monto'?(Number(x.venta_bruta)||0):(Number(x.cantidad)||0)); });
-  const top=Object.entries(prod).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  $("top").innerHTML = top.length? '<thead><tr><th>Producto</th><th class="num">'+(medida==='monto'?'Facturación':'Unidades')+'</th></tr></thead><tbody>'+top.map(([p,v])=>'<tr><td>'+p+'</td><td class="num">'+fmt(v)+'</td></tr>').join('')+'</tbody>' : '<tbody><tr><td class="muted" style="padding:16px">Cargá meses con la carga mensual para ver el ranking.</td></tr></tbody>';
+  // Top productos con cumplimiento (real vs presupuesto), ordenado por volumen real
+  const prods=productosDe(u);
+  const top=prods.slice().sort((a,b)=>b.real-a.real).slice(0,12);
+  $("top").innerHTML = top.length? '<thead><tr><th>Producto</th><th class="num">Real</th><th class="num">Presup.</th><th class="num">Cumpl.</th></tr></thead><tbody>'+
+    top.map(p=>{ const c=p.presu? p.real/p.presu*100:null; const col=c==null?'#94a1ab':(c>=100?'#16a34a':'#e1251b');
+      return '<tr><td>'+p.producto+'</td><td class="num">'+fmt(p.real)+'</td><td class="num">'+fmt(p.presu)+'</td><td class="num" style="color:'+col+'">'+(c==null?'—':c.toFixed(0)+'%')+'</td></tr>'; }).join('')+'</tbody>'
+    : '<tbody><tr><td class="muted" style="padding:16px">Sin datos de productos.</td></tr></tbody>';
+
+  // Diferencia 2026 vs 2025 (Top 10 productos por variación) — punto 11
+  const dif=prods.map(p=>({producto:p.producto, dif:p.real-p.r2025, real:p.real, r2025:p.r2025}))
+    .filter(x=>x.real||x.r2025).sort((a,b)=>b.dif-a.dif).slice(0,10);
+  $("dif").innerHTML = dif.length? '<thead><tr><th>Producto</th><th class="num">2025</th><th class="num">2026</th><th class="num">Dif.</th></tr></thead><tbody>'+
+    dif.map(x=>'<tr><td>'+x.producto+'</td><td class="num">'+fmt(x.r2025)+'</td><td class="num">'+fmt(x.real)+'</td><td class="num" style="color:'+(x.dif>=0?'#16a34a':'#e1251b')+'">'+(x.dif>=0?'+':'')+fmt(x.dif)+'</td></tr>').join('')+'</tbody>'
+    : '<tbody><tr><td class="muted" style="padding:16px">Sin datos.</td></tr></tbody>';
 }
 </script>
 </body>
