@@ -221,8 +221,8 @@ function render(){
   let bars='<div style="display:flex;gap:6px;align-items:flex-end;height:'+(Hpx+30)+'px">';
   mesesVis.forEach(i=>{
     const rH=(real[i]||0)/maxV*Hpx, pH=(presu[i]||0)/maxV*Hpx;
-    const c= presu[i]? real[i]/presu[i]*100 : null;
-    const col= c==null?'#94a1ab':(c>=100?'#16a34a':'#e1251b');
+    const c= (real[i]>0 && presu[i])? real[i]/presu[i]*100 : null;
+    const col= real[i]<=0 ? '#cbd2d9' : (c==null?'#94a1ab':(c>=100?'#16a34a':'#e1251b'));
     bars+='<div style="flex:1;min-width:26px;text-align:center">'+
       '<div style="position:relative;height:'+Hpx+'px;display:flex;align-items:flex-end;justify-content:center">'+
         (c!=null?'<div style="position:absolute;bottom:'+(Math.max(rH,4)+4)+'px;left:0;right:0;font-size:10px;font-weight:700;color:'+col+'">'+c.toFixed(0)+'%</div>':'')+
