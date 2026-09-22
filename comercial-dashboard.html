@@ -141,7 +141,7 @@ function productosDe(unidad){
 }
 
 const fmtMonto=(n)=>'$'+(n/1e6).toFixed(1)+'M';
-const fmtQty=(n)=> n>=1000 ? (n/1000).toFixed(1)+' K u' : Math.round(n)+' u';
+const fmtQty=(n)=> n>=1000 ? (n/1000).toFixed(1).replace('.',',')+' mil unidades' : Math.round(n)+' unidades';
 const fmt=(n)=> medida==='monto'? fmtMonto(n) : fmtQty(n);
 
 async function cargar(){
