@@ -69,6 +69,7 @@
     <div class="card"><div class="sec">Evolución mensual (real vs objetivo)</div><div id="evol" style="padding:14px 14px 8px"></div></div>
     <div class="card"><div class="sec">Top productos</div><div style="padding:6px 8px 14px"><table id="top"></table></div></div>
   </div>
+  <div class="card" style="margin-top:16px"><div class="sec">Cumplimiento acumulado por unidad de negocio</div><div id="cumpUni" style="padding:14px 18px"></div></div>
   <div class="card" style="margin-top:16px"><div class="sec">Participación por unidad de negocio</div><div id="pie" style="padding:14px 18px"></div></div>
   <div class="card" style="margin-top:16px"><div class="sec">Diferencia 2026 vs 2025 · Top 10 productos</div><div style="padding:6px 8px 14px"><table id="dif"></table></div></div>
 </div>
@@ -233,6 +234,23 @@ function render(){
   });
   bars+='</div><div class="muted" style="margin-top:8px;font-size:11px"><span style="display:inline-block;width:10px;height:8px;background:#16a34a;border-radius:2px;vertical-align:middle"></span> barra = real (verde cumple / rojo no) · <span style="display:inline-block;width:14px;border-top:2px solid #1f2d38;vertical-align:middle"></span> línea = objetivo (presupuesto)</div>';
   $("evol").innerHTML= mesesVis.length? bars : '<p class="muted">Sin datos.</p>';
+
+  // Cumplimiento acumulado por unidad (barra real sobre barra de presupuesto) — punto 7
+  const cu=uns.map(x=>{ const r=realPorMes(x), p=serie(x,'presu');
+    const mr=r.map((v,i)=>v>0?i:-1).filter(i=>i>=0);
+    const ra=mr.reduce((s,i)=>s+r[i],0), pa=mr.reduce((s,i)=>s+p[i],0);
+    return {u:x,real:ra,presu:pa,cumpl:pa?ra/pa*100:0}; }).sort((a,b)=>b.cumpl-a.cumpl);
+  const maxCU=Math.max(...cu.map(x=>Math.max(x.real,x.presu)),1);
+  $("cumpUni").innerHTML = cu.map(x=>{ const col=x.cumpl>=100?'#16a34a':'#e1251b';
+    return '<div style="margin:10px 0">'+
+      '<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:3px"><b>'+x.u+'</b><span style="color:'+col+';font-weight:700">'+x.cumpl.toFixed(0)+'%</span></div>'+
+      '<div style="position:relative;height:16px;background:#eef1f4;border-radius:6px" title="Presupuesto: '+fmt(x.presu)+'">'+
+        '<div style="position:absolute;inset:0;width:'+(x.presu/maxCU*100)+'%;background:#cfd6dd;border-radius:6px"></div>'+
+        '<div style="position:absolute;top:0;bottom:0;left:0;width:'+(x.real/maxCU*100)+'%;background:'+col+';border-radius:6px"></div>'+
+      '</div>'+
+      '<div style="font-size:10.5px;color:#94a1ab;margin-top:2px">Real '+fmt(x.real)+' · Presupuesto '+fmt(x.presu)+'</div>'+
+    '</div>'; }).join('') +
+    '<div class="muted" style="font-size:11px;margin-top:6px"><span style="display:inline-block;width:10px;height:8px;background:#cfd6dd;border-radius:2px;vertical-align:middle"></span> presupuesto · <span style="display:inline-block;width:10px;height:8px;background:#16a34a;border-radius:2px;vertical-align:middle"></span> real (verde cumple / rojo no)</div>';
 
   // Participación por unidad (torta) — sobre el acumulado, en la medida elegida
   const COLORS={'Familia':'#223c7e','Empresas':'#e1251b','Distribuidores':'#2ba9e0','Negocios':'#16a34a','Reventa':'#f2a900','Sucursales':'#8b5cf6'};
