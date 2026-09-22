@@ -235,6 +235,8 @@ function render(){
   bars+='</div><div class="muted" style="margin-top:8px;font-size:11px"><span style="display:inline-block;width:10px;height:8px;background:#16a34a;border-radius:2px;vertical-align:middle"></span> barra = real (verde cumple / rojo no) · <span style="display:inline-block;width:14px;border-top:2px solid #1f2d38;vertical-align:middle"></span> línea = objetivo (presupuesto)</div>';
   $("evol").innerHTML= mesesVis.length? bars : '<p class="muted">Sin datos.</p>';
 
+  const COLORS={'Familia':'#223c7e','Empresas':'#e1251b','Distribuidores':'#2ba9e0','Negocios':'#16a34a','Reventa':'#f2a900','Sucursales':'#8b5cf6'};
+  const uns=['Familia','Empresas','Distribuidores','Negocios','Reventa','Sucursales'];
   // Cumplimiento acumulado por unidad (barra real sobre barra de presupuesto) — punto 7
   const cu=uns.map(x=>{ const r=realPorMes(x), p=serie(x,'presu');
     const mr=r.map((v,i)=>v>0?i:-1).filter(i=>i>=0);
@@ -253,8 +255,6 @@ function render(){
     '<div class="muted" style="font-size:11px;margin-top:6px"><span style="display:inline-block;width:10px;height:8px;background:#cfd6dd;border-radius:2px;vertical-align:middle"></span> presupuesto · <span style="display:inline-block;width:10px;height:8px;background:#16a34a;border-radius:2px;vertical-align:middle"></span> real (verde cumple / rojo no)</div>';
 
   // Participación por unidad (torta) — sobre el acumulado, en la medida elegida
-  const COLORS={'Familia':'#223c7e','Empresas':'#e1251b','Distribuidores':'#2ba9e0','Negocios':'#16a34a','Reventa':'#f2a900','Sucursales':'#8b5cf6'};
-  const uns=['Familia','Empresas','Distribuidores','Negocios','Reventa','Sucursales'];
   const vals=uns.map(x=>{ const rr=realPorMes(x); return {u:x, v:rr.reduce((s,v)=>s+(v>0?v:0),0)}; });
   const totP=vals.reduce((s,x)=>s+x.v,0)||1;
   let ang=0, stops=[], leg='';
