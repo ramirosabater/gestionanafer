@@ -4895,6 +4895,373 @@
   document.getElementById('password-cancel').addEventListener('click', closePasswordModal);
   document.getElementById('password-new2').addEventListener('keydown', function(e){ if(e.key==='Enter') savePassword(); });
 
+
+
+  // ---------- Ayuda in-app ----------
+  var HELP_ARTICLES = [
+    {
+      id: 'proveedor',
+      title: 'Cómo dar de alta un proveedor',
+      keywords: 'proveedor alta nuevo cargar compras',
+      steps: [
+        'Andá a la pestaña <strong>Compras</strong>.',
+        'En la sección <strong>PROVEEDORES</strong>, hacé clic en el botón azul <strong>+ Nuevo proveedor</strong>.',
+        'Completá los datos: <strong>Nombre / Razón social</strong> (obligatorio), CUIT, Rubro, Contacto, Teléfono, Email, Dirección, Banco y CBU / Alias.',
+        'Podés agregar <strong>Notas</strong> y <strong>archivos adjuntos</strong> si hace falta.',
+        'Hacé clic en <strong>Guardar</strong>.'
+      ],
+      tip: 'Una vez guardado, el proveedor aparece en la lista y lo podés usar al crear órdenes de compra y facturas.',
+      img: 'assets/help/nuevo-proveedor.png'
+    },
+    {
+      id: 'viaje',
+      title: 'Cómo cargar un viaje en Flota Pesada',
+      keywords: 'viaje cargar flota pesada grilla camión chofer ruta celda',
+      steps: [
+        'Andá a la pestaña <strong>FlotaPesada</strong>.',
+        'En la grilla del mes, hacé clic en una <strong>celda vacía</strong> (intersección de un día y una ruta).',
+        'Se abre el formulario del viaje. Elegí el <strong>Camión</strong>, el <strong>Chofer</strong> y el <strong>Ayudante</strong>.',
+        'Completá la <strong>Carga</strong> (productos y cantidades) y, si querés, una <strong>Nota</strong>.',
+        'Hacé clic en <strong>Guardar</strong>. El viaje aparece de inmediato en la grilla con el color del camión.'
+      ],
+      tip: 'También podés hacer clic en un viaje ya cargado para editarlo o eliminarlo.',
+      img: 'assets/help/viaje-modal.png'
+    },
+    {
+      id: 'sucursal-empresa',
+      title: 'Cómo dar de alta una sucursal o empresa',
+      keywords: 'sucursal empresa eventual alta nuevo configuración settings',
+      steps: [
+        'Hacé clic en el ícono <strong>⚙</strong> (arriba a la derecha).',
+        'En el menú de la izquierda elegí <strong>Sucursales y empresas</strong>.',
+        'Vas a ver tres pestañas: <strong>Sucursales</strong>, <strong>Empresas</strong> y <strong>Eventuales</strong>.',
+        'Escribí el nombre en el campo de abajo (ej: “KM 15” o “Acme S.A.”) y hacé clic en el botón <strong>+</strong>.',
+        'Podés activar o desactivar las existentes con el interruptor.',
+        'Cuando termines, hacé clic en <strong>Listo</strong>.'
+      ],
+      tip: 'Las sucursales y empresas desactivadas no aparecen al cargar envíos, pero se conservan en el historial.',
+      img: 'assets/help/sucursales-config.png'
+    },
+    {
+      id: 'autoplan',
+      title: 'Cómo planificar automáticamente',
+      keywords: 'planificar automático sugerencias autoplan flota',
+      steps: [
+        'Andá a la pestaña <strong>FlotaPesada</strong>.',
+        'Arriba a la derecha hacé clic en el botón <strong>✨ Planificar automáticamente</strong>.',
+        'El sistema analiza el historial y te sugiere camiones, choferes y cargas para los días y rutas vacíos.',
+        'Revisá las sugerencias y confirmá las que quieras aplicar.'
+      ],
+      tip: 'La planificación automática se basa en el historial real de viajes. Cuantos más datos haya, mejores son las sugerencias.'
+    },
+    {
+      id: 'factura',
+      title: 'Cómo cargar una factura',
+      keywords: 'factura nueva cargar pagos proveedor monto leer archivo',
+      steps: [
+        'Andá a la pestaña <strong>Pagos</strong>.',
+        'En la sección <strong>FACTURAS</strong> hacé clic en <strong>+ Nueva factura</strong>.',
+        'Completá el <strong>Proveedor</strong> (buscá por nombre), Orden de compra (opcional), Centro de costo, Concepto, N° de factura, Fecha y Monto.',
+        'Podés subir el PDF o foto de la factura en <strong>Archivos adjuntos</strong>.',
+        'Si está habilitado, usá el botón <strong>Leer desde archivo</strong> para que complete los datos automáticamente desde el PDF o foto.',
+        'Hacé clic en <strong>Guardar</strong>.'
+      ],
+      tip: 'Una factura no necesita tener una orden de compra asociada. Después podés agrupar varias facturas pendientes en una orden de pago.',
+      img: 'assets/help/nueva-factura.png'
+    },
+    {
+      id: 'orden-compra',
+      title: 'Cómo crear una orden de compra',
+      keywords: 'orden compra oc nueva compras proveedor',
+      steps: [
+        'Andá a la pestaña <strong>Compras</strong>.',
+        'En la sección <strong>ÓRDENES DE COMPRA</strong> hacé clic en <strong>+ Nueva orden de compra</strong>.',
+        'Elegí el <strong>Proveedor</strong>, la Fecha, el Monto y la Descripción (qué se compra).',
+        'Elegí el <strong>Estado</strong> (Pendiente / Aprobada / Recibida) y agregá notas si hace falta.',
+        'Hacé clic en <strong>Guardar</strong>. El sistema le asigna automáticamente un número (ej: OC-0002).'
+      ],
+      tip: 'Las órdenes de compra se pueden vincular después a las facturas del mismo proveedor.',
+      img: 'assets/help/nueva-oc.png'
+    },
+    {
+      id: 'vista-dia',
+      title: 'Cómo usar la vista Día',
+      keywords: 'día vista diaria resumen viajes sucursales envíos',
+      steps: [
+        'Andá a la pestaña <strong>Día</strong>.',
+        'Arriba podés cambiar de día con las flechas <strong>‹ ›</strong> o con el calendario.',
+        'Vas a ver las secciones: <strong>Viajes de Flota Pesada</strong>, <strong>Sucursales</strong>, <strong>Empresas</strong> y <strong>Eventuales</strong> del día elegido.',
+        'Hacé clic en cualquier fila para cargar o editar ese viaje o envío.'
+      ],
+      tip: 'Es la vista más práctica para el trabajo diario: ves todo lo del día en un solo lugar.',
+      img: 'assets/help/vista-dia.png'
+    },
+    {
+      id: 'envio-sucursal',
+      title: 'Cómo cargar un envío a sucursal',
+      keywords: 'envío sucursal visits cargar grilla sucursales',
+      steps: [
+        'Andá a la pestaña <strong>Sucursales</strong>.',
+        'La grilla funciona igual que Flota Pesada: cada columna es una sucursal y cada fila un día.',
+        'Hacé clic en una celda vacía para cargar el envío.',
+        'Elegí camión, chofer, ayudante y la carga enviada.',
+        'Guardá. El envío queda registrado para ese día y sucursal.'
+      ],
+      tip: 'También podés cargar envíos desde la vista Día, haciendo clic en la fila de la sucursal correspondiente.'
+    },
+    {
+      id: 'orden-pago',
+      title: 'Cómo crear una orden de pago',
+      keywords: 'orden pago op facturas pendientes pagos',
+      steps: [
+        'Andá a la pestaña <strong>Pagos</strong>.',
+        'En la sección <strong>ÓRDENES DE PAGO</strong> hacé clic en <strong>+ Nueva orden de pago</strong>.',
+        'Elegí el proveedor y seleccioná las facturas pendientes que querés agrupar.',
+        'Completá fecha y estado, y guardá.'
+      ],
+      tip: 'Una orden de pago puede agrupar varias facturas pendientes del mismo proveedor.'
+    },
+    {
+      id: 'tesoreria',
+      title: 'Cómo usar Tesorería',
+      keywords: 'tesorería caja banco movimientos saldo',
+      steps: [
+        'Andá a la pestaña <strong>Tesorería</strong>.',
+        'Ahí ves los movimientos de caja/banco y los saldos.',
+        'Podés registrar ingresos y egresos con fecha, monto y concepto.',
+        'Usá los filtros de fecha para ver un período puntual.'
+      ],
+      tip: 'Los movimientos de tesorería son independientes de las facturas; sirven para el control de caja diario.'
+    },
+    {
+      id: 'dashboard',
+      title: 'Cómo leer el Dashboard',
+      keywords: 'dashboard gráficos reportes indicadores kpi',
+      steps: [
+        'Andá a la pestaña <strong>Dashboard</strong>.',
+        'Arriba elegí el rango de fechas que querés analizar.',
+        'Vas a ver indicadores de viajes, camiones, rutas, sucursales y gastos según el período.',
+        'Los gráficos se actualizan al cambiar las fechas.'
+      ],
+      tip: 'El dashboard usa el historial cargado (viajes reales + envíos a sucursales) para mostrar tendencias.'
+    },
+    {
+      id: 'acceso',
+      title: 'Cómo administrar usuarios y permisos',
+      keywords: 'acceso usuarios perfiles permisos login configuración',
+      steps: [
+        'Hacé clic en <strong>⚙</strong> → <strong>Acceso</strong>.',
+        'Ahí se administran los <strong>perfiles</strong> (qué pestañas puede ver/editar cada rol) y las <strong>personas</strong> (email + perfil).',
+        'Para que alguien pueda entrar hacen falta dos cosas: su cuenta en Supabase Authentication y estar en la lista de usuarios de la app.',
+        'Podés cambiar tu propia contraseña con el botón <strong>🔑</strong> del header.'
+      ],
+      tip: 'No compartas el link de la app ni las contraseñas públicamente.'
+    },
+    {
+      id: 'camiones-rutas',
+      title: 'Cómo administrar camiones, rutas, choferes y cargas',
+      keywords: 'camiones rutas choferes ayudantes cargas configuración flota',
+      steps: [
+        'Hacé clic en <strong>⚙</strong> → <strong>Flota y viajes</strong>.',
+        'Usá las pestañas <strong>Rutas</strong>, <strong>Camiones</strong>, <strong>Choferes</strong>, <strong>Ayudantes</strong> y <strong>Cargas</strong>.',
+        'Activá/desactivá ítems con el interruptor, o agregá nuevos con el campo de abajo y el botón +.',
+        'Los desactivados no aparecen al cargar viajes nuevos, pero se conservan en el historial.'
+      ],
+      tip: 'El chofer y ayudante “habitual” de un camión se sugieren al cargar un viaje, pero se pueden cambiar en cada carga.'
+    }
+  ];
+
+  var helpChatHistory = [];
+
+  function openHelp(articleId){
+    document.getElementById('help-overlay').classList.add('show');
+    document.getElementById('help-search').value = '';
+    setHelpMode('guides');
+    renderHelpNav('');
+    if(articleId) showHelpArticle(articleId);
+    else if(HELP_ARTICLES.length) showHelpArticle(HELP_ARTICLES[0].id);
+    setTimeout(function(){ document.getElementById('help-search').focus(); }, 50);
+  }
+  function closeHelp(){
+    document.getElementById('help-overlay').classList.remove('show');
+  }
+  function setHelpMode(mode){
+    var guides = document.getElementById('help-mode-guides');
+    var chat = document.getElementById('help-mode-chat');
+    var bodyGuides = document.getElementById('help-body-guides');
+    var bodyChat = document.getElementById('help-body-chat');
+    if(!guides) return;
+    guides.classList.toggle('active', mode==='guides');
+    chat.classList.toggle('active', mode==='chat');
+    bodyGuides.style.display = mode==='guides' ? '' : 'none';
+    bodyChat.style.display = mode==='chat' ? 'flex' : 'none';
+    if(mode==='chat'){
+      var input = document.getElementById('help-chat-input');
+      if(input) setTimeout(function(){ input.focus(); }, 50);
+    }
+  }
+  function renderHelpNav(query){
+    var q = (query||'').toLowerCase().trim();
+    var nav = document.getElementById('help-nav');
+    if(!nav) return;
+    nav.innerHTML = '';
+    var list = HELP_ARTICLES.filter(function(a){
+      if(!q) return true;
+      var hay = (a.title + ' ' + a.keywords + ' ' + a.steps.join(' ')).toLowerCase();
+      return hay.indexOf(q) !== -1;
+    });
+    if(!list.length){
+      nav.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:13px;">Sin resultados</div>';
+      document.getElementById('help-content').innerHTML = '<div id="help-empty">No hay artículos que coincidan con “'+esc(q)+'”.</div>';
+      return;
+    }
+    list.forEach(function(a){
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = a.title;
+      btn.dataset.id = a.id;
+      btn.addEventListener('click', function(){ showHelpArticle(a.id); });
+      nav.appendChild(btn);
+    });
+  }
+  function showHelpArticle(id){
+    var a = HELP_ARTICLES.find(function(x){ return x.id === id; });
+    if(!a) return;
+    Array.from(document.querySelectorAll('#help-nav button')).forEach(function(b){
+      b.classList.toggle('active', b.dataset.id === id);
+    });
+    var html = '<h4>'+esc(a.title)+'</h4><ol>';
+    a.steps.forEach(function(s){ html += '<li>'+s+'</li>'; });
+    html += '</ol>';
+    if(a.img){
+      html += '<div class="help-img-wrap"><img class="help-img" src="'+esc(a.img)+'" alt="'+esc(a.title)+'" onerror="this.parentNode.style.display=\'none\'"></div>';
+    }
+    if(a.tip) html += '<div class="help-tip"><strong>Tip:</strong> '+a.tip+'</div>';
+    document.getElementById('help-content').innerHTML = html;
+  }
+
+  function buildHelpContext(){
+    return HELP_ARTICLES.map(function(a){
+      return '## '+a.title+'\n'+a.steps.map(function(s,i){
+        return (i+1)+'. '+s.replace(/<[^>]+>/g,'');
+      }).join('\n')+(a.tip ? '\nTip: '+a.tip.replace(/<[^>]+>/g,'') : '');
+    }).join('\n\n');
+  }
+
+  function appendChatBubble(role, text){
+    var log = document.getElementById('help-chat-log');
+    if(!log) return;
+    var div = document.createElement('div');
+    div.className = 'help-chat-bubble '+role;
+    div.innerHTML = role==='assistant' ? text : esc(text);
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function sendHelpChat(){
+    var input = document.getElementById('help-chat-input');
+    var q = (input.value||'').trim();
+    if(!q) return;
+    input.value = '';
+    appendChatBubble('user', q);
+    helpChatHistory.push({role:'user', content:q});
+
+    var apiKey = (window.ANTHROPIC_API_KEY||'').trim();
+    if(!apiKey){
+      // Fallback local: buscar en artículos
+      var ql = q.toLowerCase();
+      var matches = HELP_ARTICLES.filter(function(a){
+        var hay = (a.title+' '+a.keywords+' '+a.steps.join(' ')).toLowerCase();
+        return ql.split(/\s+/).some(function(w){ return w.length>2 && hay.indexOf(w)!==-1; });
+      });
+      var reply;
+      if(matches.length){
+        var a = matches[0];
+        reply = '<strong>'+esc(a.title)+'</strong><ol>'+
+          a.steps.map(function(s){ return '<li>'+s+'</li>'; }).join('')+
+          '</ol>'+(a.tip?'<div class="help-tip"><strong>Tip:</strong> '+a.tip+'</div>':'')+
+          '<p style="margin-top:10px;font-size:12.5px;color:var(--muted);">Respuesta local (sin IA). Para respuestas más inteligentes, configurá <code>ANTHROPIC_API_KEY</code> en config.js.</p>';
+      } else {
+        reply = 'No encontré un instructivo exacto para eso. Probá con: proveedor, viaje, factura, sucursal, orden de compra, vista día, tesorería o dashboard.<br><br><span style="font-size:12.5px;color:var(--muted);">Tip: si configurás la clave de Anthropic en config.js, el chat puede responder preguntas más libres.</span>';
+      }
+      appendChatBubble('assistant', reply);
+      helpChatHistory.push({role:'assistant', content:reply});
+      return;
+    }
+
+    var thinking = document.createElement('div');
+    thinking.className = 'help-chat-bubble assistant';
+    thinking.textContent = 'Pensando…';
+    thinking.id = 'help-chat-thinking';
+    document.getElementById('help-chat-log').appendChild(thinking);
+
+    var system = 'Sos el asistente de ayuda de la app Gestión Anafer (logística: viajes, flota, sucursales, compras, pagos y tesorería). Respondé en español argentino, de forma clara y paso a paso. Usá SOLO la documentación siguiente. Si no está en la documentación, decilo. No inventes pantallas ni botones.\n\nDOCUMENTACIÓN:\n'+buildHelpContext();
+
+    var msgs = [{role:'user', content: system + '\n\nPregunta del usuario: '+q}];
+    // Anthropic messages API style via their messages endpoint
+    var body = {
+      model: window.ANTHROPIC_MODEL || 'claude-sonnet-4-5',
+      max_tokens: 1024,
+      messages: [{role:'user', content: 'Documentación de la app:\n'+buildHelpContext()+'\n\nPregunta: '+q}],
+      system: 'Sos el asistente de ayuda de Gestión Anafer. Respondé en español argentino, claro y paso a paso. Usá solo la documentación dada. Si no sabés, decilo. No inventes funciones.'
+    };
+    var headers = {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    };
+    if(window.ANTHROPIC_WORKSPACE_ID) headers['anthropic-workspace-id'] = window.ANTHROPIC_WORKSPACE_ID;
+
+    fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(body)
+    }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+    .then(function(res){
+      var el = document.getElementById('help-chat-thinking');
+      if(el) el.remove();
+      var text;
+      if(!res.ok){
+        text = 'No pude consultar la IA ('+(res.j.error && res.j.error.message || 'error')+'). Usá los instructivos de la pestaña Guías.';
+      } else {
+        var blocks = (res.j.content||[]).filter(function(b){ return b.type==='text'; });
+        text = blocks.map(function(b){ return b.text; }).join('\n') || 'Sin respuesta.';
+        // simple markdown-ish to html
+        text = esc(text).replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+        text = '<p>'+text+'</p>';
+      }
+      appendChatBubble('assistant', text);
+      helpChatHistory.push({role:'assistant', content:text});
+    }).catch(function(err){
+      var el = document.getElementById('help-chat-thinking');
+      if(el) el.remove();
+      appendChatBubble('assistant', 'Error de red al consultar la IA. Revisá la conexión o usá las Guías.');
+    });
+  }
+
+  document.getElementById('help-btn').addEventListener('click', function(){ openHelp(); });
+  document.getElementById('help-close').addEventListener('click', closeHelp);
+  document.getElementById('help-overlay').addEventListener('click', function(e){ if(e.target===this) closeHelp(); });
+  document.getElementById('help-search').addEventListener('input', function(){
+    var q = this.value;
+    renderHelpNav(q);
+    var first = document.querySelector('#help-nav button');
+    if(first) showHelpArticle(first.dataset.id);
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && document.getElementById('help-overlay').classList.contains('show')) closeHelp();
+  });
+  var modeGuides = document.getElementById('help-mode-guides');
+  var modeChat = document.getElementById('help-mode-chat');
+  if(modeGuides) modeGuides.addEventListener('click', function(){ setHelpMode('guides'); });
+  if(modeChat) modeChat.addEventListener('click', function(){ setHelpMode('chat'); });
+  var chatSend = document.getElementById('help-chat-send');
+  var chatInput = document.getElementById('help-chat-input');
+  if(chatSend) chatSend.addEventListener('click', sendHelpChat);
+  if(chatInput) chatInput.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendHelpChat(); } });
+
+
   // ---------- Init ----------
   renderAll();
   updateAuthVisibility();

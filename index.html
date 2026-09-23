@@ -607,6 +607,53 @@
     .viewtabs{padding:6px; border-radius:16px;}
     .viewtab{padding:9px 12px;}
   }
+
+  /* ---------- Ayuda in-app ---------- */
+  #help-btn{font-weight:800; font-size:16px; width:36px; padding:0;}
+  #help-overlay{z-index:90;}
+  #help-modal{max-width:720px; width:min(720px,94vw); max-height:88vh; display:flex; flex-direction:column; padding:0; overflow:hidden;}
+  #help-modal .help-head{padding:18px 20px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px;}
+  #help-modal .help-head h3{margin:0; flex:1; font-size:18px;}
+  #help-search{flex:1; max-width:280px; font-family:inherit; font-size:13.5px; padding:8px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2); color:var(--ink);}
+  #help-search:focus{outline:none; border-color:var(--accent);}
+  #help-body{display:flex; flex:1; min-height:0; overflow:hidden;}
+  #help-nav{width:220px; flex-shrink:0; border-right:1px solid var(--border); overflow-y:auto; padding:10px 8px; background:var(--surface-2);}
+  #help-nav button{display:block; width:100%; text-align:left; font-family:inherit; font-size:13px; font-weight:500; color:var(--ink-2); background:transparent; border:none; border-radius:8px; padding:9px 12px; cursor:pointer; margin-bottom:2px;}
+  #help-nav button:hover{background:var(--ghost-bg); color:var(--ink);}
+  #help-nav button.active{background:var(--accent); color:var(--accent-ink); font-weight:600;}
+  #help-content{flex:1; overflow-y:auto; padding:18px 22px 28px;}
+  #help-content h4{margin:0 0 12px; font-size:16px; font-weight:700;}
+  #help-content ol{margin:0 0 14px; padding-left:22px;}
+  #help-content li{margin-bottom:8px; line-height:1.45; color:var(--ink);}
+  #help-content .help-tip{background:var(--today); border-radius:10px; padding:10px 14px; font-size:13px; color:var(--ink-2); margin-top:12px;}
+  #help-content .help-tip strong{color:var(--ink);}
+  #help-empty{color:var(--muted); font-size:14px; padding:20px 0;}
+
+  .help-modes{display:flex; gap:4px; background:var(--surface-2); border-radius:10px; padding:3px;}
+  .help-mode{font-family:inherit; font-size:12.5px; font-weight:600; border:none; background:transparent; color:var(--ink-2); padding:6px 12px; border-radius:8px; cursor:pointer;}
+  .help-mode.active{background:var(--surface); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,0.08);}
+  #help-body-guides, #help-body-chat{flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden;}
+  #help-body{display:flex; flex:1; min-height:0; overflow:hidden;}
+  .help-img-wrap{margin:14px 0; border-radius:12px; overflow:hidden; border:1px solid var(--border); background:var(--surface-2);}
+  .help-img{display:block; width:100%; height:auto;}
+  #help-chat-log{flex:1; overflow-y:auto; padding:16px 18px; display:flex; flex-direction:column; gap:10px;}
+  .help-chat-bubble{max-width:92%; padding:10px 14px; border-radius:14px; font-size:13.5px; line-height:1.45; word-break:break-word;}
+  .help-chat-bubble.user{align-self:flex-end; background:var(--accent); color:var(--accent-ink); border-bottom-right-radius:4px;}
+  .help-chat-bubble.assistant{align-self:flex-start; background:var(--surface-2); color:var(--ink); border-bottom-left-radius:4px;}
+  .help-chat-bubble.assistant ol{margin:8px 0 0; padding-left:20px;}
+  .help-chat-bubble.assistant li{margin-bottom:4px;}
+  .help-chat-input-row{display:flex; gap:8px; padding:12px 14px; border-top:1px solid var(--border);}
+  #help-chat-input{flex:1; font-family:inherit; font-size:13.5px; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--ink);}
+  #help-chat-input:focus{outline:none; border-color:var(--accent);}
+  .help-chat-hint{font-size:11.5px; color:var(--muted); padding:0 14px 10px;}
+  #help-modal{max-width:780px;}
+
+  @media (max-width:640px){
+    #help-body{flex-direction:column;}
+    #help-nav{width:100%; border-right:none; border-bottom:1px solid var(--border); max-height:140px; display:flex; flex-wrap:wrap; gap:4px; padding:8px;}
+    #help-nav button{width:auto; flex:1 1 auto;}
+  }
+
 </style>
 </head>
 <body>
@@ -627,6 +674,7 @@
       </span>
       <span class="user-email" id="user-email"></span>
       <button class="btn ghost" id="pwd-btn" title="Cambiar mi contraseña">🔑</button>
+      <button class="btn ghost" id="help-btn" title="Ayuda">?</button>
       <button class="btn ghost" id="settings-btn" title="Configuración">⚙</button>
       <button class="btn ghost" id="logout-btn" title="Cerrar sesión">Salir</button>
     </div>
@@ -1659,6 +1707,37 @@
     </div>
     <div id="password-error" style="display:none; color:var(--danger); font-size:12.5px; margin:-6px 0 12px;"></div>
     <div class="modal-actions"><button class="btn ghost" id="password-cancel" type="button">Cancelar</button><button class="btn primary" id="password-save">Guardar</button></div>
+  </div>
+</div>
+
+
+<div class="overlay" id="help-overlay">
+  <div class="modal" id="help-modal">
+    <div class="help-head">
+      <h3>Ayuda</h3>
+      <div class="help-modes">
+        <button type="button" class="help-mode active" id="help-mode-guides">Guías</button>
+        <button type="button" class="help-mode" id="help-mode-chat">Preguntar</button>
+      </div>
+      <input type="search" id="help-search" placeholder="Buscar… (ej: proveedor, viaje)" autocomplete="off">
+      <button class="btn ghost" id="help-close" type="button" title="Cerrar">✕</button>
+    </div>
+    <div id="help-body-guides">
+      <div id="help-body">
+        <nav id="help-nav"></nav>
+        <div id="help-content">
+          <div id="help-empty">Elegí un tema a la izquierda o buscá arriba.</div>
+        </div>
+      </div>
+    </div>
+    <div id="help-body-chat" style="display:none;flex-direction:column;flex:1;min-height:0;">
+      <div id="help-chat-log"></div>
+      <div class="help-chat-input-row">
+        <input type="text" id="help-chat-input" placeholder="Ej: ¿cómo doy de alta un cliente / proveedor?" autocomplete="off">
+        <button class="btn primary" id="help-chat-send" type="button">Enviar</button>
+      </div>
+      <div class="help-chat-hint">Respondé con lenguaje natural. Si hay clave de Anthropic en config.js usa IA; si no, busca en las guías.</div>
+    </div>
   </div>
 </div>
 
