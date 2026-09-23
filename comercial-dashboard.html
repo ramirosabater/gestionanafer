@@ -143,9 +143,12 @@ document.getElementById('login-email').addEventListener('keydown', function(e){ 
 const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const $=(id)=>document.getElementById(id);
 let REF=[], REAL=[], PROD=[], medida="monto";
+function normU(s){ s=String(s||'').trim().toUpperCase();
+  const m={'FAMILIA':'Familia','NEGOCIO':'Negocios','NEGOCIOS':'Negocios','EMPRESA':'Empresas','EMPRESAS':'Empresas','DISTRIBUIDORES':'Distribuidores','DISTRICUIDORES':'Distribuidores','REVENTA':'Reventa','SUCURSALES':'Sucursales','COMPAÑIA':'Compañía','COMPAÑÍA':'Compañía','COMPANIA':'Compañía'};
+  return m[s]||s; }
 function productosDe(unidad){
   const med = medida==='monto'?'monto':'qty';
-  const rows = PROD.filter(p=> unidad==='Compañía' || p.unidad===unidad);
+  const rows = PROD.filter(p=> unidad==='Compañía' || normU(p.unidad)===normU(unidad));
   const mesReal=new Set();
   rows.forEach(p=>{ if(Number(p['real2026_'+med])>0) mesReal.add(p.mes); });
   const agg={};
