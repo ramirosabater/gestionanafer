@@ -16,7 +16,7 @@
   .toggle{display:inline-flex;background:#f1f4f7;border:1px solid #cfd6dd;border-radius:10px;padding:3px}
   .toggle button{border:none;background:transparent;padding:7px 14px;border-radius:8px;font-weight:700;cursor:pointer;color:#5c6b78;font-size:13px}
   .toggle button.on{background:#223c7e;color:#fff}
-  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin:16px 0}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:16px 0}
   .kpi{padding:16px 18px}.kpi .lab{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#94a1ab;margin-bottom:6px}
   .kpi .val{font-size:24px;font-weight:800}.kpi .tag{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;margin-top:6px}
   .row{display:grid;grid-template-columns:1fr;gap:16px}@media(min-width:820px){.row{grid-template-columns:3fr 2fr}}
@@ -36,6 +36,20 @@
   .btn.primary{background:#223c7e;border-color:#223c7e;color:#fff}
   .btn:disabled{opacity:.6;cursor:default}
   .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+  .scrollx{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  @media(max-width:640px){
+    .wrap{padding:16px 12px 50px}
+    .header{padding:14px 16px;gap:10px}
+    .header h1{font-size:17px}
+    .header img{height:38px}
+    .kpis{grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+    .kpi{padding:12px 13px}.kpi .val{font-size:19px}.kpi .lab{font-size:10px}
+    #medida{width:100%;justify-content:center}
+    #medida button{flex:1}
+    #unidad{width:100%}
+    .sec{font-size:13px;padding:12px 14px 0}
+    table{font-size:12px}th,td{padding:6px 7px}
+  }
 </style>
 </head>
 <body>
@@ -66,12 +80,12 @@
   <div class="kpis" id="kpis"></div>
   <div id="nota" class="muted" style="padding:0 6px 12px;font-size:11px"></div>
   <div class="row">
-    <div class="card"><div class="sec">Evolución mensual (real vs objetivo)</div><div id="evol" style="padding:14px 14px 8px"></div></div>
-    <div class="card"><div class="sec">Top productos</div><div style="padding:6px 8px 14px"><table id="top"></table></div></div>
+    <div class="card"><div class="sec">Evolución mensual (real vs objetivo)</div><div class="scrollx" style="padding:14px 14px 8px"><div id="evol"></div></div></div>
+    <div class="card"><div class="sec">Top productos</div><div class="scrollx" style="padding:6px 8px 14px"><table id="top"></table></div></div>
   </div>
   <div class="card" style="margin-top:16px"><div class="sec">Cumplimiento acumulado por unidad de negocio</div><div id="cumpUni" style="padding:14px 18px"></div></div>
   <div class="card" style="margin-top:16px"><div class="sec">Participación por unidad de negocio</div><div id="pie" style="padding:14px 18px"></div></div>
-  <div class="card" style="margin-top:16px"><div class="sec">Diferencia 2026 vs 2025 · Top 10 productos</div><div style="padding:6px 8px 14px"><table id="dif"></table></div></div>
+  <div class="card" style="margin-top:16px"><div class="sec">Diferencia 2026 vs 2025 · Top 10 productos</div><div class="scrollx" style="padding:6px 8px 14px"><table id="dif"></table></div></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
@@ -218,7 +232,7 @@ function render(){
   const maxV=Math.max(...real,...presu,1);
   const mesesVis=[]; for(let i=0;i<12;i++) if(presu[i]||real[i]) mesesVis.push(i);
   const Hpx=140;
-  let bars='<div style="display:flex;gap:6px;align-items:flex-end;height:'+(Hpx+30)+'px">';
+  let bars='<div style="display:flex;gap:6px;align-items:flex-end;height:'+(Hpx+30)+'px;min-width:'+(mesesVis.length*34)+'px">';
   mesesVis.forEach(i=>{
     const rH=(real[i]||0)/maxV*Hpx, pH=(presu[i]||0)/maxV*Hpx;
     const c= (real[i]>0 && presu[i])? real[i]/presu[i]*100 : null;
