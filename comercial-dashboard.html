@@ -77,6 +77,14 @@
     <select id="unidad"></select>
   </div>
   <div id="estado" class="muted" style="padding:0 4px 8px">Cargando datos…</div>
+  <div class="card" style="padding:12px 14px;margin-bottom:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:12px;font-weight:700;color:#5c6b78">Período:</span>
+    <label style="font-size:12px;color:#94a1ab">Desde</label>
+    <select id="mesDesde" style="font:inherit;background:#f1f4f7;border:1px solid #cfd6dd;border-radius:8px;padding:6px 10px"></select>
+    <label style="font-size:12px;color:#94a1ab">Hasta</label>
+    <select id="mesHasta" style="font:inherit;background:#f1f4f7;border:1px solid #cfd6dd;border-radius:8px;padding:6px 10px"></select>
+    <button id="filtroReset" style="font:inherit;font-size:12px;background:none;border:1px solid #e3e8ed;border-radius:8px;padding:6px 10px;color:#5c6b78;cursor:pointer">Todo el año</button>
+  </div>
   <div class="kpis" id="kpis"></div>
   <div id="nota" class="muted" style="padding:0 6px 12px;font-size:11px"></div>
   <div class="row">
@@ -86,6 +94,7 @@
   <div class="card" style="margin-top:16px"><div class="sec">Cumplimiento acumulado por unidad de negocio</div><div id="cumpUni" style="padding:14px 18px"></div></div>
   <div class="card" style="margin-top:16px"><div class="sec">Participación por unidad de negocio</div><div id="pie" style="padding:14px 18px"></div></div>
   <div class="card" style="margin-top:16px"><div class="sec">Diferencia 2026 vs 2025 · Top 10 productos</div><div class="scrollx" style="padding:6px 8px 14px"><table id="dif"></table></div></div>
+  <div class="card" style="margin-top:16px"><div class="sec">Altas vs Bajas de clientes</div><div id="altasbajas" style="padding:14px 18px"></div></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
@@ -142,13 +151,14 @@ document.getElementById('login-password').addEventListener('keydown', function(e
 document.getElementById('login-email').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('login-password').focus(); });
 const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const $=(id)=>document.getElementById(id);
-let REF=[], REAL=[], PROD=[], medida="monto";
+let REF=[], REAL=[], PROD=[], AB=[], medida="monto", mesDesde=0, mesHasta=11;
+const enRango=(i)=> i>=mesDesde && i<=mesHasta;
 function normU(s){ s=String(s||'').trim().toUpperCase();
   const m={'FAMILIA':'Familia','NEGOCIO':'Negocios','NEGOCIOS':'Negocios','EMPRESA':'Empresas','EMPRESAS':'Empresas','DISTRIBUIDORES':'Distribuidores','DISTRICUIDORES':'Distribuidores','REVENTA':'Reventa','SUCURSALES':'Sucursales','COMPAÑIA':'Compañía','COMPAÑÍA':'Compañía','COMPANIA':'Compañía'};
   return m[s]||s; }
 function productosDe(unidad){
   const med = medida==='monto'?'monto':'qty';
-  const rows = PROD.filter(p=> unidad==='Compañía' || normU(p.unidad)===normU(unidad));
+  const rows = PROD.filter(p=> (unidad==='Compañía' || normU(p.unidad)===normU(unidad)) && enRango((p.mes||1)-1));
   const agg={};
   rows.forEach(p=>{ const e=agg[p.producto]=agg[p.producto]||{real:0,presu:0,r2025:0};
     e.real+=Number(p['real2026_'+med])||0; e.presu+=Number(p['presu_'+med])||0; e.r2025+=Number(p['real2025_'+med])||0; });
@@ -159,21 +169,36 @@ const fmtMonto=(n)=>'$'+(n/1e6).toFixed(1)+'M';
 const fmtQty=(n)=> n>=1000 ? (n/1000).toFixed(1).replace('.',',')+' mil unidades' : Math.round(n)+' unidades';
 const fmt=(n)=> medida==='monto'? fmtMonto(n) : fmtQty(n);
 
+async function fetchAll(path){
+  let all=[], from=0, size=1000;
+  for(;;){ const r=await fetch(SUPABASE_URL+'/rest/v1/'+path+'&limit='+size+'&offset='+from,{headers:H()});
+    const c=await r.json(); if(!Array.isArray(c)||!c.length) break; all=all.concat(c); if(c.length<size) break; from+=size; }
+  return all;
+}
 async function cargar(){
   try{
-    const [r1,r2,r3]=await Promise.all([
+    const [r1,r2,r3,r4]=await Promise.all([
       fetch(SUPABASE_URL+'/rest/v1/comercial_referencia?select=*',{headers:H()}).then(r=>r.json()),
       fetch(SUPABASE_URL+'/rest/v1/comercial_real?select=periodo,unidad,producto,venta_bruta,cantidad&limit=200000',{headers:H()}).then(r=>r.json()),
-      fetch(SUPABASE_URL+'/rest/v1/comercial_producto_resumen?select=*&limit=5000',{headers:H()}).then(r=>r.json()),
+      fetchAll('comercial_producto_ref?select=unidad,producto,mes,real2026_qty,real2026_monto,presu_qty,presu_monto,real2025_qty,real2025_monto&order=unidad'),
+      fetch(SUPABASE_URL+'/rest/v1/comercial_altas_bajas?select=*&limit=50000',{headers:H()}).then(r=>r.json()).catch(()=>[]),
     ]);
-    REF=r1||[]; REAL=Array.isArray(r2)?r2:[]; PROD=Array.isArray(r3)?r3:[];
+    REF=r1||[]; REAL=Array.isArray(r2)?r2:[]; PROD=Array.isArray(r3)?r3:[]; AB=Array.isArray(r4)?r4:[];
     $("estado").textContent = REAL.length? (new Set(REAL.map(x=>x.periodo)).size)+" mes(es) desde la carga mensual · el resto del maestro" : "Mostrando datos del maestro (cargá meses con la carga mensual para el dato fresco)";
     const unidades=[...new Set(REF.map(r=>r.unidad))];
     $("unidad").innerHTML=unidades.map(u=>'<option>'+u+'</option>').join('');
+    // Filtro de meses: por defecto Ene → último mes con real
+    let ultimo=0; REF.filter(r=>r.unidad==='Compañía').forEach(r=>{ if(Number(r.real2026_monto)>0 && r.mes-1>ultimo) ultimo=r.mes-1; });
+    mesDesde=0; mesHasta=ultimo||11;
+    const opts=(sel)=>MESES.map((m,i)=>'<option value="'+i+'"'+(i===sel?' selected':'')+'>'+m+'</option>').join('');
+    $("mesDesde").innerHTML=opts(mesDesde); $("mesHasta").innerHTML=opts(mesHasta);
     render();
-  }catch(e){ $("estado").textContent="No se pudo conectar. ¿Corriste los SQL de comercial (real + referencia)?"; }
+  }catch(e){ $("estado").textContent="No se pudo conectar. ¿Corriste los SQL de comercial (real + referencia + productos)?"; }
 }
 $("unidad").onchange=render;
+$("mesDesde").onchange=(e)=>{ mesDesde=+e.target.value; if(mesDesde>mesHasta){ mesHasta=mesDesde; $("mesHasta").value=mesHasta; } render(); };
+$("mesHasta").onchange=(e)=>{ mesHasta=+e.target.value; if(mesHasta<mesDesde){ mesDesde=mesHasta; $("mesDesde").value=mesDesde; } render(); };
+$("filtroReset").onclick=()=>{ mesDesde=0; mesHasta=11; $("mesDesde").value=0; $("mesHasta").value=11; render(); };
 document.querySelectorAll('#medida button').forEach(b=> b.onclick=()=>{ medida=b.dataset.m; document.querySelectorAll('#medida button').forEach(x=>x.classList.toggle('on',x===b)); render(); });
 
 const campoRef=(tipo)=> tipo+ (medida==='monto'?'_monto':'_qty'); // presu_monto / presu_qty ...
@@ -196,14 +221,14 @@ function acumReal(unidad, med){
   const pm={};
   REAL.filter(x=> unidad==='Compañía'||x.unidad===unidad).forEach(x=>{ const m=new Date(x.periodo+'T00:00:00').getMonth(); pm[m]=(pm[m]||0)+(med==='monto'?(Number(x.venta_bruta)||0):(Number(x.cantidad)||0)); });
   Object.entries(pm).forEach(([m,v])=>b[m]=v);
-  return b.reduce((s,v)=>s+(v>0?v:0),0);
+  return b.reduce((s,v,i)=> s + (v>0 && enRango(i)? v : 0), 0);
 }
 
 function render(){
   const u=$("unidad").value;
   const real=realPorMes(u), presu=serie(u,'presu'), r2025=serie(u,'real2025');
   const idx=real.map((v,i)=> (presu[i]||v)? i : -1).filter(i=>i>=0 && (presu[i]>0||real[i]>0));
-  const mesesReal=real.map((v,i)=> v>0? i:-1).filter(i=>i>=0);
+  const mesesReal=real.map((v,i)=> v>0? i:-1).filter(i=>i>=0 && enRango(i));
   const n=mesesReal.length;
   const realAcum=mesesReal.reduce((s,i)=>s+real[i],0);
   const presuAcum=mesesReal.reduce((s,i)=>s+presu[i],0);
@@ -231,7 +256,7 @@ function render(){
 
   // Evolución mensual como gráfico de barras (real) con línea de objetivo (presupuesto) y % de cumplimiento
   const maxV=Math.max(...real,...presu,1);
-  const mesesVis=[]; for(let i=0;i<12;i++) if(presu[i]||real[i]) mesesVis.push(i);
+  const mesesVis=[]; for(let i=0;i<12;i++) if(enRango(i) && (presu[i]||real[i])) mesesVis.push(i);
   const Hpx=140;
   let bars='<div style="display:flex;gap:6px;align-items:flex-end;height:'+(Hpx+30)+'px;min-width:'+(mesesVis.length*34)+'px">';
   mesesVis.forEach(i=>{
@@ -254,7 +279,7 @@ function render(){
   const uns=['Familia','Empresas','Distribuidores','Negocios','Reventa','Sucursales'];
   // Cumplimiento acumulado por unidad (barra real sobre barra de presupuesto) — punto 7
   const cu=uns.map(x=>{ const r=realPorMes(x), p=serie(x,'presu');
-    const mr=r.map((v,i)=>v>0?i:-1).filter(i=>i>=0);
+    const mr=r.map((v,i)=>v>0?i:-1).filter(i=>i>=0 && enRango(i));
     const ra=mr.reduce((s,i)=>s+r[i],0), pa=mr.reduce((s,i)=>s+p[i],0);
     return {u:x,real:ra,presu:pa,cumpl:pa?ra/pa*100:0}; }).sort((a,b)=>b.cumpl-a.cumpl);
   const maxCU=Math.max(...cu.map(x=>Math.max(x.real,x.presu)),1);
@@ -270,7 +295,7 @@ function render(){
     '<div class="muted" style="font-size:11px;margin-top:6px"><span style="display:inline-block;width:10px;height:8px;background:#cfd6dd;border-radius:2px;vertical-align:middle"></span> presupuesto · <span style="display:inline-block;width:10px;height:8px;background:#16a34a;border-radius:2px;vertical-align:middle"></span> real (verde cumple / rojo no)</div>';
 
   // Participación por unidad (torta) — sobre el acumulado, en la medida elegida
-  const vals=uns.map(x=>{ const rr=realPorMes(x); return {u:x, v:rr.reduce((s,v)=>s+(v>0?v:0),0)}; });
+  const vals=uns.map(x=>{ const rr=realPorMes(x); return {u:x, v:rr.reduce((s,v,i)=>s+(v>0 && enRango(i)?v:0),0)}; });
   const totP=vals.reduce((s,x)=>s+x.v,0)||1;
   let ang=0, stops=[], leg='';
   vals.sort((a,b)=>b.v-a.v).forEach(x=>{ const pct=x.v/totP*100, c=COLORS[x.u]||'#94a1ab';
@@ -293,6 +318,26 @@ function render(){
   $("dif").innerHTML = dif.length? '<thead><tr><th>Producto</th><th class="num">2025</th><th class="num">2026</th><th class="num">Dif.</th></tr></thead><tbody>'+
     dif.map(x=>'<tr><td>'+x.producto+'</td><td class="num">'+fmt(x.r2025)+'</td><td class="num">'+fmt(x.real)+'</td><td class="num" style="color:'+(x.dif>=0?'#16a34a':'#e1251b')+'">'+(x.dif>=0?'+':'')+fmt(x.dif)+'</td></tr>').join('')+'</tbody>'
     : '<tbody><tr><td class="muted" style="padding:16px">Sin datos.</td></tr></tbody>';
+
+  // Altas vs Bajas de clientes — punto 13 (respeta unidad y filtro de meses)
+  const enRangoAB=(r)=> enRango(new Date(r.periodo+'T00:00:00').getMonth());
+  const abU = AB.filter(r=> enRangoAB(r) && (u==='Compañía' || normU(r.unidad)===normU(u)));
+  let tAlt=0,tBaj=0; abU.forEach(r=>{ tAlt+=Number(r.altas)||0; tBaj+=Number(r.bajas)||0; });
+  const neto=tAlt-tBaj;
+  const kpiAB = '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px">'+
+    '<div style="flex:1;min-width:110px"><div style="font-size:11px;text-transform:uppercase;color:#94a1ab">Altas</div><div style="font-size:24px;font-weight:800;color:#16a34a">'+tAlt+'</div></div>'+
+    '<div style="flex:1;min-width:110px"><div style="font-size:11px;text-transform:uppercase;color:#94a1ab">Bajas</div><div style="font-size:24px;font-weight:800;color:#e1251b">'+tBaj+'</div></div>'+
+    '<div style="flex:1;min-width:110px"><div style="font-size:11px;text-transform:uppercase;color:#94a1ab">Neto</div><div style="font-size:24px;font-weight:800;color:'+(neto>=0?'#16a34a':'#e1251b')+'">'+(neto>=0?'+':'')+neto+'</div></div>'+
+    '</div>';
+  // desglose por unidad (siempre útil; en Compañía muestra todas)
+  const porU={};
+  AB.filter(enRangoAB).forEach(r=>{ const uu=normU(r.unidad); (porU[uu]=porU[uu]||{altas:0,bajas:0}); porU[uu].altas+=Number(r.altas)||0; porU[uu].bajas+=Number(r.bajas)||0; });
+  const filasU = Object.entries(porU).filter(([uu])=> u==='Compañía' || normU(uu)===normU(u))
+    .sort((a,b)=>(b[1].altas+b[1].bajas)-(a[1].altas+a[1].bajas))
+    .map(([uu,v])=>{ const nt=v.altas-v.bajas; return '<tr><td>'+uu+'</td><td class="num" style="color:#16a34a">'+v.altas+'</td><td class="num" style="color:#e1251b">'+v.bajas+'</td><td class="num" style="color:'+(nt>=0?'#16a34a':'#e1251b')+'">'+(nt>=0?'+':'')+nt+'</td></tr>'; }).join('');
+  $("altasbajas").innerHTML = abU.length
+    ? kpiAB + '<div class="scrollx"><table><thead><tr><th>Unidad</th><th class="num">Altas</th><th class="num">Bajas</th><th class="num">Neto</th></tr></thead><tbody>'+filasU+'</tbody></table></div>'
+    : '<p class="muted">No hay datos de altas/bajas para este período. Cargá el archivo mensual.</p>';
 }
 </script>
 </body>
