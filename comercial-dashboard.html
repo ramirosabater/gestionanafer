@@ -105,7 +105,7 @@
   </div>
   <div class="card" style="margin-top:16px">
     <div class="sec" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-      <span>Principales clientes · Top 10</span>
+      <span>Principales clientes · Top 20</span>
       <div style="display:flex;gap:8px;align-items:center">
         <label style="font-size:12px;color:#94a1ab">Mes del archivo</label>
         <select id="cliMes" style="font:inherit;font-size:12px;background:#f1f4f7;border:1px solid #cfd6dd;border-radius:8px;padding:6px 8px"></select>
@@ -185,6 +185,15 @@ function productosDe(unidad){
     e.real+=Number(p['real2026_'+med])||0; e.presu+=Number(p['presu_'+med])||0; e.r2025+=Number(p['real2025_'+med])||0; });
   return Object.entries(agg).map(([producto,v])=>({producto,...v})).filter(x=>x.real||x.presu||x.r2025);
 }
+function productosDetalle(unidad){
+  const rows = PROD.filter(p=> (unidad==='Compañía' || normU(p.unidad)===normU(unidad)) && enRango((p.mes||1)-1));
+  const agg={};
+  rows.forEach(p=>{ const e=agg[p.producto]=agg[p.producto]||{realM:0,realQ:0,presuM:0,presuQ:0,r2025M:0,r2025Q:0};
+    e.realM+=Number(p.real2026_monto)||0; e.realQ+=Number(p.real2026_qty)||0;
+    e.presuM+=Number(p.presu_monto)||0; e.presuQ+=Number(p.presu_qty)||0;
+    e.r2025M+=Number(p.real2025_monto)||0; e.r2025Q+=Number(p.real2025_qty)||0; });
+  return Object.entries(agg).map(([producto,v])=>({producto,...v}));
+}
 
 const fmtMonto=(n)=>'$'+(n/1e6).toFixed(1)+'M';
 const fmtQty=(n)=> n>=1000 ? (n/1000).toFixed(1).replace('.',',')+' mil unidades' : Math.round(n)+' unidades';
@@ -256,7 +265,7 @@ async function renderClientes(){
   const desde="2026-"+String(mesDesde+1).padStart(2,"0")+"-01";
   const hasta="2026-"+String(mesHasta+1).padStart(2,"0")+"-01";
   try{
-    const res=await fetch(SUPABASE_URL+"/rest/v1/rpc/top_clientes",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_desde:desde,p_hasta:hasta,p_unidad:u,p_limit:10})});
+    const res=await fetch(SUPABASE_URL+"/rest/v1/rpc/top_clientes",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_desde:desde,p_hasta:hasta,p_unidad:u,p_limit:20})});
     const data=await res.json();
     if(!Array.isArray(data)||!data.length){ $("clientes").innerHTML='<tbody><tr><td class="muted" style="padding:16px">No hay datos de clientes para este período. Importá el archivo del mes.</td></tr></tbody>'; return; }
     $("clientes").innerHTML='<thead><tr><th>#</th><th>Cliente</th><th>Unidad</th><th class="num">Facturación</th></tr></thead><tbody>'+
@@ -336,7 +345,9 @@ function render(){
   const okc=(v)=>v>=100;
   const tag=(t,ok)=>'<span class="tag" style="background:'+(ok?'rgba(22,163,74,.12)':'rgba(225,37,27,.12)')+';color:'+(ok?'#16a34a':'#e1251b')+'">'+t+'</span>';
 
+  const abTot=(()=>{ let a=0,b=0; AB.filter(r=> enRango(new Date(r.periodo+"T00:00:00").getMonth()) && (u==="Compañía"||normU(r.unidad)===normU(u))).forEach(r=>{a+=Number(r.altas)||0;b+=Number(r.bajas)||0;}); return {a,b,neto:a-b}; })();
   $("kpis").innerHTML=[
+    '<div class="card kpi"><div class="lab">Altas / Bajas (clientes)</div><div class="val"><span style="color:#16a34a">'+abTot.a+'</span> <span style="color:#94a1ab">/</span> <span style="color:#e1251b">'+abTot.b+'</span></div><div class="muted">Neto '+(abTot.neto>=0?'+':'')+abTot.neto+'</div></div>',
     '<div class="card kpi"><div class="lab">'+(medida==='monto'?'Facturación real':'Unidades vendidas')+' (acum)</div><div class="val">'+fmt(realAcum)+'</div><div class="muted">'+n+' mes(es)</div></div>',
     '<div class="card kpi"><div class="lab">Presupuesto (acum)</div><div class="val">'+fmt(presuAcum)+'</div></div>',
     '<div class="card kpi"><div class="lab">Cumplimiento</div><div class="val" style="color:'+(okc(cumpl)?'#16a34a':'#e1251b')+'">'+cumpl.toFixed(1)+'%</div>'+tag(okc(cumpl)?'En/sobre presup.':'Por debajo',okc(cumpl))+'</div>',
@@ -397,16 +408,19 @@ function render(){
   });
   $("pie").innerHTML='<div style="display:flex;gap:26px;align-items:center;flex-wrap:wrap"><div style="width:160px;height:160px;border-radius:50%;background:conic-gradient('+stops.join(',')+');position:relative;flex-shrink:0"><div style="position:absolute;inset:36px;background:#fff;border-radius:50%"></div></div><div style="flex:1;min-width:220px">'+leg+'</div></div>';
 
-  // Top productos con cumplimiento (real vs presupuesto), ordenado por volumen real
-  const prods=productosDe(u);
-  const top=prods.slice().sort((a,b)=>b.real-a.real).slice(0,12);
-  $("top").innerHTML = top.length? '<thead><tr><th>Producto</th><th class="num">Real</th><th class="num">Presup.</th><th class="num">Cumpl.</th></tr></thead><tbody>'+
+  // Top productos con cumplimiento y precio promedio, ordenado por volumen real
+  const med = medida==='monto';
+  const prodsD = productosDetalle(u).map(p=>({ producto:p.producto,
+    real: med?p.realM:p.realQ, presu: med?p.presuM:p.presuQ, r2025: med?p.r2025M:p.r2025Q,
+    precio: p.realQ? p.realM/p.realQ : 0 }));
+  const top=prodsD.filter(x=>x.real||x.presu).sort((a,b)=>b.real-a.real).slice(0,12);
+  $("top").innerHTML = top.length? '<thead><tr><th>Producto</th><th class="num">Real</th><th class="num">Presup.</th><th class="num">Cumpl.</th><th class="num">Precio prom</th></tr></thead><tbody>'+
     top.map(p=>{ const c=p.presu? p.real/p.presu*100:null; const col=c==null?'#94a1ab':(c>=100?'#16a34a':'#e1251b');
-      return '<tr><td>'+p.producto+'</td><td class="num">'+fmt(p.real)+'</td><td class="num">'+fmt(p.presu)+'</td><td class="num" style="color:'+col+'">'+(c==null?'—':c.toFixed(0)+'%')+'</td></tr>'; }).join('')+'</tbody>'
+      return '<tr><td>'+p.producto+'</td><td class="num">'+fmt(p.real)+'</td><td class="num">'+fmt(p.presu)+'</td><td class="num" style="color:'+col+'">'+(c==null?'—':c.toFixed(0)+'%')+'</td><td class="num">$'+Math.round(p.precio).toLocaleString('es-AR')+'</td></tr>'; }).join('')+'</tbody>'
     : '<tbody><tr><td class="muted" style="padding:16px">Sin datos de productos.</td></tr></tbody>';
 
   // Diferencia 2026 vs 2025 (Top 10 productos por variación) — punto 11
-  const dif=prods.map(p=>({producto:p.producto, dif:p.real-p.r2025, real:p.real, r2025:p.r2025}))
+  const dif=prodsD.map(p=>({producto:p.producto, dif:p.real-p.r2025, real:p.real, r2025:p.r2025}))
     .filter(x=>x.real||x.r2025).sort((a,b)=>b.dif-a.dif).slice(0,10);
   $("dif").innerHTML = dif.length? '<thead><tr><th>Producto</th><th class="num">2025</th><th class="num">2026</th><th class="num">Dif.</th></tr></thead><tbody>'+
     dif.map(x=>'<tr><td>'+x.producto+'</td><td class="num">'+fmt(x.r2025)+'</td><td class="num">'+fmt(x.real)+'</td><td class="num" style="color:'+(x.dif>=0?'#16a34a':'#e1251b')+'">'+(x.dif>=0?'+':'')+fmt(x.dif)+'</td></tr>').join('')+'</tbody>'
