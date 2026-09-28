@@ -94,7 +94,28 @@
   <div class="card" style="margin-top:16px"><div class="sec">Cumplimiento acumulado por unidad de negocio</div><div id="cumpUni" style="padding:14px 18px"></div></div>
   <div class="card" style="margin-top:16px"><div class="sec">Participación por unidad de negocio</div><div id="pie" style="padding:14px 18px"></div></div>
   <div class="card" style="margin-top:16px"><div class="sec">Diferencia 2026 vs 2025 · Top 10 productos</div><div class="scrollx" style="padding:6px 8px 14px"><table id="dif"></table></div></div>
-  <div class="card" style="margin-top:16px"><div class="sec">Altas vs Bajas de clientes</div><div id="altasbajas" style="padding:14px 18px"></div></div>
+  <div class="card" style="margin-top:16px">
+    <div class="sec" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <span>Altas vs Bajas de clientes</span>
+      <button id="abImport" style="font:inherit;font-size:12px;font-weight:700;background:#223c7e;color:#fff;border:none;border-radius:9px;padding:7px 12px;cursor:pointer">📄 Importar archivo</button>
+      <input type="file" id="abFile" accept=".xls,.csv,.txt" hidden />
+    </div>
+    <div id="abMsg" style="padding:2px 18px 0;font-size:12px"></div>
+    <div id="altasbajas" style="padding:14px 18px"></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="sec" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <span>Principales clientes · Top 10</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label style="font-size:12px;color:#94a1ab">Mes del archivo</label>
+        <select id="cliMes" style="font:inherit;font-size:12px;background:#f1f4f7;border:1px solid #cfd6dd;border-radius:8px;padding:6px 8px"></select>
+        <button id="cliImport" style="font:inherit;font-size:12px;font-weight:700;background:#223c7e;color:#fff;border:none;border-radius:9px;padding:7px 12px;cursor:pointer">📄 Importar archivo</button>
+        <input type="file" id="cliFile" accept=".xls,.csv,.txt" hidden />
+      </div>
+    </div>
+    <div id="cliMsg" style="padding:2px 18px 0;font-size:12px"></div>
+    <div class="scrollx" style="padding:6px 8px 14px"><table id="clientes"></table></div>
+  </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
@@ -154,7 +175,7 @@ const $=(id)=>document.getElementById(id);
 let REF=[], REAL=[], PROD=[], AB=[], medida="monto", mesDesde=0, mesHasta=11;
 const enRango=(i)=> i>=mesDesde && i<=mesHasta;
 function normU(s){ s=String(s||'').trim().toUpperCase();
-  const m={'FAMILIA':'Familia','NEGOCIO':'Negocios','NEGOCIOS':'Negocios','EMPRESA':'Empresas','EMPRESAS':'Empresas','DISTRIBUIDORES':'Distribuidores','DISTRICUIDORES':'Distribuidores','REVENTA':'Reventa','SUCURSALES':'Sucursales','COMPAÑIA':'Compañía','COMPAÑÍA':'Compañía','COMPANIA':'Compañía'};
+  const m={'FAMILIA':'Familia','NEGOCIO':'Negocios','NEGOCIOS':'Negocios','EMPRESA':'Empresas','EMPRESAS':'Empresas','DISTRIBUIDOR':'Distribuidores','DISTRIBUIDORES':'Distribuidores','DISTRICUIDORES':'Distribuidores','PERSONAL':'Personal','REVENTA':'Reventa','SUCURSALES':'Sucursales','COMPAÑIA':'Compañía','COMPAÑÍA':'Compañía','COMPANIA':'Compañía'};
   return m[s]||s; }
 function productosDe(unidad){
   const med = medida==='monto'?'monto':'qty';
@@ -192,6 +213,7 @@ async function cargar(){
     mesDesde=0; mesHasta=ultimo||11;
     const opts=(sel)=>MESES.map((m,i)=>'<option value="'+i+'"'+(i===sel?' selected':'')+'>'+m+'</option>').join('');
     $("mesDesde").innerHTML=opts(mesDesde); $("mesHasta").innerHTML=opts(mesHasta);
+    $("cliMes").innerHTML=MESES.map((m,i)=>'<option value="'+i+'"'+(i===mesHasta?' selected':'')+'>'+m+'</option>').join('');
     render();
   }catch(e){ $("estado").textContent="No se pudo conectar. ¿Corriste los SQL de comercial (real + referencia + productos)?"; }
 }
@@ -199,6 +221,77 @@ $("unidad").onchange=render;
 $("mesDesde").onchange=(e)=>{ mesDesde=+e.target.value; if(mesDesde>mesHasta){ mesHasta=mesDesde; $("mesHasta").value=mesHasta; } render(); };
 $("mesHasta").onchange=(e)=>{ mesHasta=+e.target.value; if(mesHasta<mesDesde){ mesDesde=mesHasta; $("mesDesde").value=mesDesde; } render(); };
 $("filtroReset").onclick=()=>{ mesDesde=0; mesHasta=11; $("mesDesde").value=0; $("mesHasta").value=11; render(); };
+async function importarAB(file){
+  const msg=$("abMsg"); msg.style.color="#5c6b78"; msg.textContent="Procesando archivo…";
+  try{
+    const texto=await file.text();
+    const lineas=texto.split(/\r?\n/).filter(l=>l.trim());
+    const agg={}; let fhastaRaw=null;
+    for(let i=1;i<lineas.length;i++){ const c=lineas[i].split(';'); if(c.length<7) continue;
+      const [,fhasta,,,desc,cant,tipo]=c; fhastaRaw=fhasta;
+      const uu=normU(String(desc).trim()); const nn=parseInt(cant,10)||0; const t=String(tipo).trim().toUpperCase();
+      if(!agg[uu]) agg[uu]={altas:0,bajas:0};
+      if(t==="ALTA") agg[uu].altas+=nn; else if(t==="BAJA") agg[uu].bajas+=nn;
+    }
+    if(!fhastaRaw){ msg.style.color="#e1251b"; msg.textContent="No se detectó el período en el archivo."; return; }
+    const pp=fhastaRaw.split("/"); const periodo=pp[2]+"-"+String(pp[1]).padStart(2,"0")+"-01";
+    const nom=new Date(periodo+"T00:00:00").toLocaleDateString("es-AR",{month:"long",year:"numeric"});
+    await fetch(SUPABASE_URL+"/rest/v1/comercial_altas_bajas?periodo=eq."+periodo,{method:"DELETE",headers:H()});
+    const rows=Object.entries(agg).map(([uu,v])=>({periodo,unidad:uu,altas:v.altas,bajas:v.bajas}));
+    const res=await fetch(SUPABASE_URL+"/rest/v1/comercial_altas_bajas",{method:"POST",headers:{...H(),"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify(rows)});
+    if(!res.ok) throw new Error(await res.text());
+    AB=await fetch(SUPABASE_URL+"/rest/v1/comercial_altas_bajas?select=*&limit=50000",{headers:H()}).then(r=>r.json());
+    msg.style.color="#16a34a"; msg.textContent="✓ "+nom+" cargado ("+rows.length+" unidades). Si ya existía, se reemplazó.";
+    render();
+  }catch(e){ msg.style.color="#e1251b"; msg.textContent="No se pudo importar: "+e.message; }
+}
+$("abImport").onclick=()=>$("abFile").click();
+$("abFile").onchange=(e)=>{ if(e.target.files[0]) importarAB(e.target.files[0]); e.target.value=""; };
+
+async function leerTexto(file){ const buf=await file.arrayBuffer();
+  try{ return new TextDecoder("utf-8",{fatal:true}).decode(buf); }catch{ return new TextDecoder("iso-8859-1").decode(buf); } }
+
+async function renderClientes(){
+  const u=$("unidad").value;
+  const desde="2026-"+String(mesDesde+1).padStart(2,"0")+"-01";
+  const hasta="2026-"+String(mesHasta+1).padStart(2,"0")+"-01";
+  try{
+    const res=await fetch(SUPABASE_URL+"/rest/v1/rpc/top_clientes",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_desde:desde,p_hasta:hasta,p_unidad:u,p_limit:10})});
+    const data=await res.json();
+    if(!Array.isArray(data)||!data.length){ $("clientes").innerHTML='<tbody><tr><td class="muted" style="padding:16px">No hay datos de clientes para este período. Importá el archivo del mes.</td></tr></tbody>'; return; }
+    $("clientes").innerHTML='<thead><tr><th>#</th><th>Cliente</th><th>Unidad</th><th class="num">Facturación</th></tr></thead><tbody>'+
+      data.map((c,i)=>'<tr><td>'+(i+1)+'</td><td>'+(c.cliente||'')+'</td><td>'+(c.unidad||'')+'</td><td class="num">'+fmtMonto(Number(c.venta)||0)+'</td></tr>').join('')+'</tbody>';
+  }catch(e){ $("clientes").innerHTML='<tbody><tr><td class="muted" style="padding:16px">No se pudo cargar. ¿Corriste el SQL de clientes (tabla + función)?</td></tr></tbody>'; }
+}
+
+async function importarClientes(file){
+  const msg=$("cliMsg"); msg.style.color="#5c6b78"; msg.textContent="Procesando archivo…";
+  const mesIdx=+$("cliMes").value; const periodo="2026-"+String(mesIdx+1).padStart(2,"0")+"-01"; const nom=MESES[mesIdx]+" 2026";
+  try{
+    const texto=await leerTexto(file);
+    const lineas=texto.split(/\r?\n/).filter(l=>l.trim());
+    const agg={};
+    for(let i=1;i<lineas.length;i++){ const c=lineas[i].split(";"); if(c.length<6) continue;
+      const nombre=String(c[2]).trim(); if(!nombre) continue;
+      const tipo=normU(String(c[4]).trim());
+      const v=parseFloat(String(c[5]).replace(",","."))||0;
+      if(!agg[nombre]) agg[nombre]={unidad:tipo,venta:0};
+      agg[nombre].venta+=v;
+    }
+    const rows=Object.entries(agg).map(([cliente,v])=>({periodo,unidad:v.unidad,cliente,venta:v.venta}));
+    if(!rows.length){ msg.style.color="#e1251b"; msg.textContent="El archivo no tiene datos válidos."; return; }
+    await fetch(SUPABASE_URL+"/rest/v1/comercial_clientes?periodo=eq."+periodo,{method:"DELETE",headers:H()});
+    for(let i=0;i<rows.length;i+=1000){ const chunk=rows.slice(i,i+1000);
+      const res=await fetch(SUPABASE_URL+"/rest/v1/comercial_clientes",{method:"POST",headers:{...H(),"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify(chunk)});
+      if(!res.ok) throw new Error(await res.text());
+      msg.textContent="Subiendo… "+Math.min(i+1000,rows.length)+"/"+rows.length;
+    }
+    msg.style.color="#16a34a"; msg.textContent="✓ "+nom+" cargado ("+rows.length+" clientes). Si ya existía, se reemplazó.";
+    renderClientes();
+  }catch(e){ msg.style.color="#e1251b"; msg.textContent="No se pudo importar: "+e.message; }
+}
+$("cliImport").onclick=()=>$("cliFile").click();
+$("cliFile").onchange=(e)=>{ if(e.target.files[0]) importarClientes(e.target.files[0]); e.target.value=""; };
 document.querySelectorAll('#medida button').forEach(b=> b.onclick=()=>{ medida=b.dataset.m; document.querySelectorAll('#medida button').forEach(x=>x.classList.toggle('on',x===b)); render(); });
 
 const campoRef=(tipo)=> tipo+ (medida==='monto'?'_monto':'_qty'); // presu_monto / presu_qty ...
@@ -338,6 +431,8 @@ function render(){
   $("altasbajas").innerHTML = abU.length
     ? kpiAB + '<div class="scrollx"><table><thead><tr><th>Unidad</th><th class="num">Altas</th><th class="num">Bajas</th><th class="num">Neto</th></tr></thead><tbody>'+filasU+'</tbody></table></div>'
     : '<p class="muted">No hay datos de altas/bajas para este período. Cargá el archivo mensual.</p>';
+
+  renderClientes();
 }
 </script>
 </body>
