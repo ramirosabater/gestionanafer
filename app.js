@@ -225,6 +225,7 @@
   function canEdit(tabId){ return tabPermiso(tabId)==='editar'; }
   function canEditAnything(){ return TAB_DEFS.some(function(t){ return canEdit(t.id); }); }
   function canManageAccess(){ var r = currentRole(); return !!(r && r.manageAccess); }
+  function canAutoplan(){ var r = currentRole(); if(!r) return false; var v = r.permisos && r.permisos.__autoplan; return v===undefined ? true : !!v; }
   function canOpenSettings(){
     return canManageAccess() || canEdit('grid') || canEdit('branches') || canEdit('company') || canEdit('occasional') || canEdit('compras');
   }
@@ -690,6 +691,7 @@
     if(!v || tabPermiso(v)==='oculta') v = firstAccessibleTab() || 'day'; // no navega a pestañas sin permiso
     state.view = v;
     document.body.classList.toggle('tab-readonly', tabPermiso(v)!=='editar');
+    document.body.classList.toggle('no-autoplan', !canAutoplan());
     refreshTabVisibility();
     document.getElementById('view-grid').hidden = (v!=='grid');
     document.getElementById('view-day').hidden = (v!=='day');
@@ -2443,6 +2445,16 @@
     manageRow.appendChild(document.createTextNode('Puede administrar perfiles y personas (⚙ Acceso)'));
     card.appendChild(manageRow);
 
+    var apRow = document.createElement('label');
+    apRow.className = 'role-manage-row';
+    var apChk = document.createElement('input');
+    apChk.type = 'checkbox'; apChk.className = 'role-autoplan';
+    var apVal = role.permisos && role.permisos.__autoplan;
+    apChk.checked = (apVal===undefined ? true : !!apVal);
+    apRow.appendChild(apChk);
+    apRow.appendChild(document.createTextNode('Puede usar "Planificar automáticamente"'));
+    card.appendChild(apRow);
+
     var grid = document.createElement('div');
     grid.className = 'role-permisos-grid';
     TAB_DEFS.forEach(function(t){
@@ -3385,11 +3397,21 @@
   wireProveedorCombo('fm-proveedor');
   wireProveedorCombo('pom-proveedor');
 
+  (function wireViewSubtabs(){
+    function sub(tabs){
+      function show(i){ tabs.forEach(function(t,j){ var b=document.getElementById(t[0]), sec=document.getElementById(t[1]); if(b) b.classList.toggle('active', i===j); if(sec) sec.hidden=(i!==j); }); }
+      tabs.forEach(function(t,i){ var b=document.getElementById(t[0]); if(b) b.addEventListener('click', function(){ show(i); }); });
+    }
+    sub([['ctab-proveedores','csec-proveedores'],['ctab-compra','csec-compra'],['ctab-oc','csec-oc']]);
+    sub([['ptab-pago','psec-pago'],['ptab-op','psec-op']]);
+  })();
+
   function renderCompras(){
     renderProveedoresList();
     renderCentrosCostoList();
     renderConceptosList();
     renderOCList();
+    renderFacturasList();
   }
 
   function renderProveedoresList(){
@@ -3702,9 +3724,26 @@
     writeFactura(f);
   }
 
+  function cuentaNombrePago(id){ var c=state.cuentas.find(function(x){ return x.id===id; }); return c?c.nombre:'—'; }
+  function renderPagoSubtab(){
+    var pend=document.getElementById('pago-pend-body'), real=document.getElementById('pago-real-body');
+    if(pend){
+      var ps=state.ordenesPago.filter(function(p){ return (p.estado||'pendiente')!=='pagada'; }).slice().sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
+      pend.innerHTML = ps.length ? ps.map(function(p){
+        return '<tr class="day-row"><td>'+esc(pagoNumeroLabel(p.numero))+'</td><td>'+esc(proveedorNombre(p.proveedorId))+'</td><td>'+esc(p.fecha||'—')+'</td><td class="num">'+fmtMoney(p.monto)+'</td><td><button class="btn primary edit-action pago-reg-btn" data-id="'+esc(p.id)+'">Registrar pago</button></td></tr>';
+      }).join('') : '<tr class="day-row empty"><td colspan="5">No hay órdenes de pago pendientes.</td></tr>';
+      Array.prototype.forEach.call(pend.querySelectorAll('.pago-reg-btn'), function(b){ b.addEventListener('click', function(ev){ ev.stopPropagation(); openPagoModal(b.getAttribute('data-id')); }); });
+    }
+    if(real){
+      var rs=state.ordenesPago.filter(function(p){ return (p.estado||'pendiente')==='pagada'; }).slice().sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
+      real.innerHTML = rs.length ? rs.map(function(p){
+        return '<tr class="day-row"><td>'+esc(pagoNumeroLabel(p.numero))+'</td><td>'+esc(proveedorNombre(p.proveedorId))+'</td><td>'+esc(p.fecha||'—')+'</td><td style="text-transform:capitalize">'+esc(p.medioPago||'—')+'</td><td>'+esc(cuentaNombrePago(p.cuentaId))+'</td><td class="num">'+fmtMoney(p.monto)+'</td></tr>';
+      }).join('') : '<tr class="day-row empty"><td colspan="6">Todavía no hay pagos realizados.</td></tr>';
+    }
+  }
   function renderPagos(){
-    renderFacturasList();
     renderPagosList();
+    renderPagoSubtab();
   }
 
   function renderFacturasList(){
@@ -4625,6 +4664,7 @@
       if(manageAccess) anyManage = true;
       var permisos = {};
       card.querySelectorAll('.role-permiso-select').forEach(function(sel){ permisos[sel.dataset.tab] = sel.value; });
+      var apEl = card.querySelector('.role-autoplan'); permisos.__autoplan = apEl ? apEl.checked : true;
       roles.push({id: card.dataset.roleId, nombre: nombre, manageAccess: manageAccess, permisos: permisos});
     }
     if(!anyManage){ showToast('Al menos un perfil tiene que poder administrar el acceso.'); return; }

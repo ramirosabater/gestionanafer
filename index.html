@@ -243,6 +243,7 @@
   body.tab-readonly td.cell.empty:hover::after{content:none;}
   body.tab-readonly .cell-add-btn{display:none;}
   body.tab-readonly .edit-action{display:none;}
+  body.no-autoplan #autoplan-btn, body.no-autoplan #branch-autoplan-btn{display:none;}
   body.tab-readonly .legend{display:none;}
 
   .overlay{position:fixed; inset:0; background:rgba(10,9,6,0.45); display:none; align-items:center; justify-content:center; z-index:50; padding:16px;}
@@ -937,90 +938,132 @@
 
   <div id="view-compras" hidden>
     <div class="toolbar" id="toolbar-compras">
-      <div style="font-size:12.5px; color:var(--ink-2);">Proveedores y órdenes de compra</div>
+      <div style="font-size:12.5px; color:var(--ink-2);">Proveedores, compras y órdenes de compra</div>
+    </div>
+    <div class="settings-subtabs" style="display:flex; gap:18px; border-bottom:1px solid var(--line); margin-bottom:14px;">
+      <button class="stabbtn active" id="ctab-proveedores">Proveedores</button>
+      <button class="stabbtn" id="ctab-compra">Compra</button>
+      <button class="stabbtn" id="ctab-oc">Orden de compra</button>
     </div>
 
-    <div class="compras-section-head">
-      <h3>Proveedores</h3>
-      <button class="btn primary edit-action" id="new-proveedor-btn">+ Nuevo proveedor</button>
-    </div>
-    <div class="day-wrap">
-      <table class="day-table" id="proveedores-table">
-        <thead><tr><th>Proveedor</th><th>Rubro</th><th>Contacto</th><th>Teléfono</th><th></th></tr></thead>
-        <tbody id="proveedores-body"></tbody>
-      </table>
-    </div>
-
-    <div class="compras-section-head">
-      <h3>Órdenes de compra</h3>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <select id="oc-filter-estado" class="scope-select" style="max-width:170px;">
-          <option value="">Todos los estados</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="aprobada">Aprobada</option>
-          <option value="recibida">Recibida</option>
-        </select>
-        <button class="btn primary edit-action" id="new-oc-btn">+ Nueva orden de compra</button>
+    <div id="csec-proveedores">
+      <div class="compras-section-head">
+        <h3>Proveedores</h3>
+        <button class="btn primary edit-action" id="new-proveedor-btn">+ Nuevo proveedor</button>
       </div>
-    </div>
-    <div class="day-wrap">
-      <table class="day-table" id="oc-table">
-        <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Descripción</th><th>Monto</th><th>Estado</th></tr></thead>
-        <tbody id="oc-body"></tbody>
-      </table>
+      <div class="day-wrap">
+        <table class="day-table" id="proveedores-table">
+          <thead><tr><th>Proveedor</th><th>Rubro</th><th>Contacto</th><th>Teléfono</th><th></th></tr></thead>
+          <tbody id="proveedores-body"></tbody>
+        </table>
+      </div>
+      <div class="legend"><div class="item">Hacé clic en un proveedor para editarlo</div></div>
     </div>
 
-    <div class="legend">
-      <div class="item">Hacé clic en un proveedor o una orden de compra para editarlo</div>
-      <div class="item">Centros de costo y Conceptos se administran desde ⚙ → Compras</div>
+    <div id="csec-compra" hidden>
+      <div class="compras-section-head">
+        <h3>Compras (facturas)</h3>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select id="factura-filter-estado" class="scope-select" style="max-width:170px;">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="pagada">Pagada</option>
+          </select>
+          <button class="btn primary edit-action" id="new-factura-btn">+ Nueva compra</button>
+        </div>
+      </div>
+      <div class="day-wrap">
+        <table class="day-table" id="facturas-table">
+          <thead><tr><th>Proveedor</th><th>N° Factura</th><th>Fecha</th><th>Orden de compra</th><th>Monto</th><th>Estado</th><th>Archivo</th></tr></thead>
+          <tbody id="facturas-body"></tbody>
+        </table>
+      </div>
+      <div class="legend"><div class="item">Una compra (factura) no necesita tener una orden de compra asociada</div></div>
+    </div>
+
+    <div id="csec-oc" hidden>
+      <div class="compras-section-head">
+        <h3>Órdenes de compra</h3>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select id="oc-filter-estado" class="scope-select" style="max-width:170px;">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="aprobada">Aprobada</option>
+            <option value="recibida">Recibida</option>
+          </select>
+          <button class="btn primary edit-action" id="new-oc-btn">+ Nueva orden de compra</button>
+        </div>
+      </div>
+      <div class="day-wrap">
+        <table class="day-table" id="oc-table">
+          <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Descripción</th><th>Monto</th><th>Estado</th></tr></thead>
+          <tbody id="oc-body"></tbody>
+        </table>
+      </div>
+      <div class="legend">
+        <div class="item">Hacé clic en una orden de compra para editarla</div>
+        <div class="item">Centros de costo y Conceptos se administran desde ⚙ → Compras y Tesorería</div>
+      </div>
     </div>
   </div>
 
   <div id="view-pagos" hidden>
     <div class="toolbar" id="toolbar-pagos">
-      <div style="font-size:12.5px; color:var(--ink-2);">Facturas y órdenes de pago</div>
+      <div style="font-size:12.5px; color:var(--ink-2);">Pagos y órdenes de pago</div>
+    </div>
+    <div class="settings-subtabs" style="display:flex; gap:18px; border-bottom:1px solid var(--line); margin-bottom:14px;">
+      <button class="stabbtn active" id="ptab-pago">Pago</button>
+      <button class="stabbtn" id="ptab-op">Orden de Pago</button>
     </div>
 
-    <div class="compras-section-head">
-      <h3>Facturas</h3>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <select id="factura-filter-estado" class="scope-select" style="max-width:170px;">
-          <option value="">Todos los estados</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="pagada">Pagada</option>
-        </select>
-        <button class="btn primary edit-action" id="new-factura-btn">+ Nueva factura</button>
+    <div id="psec-pago">
+      <div class="compras-section-head">
+        <h3>Registrar pago</h3>
+        <div style="font-size:12px; color:var(--ink-2);">Órdenes de pago pendientes</div>
+      </div>
+      <div class="day-wrap">
+        <table class="day-table" id="pago-pend-table">
+          <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Monto</th><th></th></tr></thead>
+          <tbody id="pago-pend-body"></tbody>
+        </table>
+      </div>
+
+      <div class="compras-section-head" style="margin-top:18px;">
+        <h3>Pagos realizados</h3>
+      </div>
+      <div class="day-wrap">
+        <table class="day-table" id="pago-real-table">
+          <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Medio</th><th>Cuenta</th><th>Monto</th></tr></thead>
+          <tbody id="pago-real-body"></tbody>
+        </table>
+      </div>
+      <div class="legend">
+        <div class="item">"Registrar pago" abre la orden para elegir el medio (efectivo, cheque, transferencia) y la cuenta, y genera el egreso automáticamente</div>
       </div>
     </div>
-    <div class="day-wrap">
-      <table class="day-table" id="facturas-table">
-        <thead><tr><th>Proveedor</th><th>N° Factura</th><th>Fecha</th><th>Orden de compra</th><th>Monto</th><th>Estado</th><th>Archivo</th></tr></thead>
-        <tbody id="facturas-body"></tbody>
-      </table>
-    </div>
 
-    <div class="compras-section-head">
-      <h3>Órdenes de pago</h3>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <select id="pago-filter-estado" class="scope-select" style="max-width:170px;">
-          <option value="">Todos los estados</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="pagada">Pagada</option>
-        </select>
-        <button class="btn primary edit-action" id="new-pago-btn">+ Nueva orden de pago</button>
+    <div id="psec-op" hidden>
+      <div class="compras-section-head">
+        <h3>Órdenes de pago</h3>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select id="pago-filter-estado" class="scope-select" style="max-width:170px;">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="pagada">Pagada</option>
+          </select>
+          <button class="btn primary edit-action" id="new-pago-btn">+ Nueva orden de pago</button>
+        </div>
       </div>
-    </div>
-    <div class="day-wrap">
-      <table class="day-table" id="pagos-table">
-        <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Facturas</th><th>Monto</th><th>Estado</th></tr></thead>
-        <tbody id="pagos-body"></tbody>
-      </table>
-    </div>
-
-    <div class="legend">
-      <div class="item">Una factura no necesita tener una orden de compra asociada</div>
-      <div class="item">Una orden de pago puede agrupar varias facturas pendientes del mismo proveedor</div>
-      <div class="item">Hacé clic en una factura o una orden de pago para editarla</div>
+      <div class="day-wrap">
+        <table class="day-table" id="pagos-table">
+          <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Facturas</th><th>Monto</th><th>Estado</th></tr></thead>
+          <tbody id="pagos-body"></tbody>
+        </table>
+      </div>
+      <div class="legend">
+        <div class="item">Una orden de pago puede agrupar varias facturas pendientes del mismo proveedor</div>
+        <div class="item">Hacé clic en una orden de pago para editarla</div>
+      </div>
     </div>
   </div>
 
