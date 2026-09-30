@@ -3386,7 +3386,8 @@
     state.sb.from('proveedores').upsert({
       id:p.id, nombre:p.nombre, cuit:p.cuit||'', rubro:p.rubro||'', contacto:p.contacto||'',
       telefono:p.telefono||'', email:p.email||'', direccion:p.direccion||'',
-      banco:p.banco||'', cbu:p.cbu||'', notas:p.notas||'', archivos:p.archivos||[]
+      banco:p.banco||'', cbu:p.cbu||'', notas:p.notas||'', archivos:p.archivos||[],
+      condicion_iva:p.condicionIva||'', condicion_pago:p.condicionPago||'', localidad:p.localidad||'', provincia:p.provincia||'', zona:p.zona||'', categoria:p.categoria||'', imputacion:p.imputacion||'', fax:p.fax||'', orden_cheque:p.ordenCheque||'', responsable:p.responsable||''
     }).then(function(res){
       if(res.error) showToast('No se pudo guardar el proveedor: '+res.error.message);
     });
@@ -3405,6 +3406,16 @@
     document.getElementById('pm-direccion').value = p ? (p.direccion||'') : '';
     document.getElementById('pm-banco').value = p ? (p.banco||'') : '';
     document.getElementById('pm-cbu').value = p ? (p.cbu||'') : '';
+    document.getElementById('pm-condicion-iva').value = p ? (p.condicionIva||'') : '';
+    document.getElementById('pm-condicion-pago').value = p ? (p.condicionPago||'') : '';
+    document.getElementById('pm-localidad').value = p ? (p.localidad||'') : '';
+    document.getElementById('pm-provincia').value = p ? (p.provincia||'') : '';
+    document.getElementById('pm-zona').value = p ? (p.zona||'') : '';
+    document.getElementById('pm-categoria').value = p ? (p.categoria||'') : '';
+    document.getElementById('pm-imputacion').value = p ? (p.imputacion||'') : '';
+    document.getElementById('pm-fax').value = p ? (p.fax||'') : '';
+    document.getElementById('pm-orden-cheque').value = p ? (p.ordenCheque||'') : '';
+    document.getElementById('pm-responsable').value = p ? (p.responsable||'') : '';
     document.getElementById('pm-notas').value = p ? (p.notas||'') : '';
     document.getElementById('pm-delete').style.display = p ? '' : 'none';
     state.editingProveedorArchivos = p ? (p.archivos||[]).slice() : [];
@@ -3434,6 +3445,16 @@
       direccion: document.getElementById('pm-direccion').value.trim(),
       banco: document.getElementById('pm-banco').value.trim(),
       cbu: document.getElementById('pm-cbu').value.trim(),
+      condicionIva: document.getElementById('pm-condicion-iva').value,
+      condicionPago: document.getElementById('pm-condicion-pago').value,
+      localidad: document.getElementById('pm-localidad').value.trim(),
+      provincia: document.getElementById('pm-provincia').value.trim(),
+      zona: document.getElementById('pm-zona').value.trim(),
+      categoria: document.getElementById('pm-categoria').value.trim(),
+      imputacion: document.getElementById('pm-imputacion').value.trim(),
+      fax: document.getElementById('pm-fax').value.trim(),
+      ordenCheque: document.getElementById('pm-orden-cheque').value.trim(),
+      responsable: document.getElementById('pm-responsable').value.trim(),
       notas: document.getElementById('pm-notas').value.trim()
     };
     var saveBtn = this;
@@ -3544,6 +3565,7 @@
       id:row.id, nombre:row.nombre||row.id, cuit:row.cuit||'', rubro:row.rubro||'',
       contacto:row.contacto||'', telefono:row.telefono||'', email:row.email||'',
       direccion:row.direccion||'', banco:row.banco||'', cbu:row.cbu||'', notas:row.notas||'',
+      condicionIva:row.condicion_iva||'', condicionPago:row.condicion_pago||'', localidad:row.localidad||'', provincia:row.provincia||'', zona:row.zona||'', categoria:row.categoria||'', imputacion:row.imputacion||'', fax:row.fax||'', ordenCheque:row.orden_cheque||'', responsable:row.responsable||'',
       archivos: Array.isArray(row.archivos) ? row.archivos : []
     };
   }
