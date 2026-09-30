@@ -690,6 +690,7 @@
     <button class="viewtab" id="tab-compras">Compras</button>
     <button class="viewtab" id="tab-pagos">Pagos</button>
     <button class="viewtab" id="tab-tesoreria">Tesorería</button>
+    <button class="viewtab" id="tab-simulador">Simulación</button>
     <button class="viewtab" id="tab-day">Día</button>
     <button class="viewtab" id="tab-dashboard">Dashboard</button>
   </div>
@@ -1075,6 +1076,32 @@
       <div class="item">El saldo actual de cada cuenta es el saldo inicial menos todos sus egresos cargados</div>
       <div class="item">Al marcar una orden de pago como Pagada se elige la cuenta y se genera el egreso automáticamente — esos movimientos no se pueden editar ni borrar desde acá, solo cambiando la orden de pago</div>
       <div class="item">Los movimientos cargados a mano (no ligados a una orden de pago) sí se pueden editar o borrar</div>
+    </div>
+  </div>
+
+  <div id="view-simulador" hidden>
+    <div class="toolbar" id="toolbar-simulador">
+      <div style="font-size:12.5px; color:var(--ink-2);">Simulá qué facturas pagar con el disponible, priorizando por vencimiento</div>
+    </div>
+    <div class="compras-section-head">
+      <h3>Simulación de pagos</h3>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <label style="font-size:12px;color:var(--ink-2);">Disponible</label>
+        <input type="text" id="sim-disponible" inputmode="decimal" class="scope-select" style="max-width:160px;" placeholder="(saldo de cuentas)">
+        <button class="btn primary" id="sim-auto-btn">Auto por vencimiento</button>
+        <button class="btn" id="sim-limpiar-btn">Limpiar</button>
+      </div>
+    </div>
+    <div id="sim-resumen" style="display:flex; gap:18px; flex-wrap:wrap; margin:6px 0 12px; font-size:13px;"></div>
+    <div class="day-wrap">
+      <table class="day-table" id="sim-table">
+        <thead><tr><th style="width:34px;">✓</th><th>Vencimiento</th><th>Estado</th><th>Proveedor</th><th>Factura</th><th>Monto</th></tr></thead>
+        <tbody id="sim-body"></tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <div class="item">Tildá las facturas para armar el pago. "Auto por vencimiento" selecciona las más urgentes hasta agotar el disponible.</div>
+      <div class="item">El disponible arranca en el saldo total de tus cuentas; podés escribir otro monto a mano.</div>
     </div>
   </div>
 </div>
@@ -1484,6 +1511,10 @@
     <div class="crew-fields">
       <div class="field"><label for="fm-numero">N° de factura</label><input type="text" id="fm-numero" maxlength="40" placeholder="Ej: A-0001-00012345"></div>
       <div class="field"><label for="fm-fecha">Fecha</label><input type="date" id="fm-fecha"></div>
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label for="fm-vencimiento">Vencimiento</label><input type="date" id="fm-vencimiento"></div>
+      <div class="field"></div>
     </div>
     <div class="crew-fields">
       <div class="field">

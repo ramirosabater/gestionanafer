@@ -197,6 +197,7 @@
     {id:'compras',    label:'Compras'},
     {id:'pagos',      label:'Pagos'},
     {id:'tesoreria',  label:'Tesorería'},
+    {id:'simulador',  label:'Simulación'},
     {id:'day',        label:'Día'},
     {id:'dashboard',  label:'Dashboard'}
   ];
@@ -402,6 +403,7 @@
     editingConceptoRetencionId: null,
     editingCentroCostoId: null,
     deudaModo: 'resumido',
+    simSeleccion: {},
     editingConceptoId: null,
     // Facturas y Órdenes de pago: facturas de proveedor (con o sin orden de
     // compra asociada — la mayoría no tiene una) y órdenes de pago que
@@ -691,6 +693,7 @@
     document.getElementById('view-compras').hidden = (v!=='compras');
     document.getElementById('view-pagos').hidden = (v!=='pagos');
     document.getElementById('view-tesoreria').hidden = (v!=='tesoreria');
+    document.getElementById('view-simulador').hidden = (v!=='simulador');
     document.getElementById('tab-grid').classList.toggle('active', v==='grid');
     document.getElementById('tab-day').classList.toggle('active', v==='day');
     document.getElementById('tab-dashboard').classList.toggle('active', v==='dashboard');
@@ -700,6 +703,7 @@
     document.getElementById('tab-compras').classList.toggle('active', v==='compras');
     document.getElementById('tab-pagos').classList.toggle('active', v==='pagos');
     document.getElementById('tab-tesoreria').classList.toggle('active', v==='tesoreria');
+    document.getElementById('tab-simulador').classList.toggle('active', v==='simulador');
     document.getElementById('toolbar-grid').hidden = (v!=='grid');
     document.getElementById('toolbar-day').hidden = (v!=='day');
     document.getElementById('toolbar-dashboard').hidden = (v!=='dashboard');
@@ -709,6 +713,8 @@
     document.getElementById('toolbar-compras').hidden = (v!=='compras');
     document.getElementById('toolbar-pagos').hidden = (v!=='pagos');
     document.getElementById('toolbar-tesoreria').hidden = (v!=='tesoreria');
+    document.getElementById('toolbar-simulador').hidden = (v!=='simulador');
+    if(v==='simulador') renderSimulador();
     if(v==='day') fetchDay(state.day);
     if(v==='dashboard') fetchDashboard();
   }
@@ -721,6 +727,7 @@
   document.getElementById('tab-compras').addEventListener('click', function(){ setView('compras'); });
   document.getElementById('tab-pagos').addEventListener('click', function(){ setView('pagos'); });
   document.getElementById('tab-tesoreria').addEventListener('click', function(){ setView('tesoreria'); });
+  document.getElementById('tab-simulador').addEventListener('click', function(){ setView('simulador'); });
 
   // ---------- Rendering: grid view ----------
   function monthLabel(){ return MONTH_NAMES[state.month] + ' de ' + state.year; }
@@ -3757,7 +3764,7 @@
     state.sb.from('facturas').upsert({
       id:f.id, proveedor_id:f.proveedorId||'', oc_id:f.ocId||null,
       centro_costo_id:f.centroCostoId||null, concepto_id:f.conceptoId||null, numero:f.numero||'',
-      fecha:f.fecha||'', monto:f.monto||0, estado:f.estado||'pendiente', notas:f.notas||'', archivos:f.archivos||[]
+      fecha:f.fecha||'', vencimiento:f.vencimiento||null, monto:f.monto||0, estado:f.estado||'pendiente', notas:f.notas||'', archivos:f.archivos||[]
     }).then(function(res){
       if(res.error) showToast('No se pudo guardar la factura: '+res.error.message);
     });
@@ -3932,6 +3939,7 @@
     document.getElementById('fm-concepto').value = f ? (f.conceptoId||'') : '';
     document.getElementById('fm-numero').value = f ? (f.numero||'') : '';
     document.getElementById('fm-fecha').value = f ? (f.fecha||todayStr()) : todayStr();
+    document.getElementById('fm-vencimiento').value = f ? (f.vencimiento||'') : '';
     document.getElementById('fm-monto').value = f ? String(f.monto||0).replace('.',',') : '';
     document.getElementById('fm-notas').value = f ? (f.notas||'') : '';
     document.getElementById('fm-delete').style.display = f ? '' : 'none';
@@ -3977,6 +3985,7 @@
       conceptoId: conceptoId,
       numero:numero,
       fecha: document.getElementById('fm-fecha').value || todayStr(),
+      vencimiento: document.getElementById('fm-vencimiento').value || null,
       monto: monto,
       estado: existing ? (existing.estado||'pendiente') : 'pendiente',
       notas: document.getElementById('fm-notas').value.trim()
@@ -4156,7 +4165,7 @@
     return {
       id:row.id, proveedorId:row.proveedor_id||'', ocId:row.oc_id||'',
       centroCostoId:row.centro_costo_id||'', conceptoId:row.concepto_id||'', numero:row.numero||'',
-      fecha:row.fecha||'', monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0,
+      fecha:row.fecha||'', vencimiento:row.vencimiento||'', monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0,
       estado:row.estado||'pendiente', notas:row.notas||'',
       archivos: Array.isArray(row.archivos) ? row.archivos : []
     };
@@ -4249,6 +4258,74 @@
     var br=document.getElementById('deuda-modo-resumido'); if(br) br.addEventListener('click',function(){ state.deudaModo='resumido'; renderDeudaProveedores(); });
     var bd=document.getElementById('deuda-modo-detallado'); if(bd) bd.addEventListener('click',function(){ state.deudaModo='detallado'; renderDeudaProveedores(); });
     var fp=document.getElementById('deuda-proveedor-filter'); if(fp) fp.addEventListener('change', renderDeudaProveedores);
+  })();
+
+  function simDiasHasta(fechaStr){
+    if(!fechaStr) return null;
+    var hoy=new Date(TODAY+'T00:00:00'); var v=new Date(fechaStr+'T00:00:00');
+    if(isNaN(v)) return null;
+    return Math.round((v-hoy)/86400000);
+  }
+  function simDisponible(){
+    var el=document.getElementById('sim-disponible');
+    if(el && el.value.trim()!==''){ var n=parseFloat(el.value.replace(/\./g,'').replace(',','.')); return isNaN(n)?0:n; }
+    return state.cuentas.reduce(function(sm,c){ return sm+cuentaSaldoActual(c.id); }, 0);
+  }
+  function simFacturasPendientes(){
+    return state.facturas.filter(function(f){ return (f.estado||'pendiente')==='pendiente'; })
+      .slice().sort(function(a,b){
+        var va=a.vencimiento||'9999-12-31', vb=b.vencimiento||'9999-12-31';
+        return va.localeCompare(vb) || (a.fecha||'').localeCompare(b.fecha||'');
+      });
+  }
+  function renderSimuladorResumen(){
+    var el=document.getElementById('sim-resumen'); if(!el) return;
+    var pend=simFacturasPendientes();
+    var totalPend=pend.reduce(function(sm,f){ return sm+Number(f.monto||0); },0);
+    var sel=pend.filter(function(f){ return state.simSeleccion[f.id]; });
+    var totalSel=sel.reduce(function(sm,f){ return sm+Number(f.monto||0); },0);
+    var disp=simDisponible(); var rest=disp-totalSel;
+    el.innerHTML =
+      '<div><b>Disponible:</b> '+fmtMoney(disp)+'</div>'+
+      '<div style="color:var(--brand-red,#e30613)"><b>A pagar ('+sel.length+'):</b> '+fmtMoney(totalSel)+'</div>'+
+      '<div style="color:'+(rest<0?'var(--danger)':'inherit')+'"><b>Restante:</b> '+fmtMoney(rest)+'</div>'+
+      '<div style="color:var(--ink-2)"><b>Deuda total ('+pend.length+'):</b> '+fmtMoney(totalPend)+'</div>';
+  }
+  function simAuto(){
+    var rest=simDisponible(); state.simSeleccion={};
+    simFacturasPendientes().forEach(function(f){ var m=Number(f.monto||0); if(m<=rest){ state.simSeleccion[f.id]=true; rest-=m; } });
+    renderSimulador();
+  }
+  function renderSimulador(){
+    var body=document.getElementById('sim-body'); if(!body) return;
+    var pend=simFacturasPendientes();
+    if(pend.length===0){ body.innerHTML='<tr class="day-row empty"><td colspan="6">No hay facturas pendientes.</td></tr>'; renderSimuladorResumen(); return; }
+    body.innerHTML='';
+    pend.forEach(function(f){
+      var tr=document.createElement('tr'); tr.className='day-row';
+      var d=simDiasHasta(f.vencimiento); var estadoTxt, color='var(--ink-2)';
+      if(!f.vencimiento){ estadoTxt='Sin vencimiento'; }
+      else if(d<0){ estadoTxt='Vencida hace '+(-d)+'d'; color='var(--danger)'; }
+      else if(d===0){ estadoTxt='Vence hoy'; color='var(--danger)'; }
+      else { estadoTxt='Vence en '+d+'d'; if(d<=7) color='#b8860b'; }
+      var checked=state.simSeleccion[f.id]?'checked':'';
+      tr.innerHTML='<td><input type="checkbox" class="sim-chk" data-id="'+esc(f.id)+'" '+checked+'></td>'+
+        '<td>'+esc(f.vencimiento||'—')+'</td>'+
+        '<td style="color:'+color+'">'+estadoTxt+'</td>'+
+        '<td>'+esc(proveedorNombre(f.proveedorId))+'</td>'+
+        '<td>'+esc(f.numero||'—')+'</td>'+
+        '<td class="num">'+fmtMoney(f.monto)+'</td>';
+      body.appendChild(tr);
+    });
+    Array.prototype.forEach.call(body.querySelectorAll('.sim-chk'), function(chk){
+      chk.addEventListener('change', function(){ var id=chk.getAttribute('data-id'); if(chk.checked) state.simSeleccion[id]=true; else delete state.simSeleccion[id]; renderSimuladorResumen(); });
+    });
+    renderSimuladorResumen();
+  }
+  (function wireSimulador(){
+    var a=document.getElementById('sim-auto-btn'); if(a) a.addEventListener('click', simAuto);
+    var l=document.getElementById('sim-limpiar-btn'); if(l) l.addEventListener('click', function(){ state.simSeleccion={}; renderSimulador(); });
+    var d=document.getElementById('sim-disponible'); if(d) d.addEventListener('input', renderSimuladorResumen);
   })();
 
   function renderTesoreria(){
