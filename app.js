@@ -240,7 +240,8 @@
   var SETTINGS_TAB_PERMISOS = {
     routes:'grid', trucks:'grid', drivers:'grid', helpers:'grid', cargo:'grid',
     branches:'branches', companies:'company', occasionals:'occasional',
-    'centros-costo':'compras', conceptos:'compras'
+    'centros-costo':'compras', conceptos:'compras',
+    'tipos-retencion':'compras', 'conceptos-retencion':'compras'
   };
   function settingsTabVisible(t){
     if(t==='auth') return canManageAccess();
@@ -254,7 +255,7 @@
   var SETTINGS_CATEGORIES = [
     {id:'flota',       label:'Flota y viajes',            tabs:['routes','trucks','drivers','helpers','cargo']},
     {id:'sucursales',  label:'Sucursales y empresas',     tabs:['branches','companies','occasionals']},
-    {id:'compras',     label:'Compras',                   tabs:['centros-costo','conceptos']},
+    {id:'compras',     label:'Compras y Tesorería',        tabs:['centros-costo','conceptos','tipos-retencion','conceptos-retencion']},
     {id:'acceso',      label:'Acceso',                     tabs:['auth']}
   ];
   function settingsCategoryVisible(catId){
@@ -286,7 +287,7 @@
     });
   }
   function firstVisibleSettingsTab(){
-    var order = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','auth'];
+    var order = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','tipos-retencion','conceptos-retencion','auth'];
     for(var i=0;i<order.length;i++){ if(settingsTabVisible(order[i])) return order[i]; }
     return 'auth';
   }
@@ -395,6 +396,10 @@
     // centro de costo/concepto en el dashboard.
     centrosCosto: [],
     conceptos: [],
+    tiposRetencion: [],
+    conceptosRetencion: [],
+    editingTipoRetencionId: null,
+    editingConceptoRetencionId: null,
     editingCentroCostoId: null,
     editingConceptoId: null,
     // Facturas y Órdenes de pago: facturas de proveedor (con o sin orden de
@@ -2223,7 +2228,7 @@
   }
 
   // ---------- Settings (ABM: rutas, camiones, choferes, ayudantes, etc.) ----------
-  var SETTINGS_ALL_TABS = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','auth'];
+  var SETTINGS_ALL_TABS = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','tipos-retencion','conceptos-retencion','auth'];
   function switchSettingsTab(tab){
     refreshSettingsTabsVisibility();
     if(!settingsTabVisible(tab)) tab = firstVisibleSettingsTab();
@@ -3216,6 +3221,44 @@
     showToast('Centro de costo eliminado.');
   });
 
+  // ---------- Tesorería: ABM Tipos y Conceptos de retención (código+descripción) ----------
+  function setupRetencionABM(cfg){
+    function genId(codigo){ var base=slug(codigo)||cfg.slugBase; var used={}; state[cfg.list].forEach(function(c){used[c.id]=true;}); if(!used[base])return base; var n=2; while(used[base+'_'+n])n++; return base+'_'+n; }
+    function renderList(){ var body=document.getElementById(cfg.bodyId); if(!body)return; body.innerHTML='';
+      if(state[cfg.list].length===0){ body.innerHTML='<tr class="day-row empty"><td colspan="2">Todavía no hay '+cfg.entityPlural+' cargados.</td></tr>'; return; }
+      state[cfg.list].slice().sort(function(a,b){return (a.codigo||'').localeCompare(b.codigo||'',undefined,{numeric:true});}).forEach(function(c){
+        var tr=document.createElement('tr'); tr.className='day-row';
+        tr.innerHTML='<td class="day-route num">'+esc(c.codigo)+'</td><td>'+esc(c.descripcion)+'</td>';
+        tr.addEventListener('click',function(){ openModal(c.id); }); body.appendChild(tr); }); }
+    function write(c){ if(!state.sb){showToast('No se pudo guardar: sin conexión.');return;}
+      state.sb.from(cfg.table).upsert({id:c.id,codigo:c.codigo||'',descripcion:c.descripcion||''}).then(function(res){ if(res.error) showToast('No se pudo guardar: '+res.error.message); }); }
+    function openModal(id){ state[cfg.editKey]=id||null; var c=id?state[cfg.list].find(function(x){return x.id===id;}):null;
+      document.getElementById(cfg.pfx+'-title').textContent=c?cfg.titleEdit:cfg.titleNew;
+      document.getElementById(cfg.pfx+'-codigo').value=c?c.codigo:'';
+      document.getElementById(cfg.pfx+'-descripcion').value=c?c.descripcion:'';
+      document.getElementById(cfg.pfx+'-delete').style.display=c?'':'none';
+      document.getElementById(cfg.overlay).classList.add('show'); }
+    function closeModal(){ document.getElementById(cfg.overlay).classList.remove('show'); }
+    document.getElementById(cfg.newBtn).addEventListener('click',function(){ openModal(null); });
+    document.getElementById(cfg.pfx+'-cancel').addEventListener('click',closeModal);
+    document.getElementById(cfg.overlay).addEventListener('click',function(e){ if(e.target===this) closeModal(); });
+    document.getElementById(cfg.pfx+'-save').addEventListener('click',function(){
+      var codigo=document.getElementById(cfg.pfx+'-codigo').value.trim(); if(!codigo){showToast('Ingresá el código.');return;}
+      var descripcion=document.getElementById(cfg.pfx+'-descripcion').value.trim(); if(!descripcion){showToast('Ingresá la descripción.');return;}
+      var id=state[cfg.editKey]; var isNew=!id; if(isNew) id=genId(codigo);
+      var c={id:id,codigo:codigo,descripcion:descripcion};
+      if(isNew) state[cfg.list].push(c); else { var idx=state[cfg.list].findIndex(function(x){return x.id===id;}); if(idx>=0) state[cfg.list][idx]=c; }
+      write(c); closeModal(); renderList(); showToast(cfg.entityName+' guardado.'); });
+    document.getElementById(cfg.pfx+'-delete').addEventListener('click',function(){
+      var id=state[cfg.editKey]; if(!id)return;
+      state[cfg.list]=state[cfg.list].filter(function(x){return x.id!==id;});
+      if(state.sb) state.sb.from(cfg.table).delete().eq('id',id).then(function(res){ if(res.error) showToast('No se pudo eliminar: '+res.error.message); });
+      closeModal(); renderList(); showToast(cfg.entityName+' eliminado.'); });
+    return { renderList: renderList };
+  }
+  var retTiposABM = setupRetencionABM({ list:'tiposRetencion', editKey:'editingTipoRetencionId', table:'tipos_retencion', bodyId:'tipos-retencion-body', newBtn:'new-tipo-retencion-btn', overlay:'tipo-retencion-overlay', pfx:'trm', titleNew:'Nuevo tipo de retención', titleEdit:'Editar tipo de retención', entityName:'Tipo de retención', entityPlural:'tipos', slugBase:'tipo' });
+  var retConceptosABM = setupRetencionABM({ list:'conceptosRetencion', editKey:'editingConceptoRetencionId', table:'conceptos_retencion', bodyId:'conceptos-retencion-body', newBtn:'new-concepto-retencion-btn', overlay:'concepto-retencion-overlay', pfx:'crm', titleNew:'Nuevo concepto de retención', titleEdit:'Editar concepto de retención', entityName:'Concepto de retención', entityPlural:'conceptos', slugBase:'concepto' });
+
   function writeConcepto(c){
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
     state.sb.from('conceptos').upsert({
@@ -3603,6 +3646,16 @@
       if(res.error){ showToast('Error cargando conceptos: '+res.error.message); return; }
       state.conceptos = (res.data||[]).map(mapConceptoRow);
       renderCompras();
+    });
+    state.sb.from('tipos_retencion').select('*').then(function(res){
+      if(res.error){ return; }
+      state.tiposRetencion = (res.data||[]).map(function(r){ return {id:r.id,codigo:r.codigo||'',descripcion:r.descripcion||''}; });
+      retTiposABM.renderList();
+    });
+    state.sb.from('conceptos_retencion').select('*').then(function(res){
+      if(res.error){ return; }
+      state.conceptosRetencion = (res.data||[]).map(function(r){ return {id:r.id,codigo:r.codigo||'',descripcion:r.descripcion||''}; });
+      retConceptosABM.renderList();
     });
   }
 

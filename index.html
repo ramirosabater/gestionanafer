@@ -589,7 +589,7 @@
 
   /* Arreglo: los modales que se abren DESDE Configuración (nuevo centro de costo / concepto)
      quedaban tapados por el panel de Configuración porque tenían la misma capa. */
-  #centro-costo-overlay, #concepto-overlay{z-index:70;}
+  #centro-costo-overlay, #concepto-overlay, #tipo-retencion-overlay, #concepto-retencion-overlay{z-index:70;}
   /* Los avisos siempre por encima de cualquier modal */
   .toast{z-index:300;}
 
@@ -1342,6 +1342,36 @@
   </div>
 </div>
 
+<div class="overlay" id="tipo-retencion-overlay">
+  <div class="modal" id="tipo-retencion-modal" style="max-width:380px;">
+    <h3 id="trm-title">Nuevo tipo de retención</h3>
+    <div class="field"><label for="trm-codigo">Código</label><input type="text" id="trm-codigo" maxlength="10" placeholder="Ej: GA"></div>
+    <div class="field"><label for="trm-descripcion">Descripción</label><input type="text" id="trm-descripcion" maxlength="80" placeholder="Ej: Ganancias"></div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="trm-cancel">Cancelar</button>
+        <button class="btn" id="trm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="trm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="concepto-retencion-overlay">
+  <div class="modal" id="concepto-retencion-modal" style="max-width:380px;">
+    <h3 id="crm-title">Nuevo concepto de retención</h3>
+    <div class="field"><label for="crm-codigo">Código</label><input type="text" id="crm-codigo" maxlength="10" placeholder="Ej: AL"></div>
+    <div class="field"><label for="crm-descripcion">Descripción</label><input type="text" id="crm-descripcion" maxlength="80" placeholder="Ej: Alquileres"></div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="crm-cancel">Cancelar</button>
+        <button class="btn" id="crm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="crm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="concepto-overlay">
   <div class="modal" id="concepto-modal" style="max-width:380px;">
     <h3 id="cpm-title">Nuevo concepto</h3>
@@ -1630,6 +1660,8 @@
         <div class="settings-tabs settings-subtabs" id="settings-subtabs-compras" hidden>
           <button class="stabbtn" id="stabbtn-centros-costo">Centros de costo</button>
           <button class="stabbtn" id="stabbtn-conceptos">Conceptos</button>
+          <button class="stabbtn" id="stabbtn-tipos-retencion">Tipos de retención</button>
+          <button class="stabbtn" id="stabbtn-conceptos-retencion">Conceptos de retención</button>
         </div>
         <div class="settings-tabs settings-subtabs" id="settings-subtabs-acceso" hidden>
           <button class="stabbtn" id="stabbtn-auth">Perfiles y permisos</button>
@@ -1688,6 +1720,26 @@
             </table>
           </div>
           <div class="addrow"><button class="btn primary" id="new-concepto-btn">+ Nuevo concepto</button></div>
+        </div>
+        <div id="stab-tipos-retencion" hidden>
+          <div class="sub" style="margin-bottom:10px;">Tipos de retención (ej: GA = Ganancias, IB = Ingresos Brutos, SU = SUSS).</div>
+          <div class="day-wrap">
+            <table class="day-table" id="tipos-retencion-table">
+              <thead><tr><th>Código</th><th>Descripción</th></tr></thead>
+              <tbody id="tipos-retencion-body"></tbody>
+            </table>
+          </div>
+          <div class="addrow"><button class="btn primary" id="new-tipo-retencion-btn">+ Nuevo tipo de retención</button></div>
+        </div>
+        <div id="stab-conceptos-retencion" hidden>
+          <div class="sub" style="margin-bottom:10px;">Conceptos de retención (ej: AL = Alquileres, HO = Honorarios, LO = Locación de servicios).</div>
+          <div class="day-wrap">
+            <table class="day-table" id="conceptos-retencion-table">
+              <thead><tr><th>Código</th><th>Descripción</th></tr></thead>
+              <tbody id="conceptos-retencion-body"></tbody>
+            </table>
+          </div>
+          <div class="addrow"><button class="btn primary" id="new-concepto-retencion-btn">+ Nuevo concepto de retención</button></div>
         </div>
         <div id="stab-auth" hidden>
           <div class="sub" style="margin-bottom:14px;">Cada perfil tiene sus propios permisos por pestaña. "Ver" deja mirar esa pestaña sin poder crear, editar ni borrar nada ahí; "Editar" da acceso completo; "Oculta" la esconde. Estos permisos los controla también la base de datos, no solo la pantalla.</div>
