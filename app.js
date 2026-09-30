@@ -401,6 +401,7 @@
     editingTipoRetencionId: null,
     editingConceptoRetencionId: null,
     editingCentroCostoId: null,
+    deudaModo: 'resumido',
     editingConceptoId: null,
     // Facturas y Órdenes de pago: facturas de proveedor (con o sin orden de
     // compra asociada — la mayoría no tiene una) y órdenes de pago que
@@ -4216,7 +4217,43 @@
     return Number(c.saldoInicial||0) - egresos;
   }
 
+  function fillDeudaProveedorFilter(){
+    var sel=document.getElementById('deuda-proveedor-filter'); if(!sel) return;
+    var cur=sel.value;
+    var opts='<option value="">Todos los proveedores</option>';
+    state.proveedores.slice().sort(function(a,b){return (a.nombre||'').localeCompare(b.nombre||'');}).forEach(function(pr){ opts+='<option value="'+esc(pr.id)+'">'+esc(pr.nombre)+'</option>'; });
+    sel.innerHTML=opts; sel.value=cur;
+  }
+  function renderDeudaProveedores(){
+    var body=document.getElementById('deuda-body'), head=document.getElementById('deuda-head'); if(!body||!head) return;
+    var modo=state.deudaModo||'resumido';
+    var br=document.getElementById('deuda-modo-resumido'), bd=document.getElementById('deuda-modo-detallado');
+    if(br) br.classList.toggle('primary', modo==='resumido');
+    if(bd) bd.classList.toggle('primary', modo==='detallado');
+    var fEl=document.getElementById('deuda-proveedor-filter'); var filtro=fEl?fEl.value:'';
+    var pend=state.facturas.filter(function(f){ return (f.estado||'pendiente')==='pendiente' && (!filtro||f.proveedorId===filtro); });
+    var total=pend.reduce(function(sm,f){ return sm+Number(f.monto||0); },0);
+    var tEl=document.getElementById('deuda-total'); if(tEl) tEl.textContent='Deuda total pendiente: '+fmtMoney(total)+'  ·  '+pend.length+' factura(s)';
+    if(modo==='detallado'){
+      head.innerHTML='<tr><th>Proveedor</th><th>Factura</th><th>Fecha</th><th>Monto</th></tr>';
+      var ss=pend.slice().sort(function(a,b){ return (proveedorNombre(a.proveedorId)||'').localeCompare(proveedorNombre(b.proveedorId)||'') || (a.fecha||'').localeCompare(b.fecha||''); });
+      body.innerHTML = ss.length ? ss.map(function(f){ return '<tr class="day-row"><td>'+esc(proveedorNombre(f.proveedorId))+'</td><td>'+esc(f.numero||'—')+'</td><td>'+esc(f.fecha||'—')+'</td><td class="num">'+fmtMoney(f.monto)+'</td></tr>'; }).join('') : '<tr class="day-row empty"><td colspan="4">No hay deuda pendiente.</td></tr>';
+    } else {
+      head.innerHTML='<tr><th>Proveedor</th><th>Facturas pendientes</th><th>Deuda</th></tr>';
+      var by={}; pend.forEach(function(f){ var k=f.proveedorId||''; if(!by[k]) by[k]={c:0,t:0}; by[k].c++; by[k].t+=Number(f.monto||0); });
+      var rows=Object.keys(by).map(function(k){ return {n:proveedorNombre(k),c:by[k].c,t:by[k].t}; }).sort(function(a,b){ return b.t-a.t; });
+      body.innerHTML = rows.length ? rows.map(function(r){ return '<tr class="day-row"><td>'+esc(r.n)+'</td><td class="num">'+r.c+'</td><td class="num">'+fmtMoney(r.t)+'</td></tr>'; }).join('') : '<tr class="day-row empty"><td colspan="3">No hay deuda pendiente.</td></tr>';
+    }
+  }
+  (function wireDeuda(){
+    var br=document.getElementById('deuda-modo-resumido'); if(br) br.addEventListener('click',function(){ state.deudaModo='resumido'; renderDeudaProveedores(); });
+    var bd=document.getElementById('deuda-modo-detallado'); if(bd) bd.addEventListener('click',function(){ state.deudaModo='detallado'; renderDeudaProveedores(); });
+    var fp=document.getElementById('deuda-proveedor-filter'); if(fp) fp.addEventListener('change', renderDeudaProveedores);
+  })();
+
   function renderTesoreria(){
+    fillDeudaProveedorFilter();
+    renderDeudaProveedores();
     renderCuentasList();
     fillMovFilterCuentaSelect();
     renderMovimientosList();

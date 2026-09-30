@@ -1025,7 +1025,23 @@
 
   <div id="view-tesoreria" hidden>
     <div class="toolbar" id="toolbar-tesoreria">
-      <div style="font-size:12.5px; color:var(--ink-2);">Cuentas y movimientos de caja/banco</div>
+      <div style="font-size:12.5px; color:var(--ink-2);">Deuda de proveedores, cuentas y movimientos de caja/banco</div>
+    </div>
+
+    <div class="compras-section-head">
+      <h3>Deuda de proveedores</h3>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <select id="deuda-proveedor-filter" class="scope-select" style="max-width:220px;"><option value="">Todos los proveedores</option></select>
+        <button class="btn" id="deuda-modo-resumido">Resumido</button>
+        <button class="btn" id="deuda-modo-detallado">Detallado</button>
+      </div>
+    </div>
+    <div id="deuda-total" style="font-size:13px; color:var(--ink-2); margin:2px 0 8px;"></div>
+    <div class="day-wrap">
+      <table class="day-table" id="deuda-table">
+        <thead id="deuda-head"></thead>
+        <tbody id="deuda-body"></tbody>
+      </table>
     </div>
 
     <div class="compras-section-head">
@@ -1245,7 +1261,7 @@
 </div>
 
 <div class="overlay" id="proveedor-overlay">
-  <div class="modal" id="proveedor-modal" style="max-width:460px;">
+  <div class="modal" id="proveedor-modal" style="max-width:600px; max-height:88vh; overflow-y:auto;">
     <h3 id="pm-title">Nuevo proveedor</h3>
     <div class="sub">Datos del proveedor</div>
     <div class="field">
@@ -1268,7 +1284,7 @@
       <div class="field"><label for="pm-banco">Banco</label><input type="text" id="pm-banco" maxlength="60"></div>
       <div class="field"><label for="pm-cbu">CBU / Alias</label><input type="text" id="pm-cbu" maxlength="60"></div>
     </div>
-    <div class="grid-2">
+    <div class="crew-fields">
       <div class="field"><label for="pm-condicion-iva">Condición IVA</label>
         <select id="pm-condicion-iva">
           <option value="">—</option>
@@ -1289,19 +1305,19 @@
           <option>60 días</option>
         </select></div>
     </div>
-    <div class="grid-2">
+    <div class="crew-fields">
       <div class="field"><label for="pm-localidad">Localidad</label><input type="text" id="pm-localidad" maxlength="60"></div>
       <div class="field"><label for="pm-provincia">Provincia</label><input type="text" id="pm-provincia" maxlength="40"></div>
     </div>
-    <div class="grid-2">
+    <div class="crew-fields">
       <div class="field"><label for="pm-zona">Zona</label><input type="text" id="pm-zona" maxlength="40" placeholder="Ej: Logística"></div>
       <div class="field"><label for="pm-categoria">Categoría</label><input type="text" id="pm-categoria" maxlength="40" placeholder="Ej: Bienes"></div>
     </div>
-    <div class="grid-2">
+    <div class="crew-fields">
       <div class="field"><label for="pm-imputacion">Imputación</label><input type="text" id="pm-imputacion" maxlength="60" placeholder="Ej: Repuestos y reparación"></div>
       <div class="field"><label for="pm-fax">Fax</label><input type="text" id="pm-fax" maxlength="30"></div>
     </div>
-    <div class="grid-2">
+    <div class="crew-fields">
       <div class="field"><label for="pm-orden-cheque">Orden de cheque (a nombre de)</label><input type="text" id="pm-orden-cheque" maxlength="80"></div>
       <div class="field"><label for="pm-responsable">Responsable</label><input type="text" id="pm-responsable" maxlength="60"></div>
     </div>
