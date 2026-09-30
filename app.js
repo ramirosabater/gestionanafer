@@ -210,10 +210,17 @@
     return (state.auth.roles||[]).find(function(r){ return r.id===state.roleId; }) || null;
   }
   function isLoggedIn(){ return !!currentRole(); }
+  // Pestañas nuevas que los perfiles viejos todavía no tienen guardadas:
+  // heredan el permiso de una pestaña relacionada hasta que se re-guarde el perfil.
+  var TAB_PERMISO_FALLBACK = { simulador: 'tesoreria' };
   function tabPermiso(tabId){
     var r = currentRole();
     if(!r) return 'oculta';
-    return (r.permisos && r.permisos[tabId]) || 'oculta';
+    var p = r.permisos || {};
+    if(p[tabId]) return p[tabId];
+    var fb = TAB_PERMISO_FALLBACK[tabId];
+    if(fb && p[fb]) return p[fb];
+    return 'oculta';
   }
   function canEdit(tabId){ return tabPermiso(tabId)==='editar'; }
   function canEditAnything(){ return TAB_DEFS.some(function(t){ return canEdit(t.id); }); }
