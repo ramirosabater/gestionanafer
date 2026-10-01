@@ -78,6 +78,8 @@
   </div>
   <div id="estado" class="muted" style="padding:0 4px 8px">Cargando datos…</div>
   <div class="card" style="padding:12px 14px;margin-bottom:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <label for="anio" style="font-size:12px;font-weight:700;color:#5c6b78">Año</label>
+    <select id="anio" style="font:inherit;font-weight:700;background:#f1f4f7;border:1px solid #cfd6dd;border-radius:8px;padding:6px 10px"></select>
     <span style="font-size:12px;font-weight:700;color:#5c6b78">Período:</span>
     <label style="font-size:12px;color:#94a1ab">Desde</label>
     <select id="mesDesde" style="font:inherit;background:#f1f4f7;border:1px solid #cfd6dd;border-radius:8px;padding:6px 10px"></select>
@@ -86,6 +88,8 @@
     <button id="filtroReset" style="font:inherit;font-size:12px;background:none;border:1px solid #e3e8ed;border-radius:8px;padding:6px 10px;color:#5c6b78;cursor:pointer">Todo el año</button>
     <button id="factImport" title="Subí el archivo Facturación_&lt;Mes&gt;_&lt;Año&gt; del sistema: carga facturación y unidades de ese mes" style="margin-left:auto;font:inherit;font-size:12px;font-weight:700;background:#223c7e;color:#fff;border:none;border-radius:9px;padding:7px 12px;cursor:pointer">📄 Cargar facturación del mes</button>
     <input type="file" id="factFile" accept=".xls,.csv,.txt" hidden />
+    <button id="presuImport" title="Subí la planilla de cumplimiento (.xlsx) con las filas PRESUPUESTADO del año: reemplaza el presupuesto de ese año" style="font:inherit;font-size:12px;font-weight:700;background:#fff;color:#223c7e;border:1px solid #223c7e;border-radius:9px;padding:6px 12px;cursor:pointer">📊 Cargar presupuesto</button>
+    <input type="file" id="presuFile" accept=".xlsx,.xls" hidden />
     <div id="factMsg" style="flex-basis:100%;font-size:12px"></div>
   </div>
   <div class="kpis" id="kpis"></div>
@@ -96,7 +100,7 @@
   </div>
   <div class="card" style="margin-top:16px"><div class="sec">Cumplimiento acumulado por unidad de negocio</div><div id="cumpUni" style="padding:14px 18px"></div></div>
   <div class="card" style="margin-top:16px"><div class="sec">Participación por unidad de negocio</div><div id="pie" style="padding:14px 18px"></div></div>
-  <div class="card" style="margin-top:16px"><div class="sec">Diferencia 2026 vs 2025 · Top 10 productos</div><div class="scrollx" style="padding:6px 8px 14px"><table id="dif"></table></div></div>
+  <div class="card" style="margin-top:16px"><div class="sec" id="difTitulo">Diferencia vs año anterior · Top 10 productos</div><div class="scrollx" style="padding:6px 8px 14px"><table id="dif"></table></div></div>
   <div class="card" style="margin-top:16px">
     <div class="sec" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
       <span>Altas vs Bajas de clientes</span>
@@ -175,7 +179,11 @@ document.getElementById('login-password').addEventListener('keydown', function(e
 document.getElementById('login-email').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('login-password').focus(); });
 const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const $=(id)=>document.getElementById(id);
-let REF=[], REAL=[], PROD=[], AB=[], medida="monto", mesDesde=0, mesHasta=11;
+// Modelo multi-año: MENSUAL = comercial_mensual (todos los años, es chico).
+// REF y PROD son "vistas" del año elegido (ANIO) con la forma que usa el resto
+// del tablero: real2026_* = real del año elegido, real2025_* = real del año
+// anterior (los nombres quedaron de la versión de un solo año).
+let REF=[], REAL=[], PROD=[], AB=[], MENSUAL=[], ANIO=null, medida="monto", mesDesde=0, mesHasta=11;
 const enRango=(i)=> i>=mesDesde && i<=mesHasta;
 function normU(s){ s=String(s||'').trim().toUpperCase();
   const m={'FAMILIA':'Familia','NEGOCIO':'Negocios','NEGOCIOS':'Negocios','EMPRESA':'Empresas','EMPRESAS':'Empresas','DISTRIBUIDOR':'Distribuidores','DISTRIBUIDORES':'Distribuidores','DISTRICUIDORES':'Distribuidores','PERSONAL':'Personal','OTROS':'Otros','COMERCIO':'Comercio','REVENTA':'Reventa','SUCURSALES':'Sucursales','COMPAÑIA':'Compañía','COMPAÑÍA':'Compañía','COMPANIA':'Compañía'};
@@ -208,27 +216,63 @@ async function fetchAll(path){
     const c=await r.json(); if(!Array.isArray(c)||!c.length) break; all=all.concat(c); if(c.length<size) break; from+=size; }
   return all;
 }
-async function cargar(){
+async function cargar(preferAnio){
   try{
-    const [r1,r2,r3,r4]=await Promise.all([
-      fetch(SUPABASE_URL+'/rest/v1/comercial_referencia?select=*',{headers:H()}).then(r=>r.json()),
-      fetch(SUPABASE_URL+'/rest/v1/comercial_real?select=periodo,unidad,producto,venta_bruta,cantidad&limit=200000',{headers:H()}).then(r=>r.json()),
-      fetchAll('comercial_producto_ref?select=unidad,producto,mes,real2026_qty,real2026_monto,presu_qty,presu_monto,real2025_qty,real2025_monto&order=unidad'),
+    const [m, ab]=await Promise.all([
+      fetchAll('comercial_mensual?select=anio,mes,unidad,presu_qty,presu_monto,real_qty,real_monto&order=anio,mes'),
       fetch(SUPABASE_URL+'/rest/v1/comercial_altas_bajas?select=*&limit=50000',{headers:H()}).then(r=>r.json()).catch(()=>[]),
     ]);
-    REF=r1||[]; REAL=Array.isArray(r2)?r2:[]; PROD=Array.isArray(r3)?r3:[]; AB=Array.isArray(r4)?r4:[];
-    $("estado").textContent = REAL.length? (new Set(REAL.map(x=>x.periodo)).size)+" mes(es) desde la carga mensual · el resto del maestro" : "Mostrando datos del maestro (cargá meses con la carga mensual para el dato fresco)";
-    const unidades=[...new Set(REF.map(r=>r.unidad))];
-    $("unidad").innerHTML=unidades.map(u=>'<option>'+u+'</option>').join('');
-    // Filtro de meses: por defecto Ene → último mes con real
-    let ultimo=0; REF.filter(r=>r.unidad==='Compañía').forEach(r=>{ if(Number(r.real2026_monto)>0 && r.mes-1>ultimo) ultimo=r.mes-1; });
-    mesDesde=0; mesHasta=ultimo||11;
-    const opts=(sel)=>MESES.map((m,i)=>'<option value="'+i+'"'+(i===sel?' selected':'')+'>'+m+'</option>').join('');
-    $("mesDesde").innerHTML=opts(mesDesde); $("mesHasta").innerHTML=opts(mesHasta);
-    $("cliMes").innerHTML=MESES.map((m,i)=>'<option value="'+i+'"'+(i===mesHasta?' selected':'')+'>'+m+'</option>').join('');
-    render();
-  }catch(e){ $("estado").textContent="No se pudo conectar. ¿Corriste los SQL de comercial (real + referencia + productos)?"; }
+    MENSUAL=Array.isArray(m)?m:[]; AB=Array.isArray(ab)?ab:[];
+    if(!MENSUAL.length){ $("estado").textContent="No hay datos. ¿Corriste supabase/migracion_multianio.sql?"; return; }
+    const anios=[...new Set(MENSUAL.map(r=>r.anio))].sort((a,b)=>a-b);
+    const conReal=anios.filter(a=>MENSUAL.some(r=>r.anio===a && r.unidad==='Compañía' && Number(r.real_monto)>0));
+    const def=(preferAnio && anios.includes(+preferAnio))? +preferAnio
+            : (ANIO && anios.includes(ANIO))? ANIO
+            : (conReal.length? conReal[conReal.length-1] : anios[anios.length-1]);
+    $("anio").innerHTML=anios.slice().reverse().map(a=>'<option value="'+a+'"'+(a===def?' selected':'')+'>'+a+'</option>').join('');
+    await setAnio(def);
+  }catch(e){ console.error(e); $("estado").textContent="No se pudo conectar con la base. Probá recargar la página."; }
 }
+// Arma REF/PROD del año elegido (+ año anterior para las comparaciones).
+async function setAnio(anio){
+  ANIO=+anio; const prev=ANIO-1;
+  $("estado").textContent="Cargando "+ANIO+"…";
+  const prods=await fetchAll('comercial_producto_mensual?select=anio,mes,unidad,producto,producto_clave,presu_qty,presu_monto,real_qty,real_monto&anio=in.('+prev+','+ANIO+')&order=anio,mes,unidad');
+  const n=(v)=>Number(v)||0;
+  // Totales por unidad y mes
+  const ref={};
+  MENSUAL.filter(r=>r.anio===ANIO||r.anio===prev).forEach(r=>{
+    const k=r.unidad+'|'+r.mes;
+    const e=ref[k]||(ref[k]={unidad:r.unidad,mes:r.mes,presu_qty:0,presu_monto:0,real2026_qty:0,real2026_monto:0,real2025_qty:0,real2025_monto:0});
+    if(r.anio===ANIO){ e.presu_qty=n(r.presu_qty); e.presu_monto=n(r.presu_monto); e.real2026_qty=n(r.real_qty); e.real2026_monto=n(r.real_monto); }
+    else { e.real2025_qty=n(r.real_qty); e.real2025_monto=n(r.real_monto); }
+  });
+  REF=Object.values(ref);
+  // Detalle por producto
+  const pr={};
+  (Array.isArray(prods)?prods:[]).forEach(r=>{
+    const k=r.unidad+'|'+r.mes+'|'+r.producto_clave;
+    const e=pr[k]||(pr[k]={unidad:r.unidad,mes:r.mes,producto:r.producto,presu_qty:0,presu_monto:0,real2026_qty:0,real2026_monto:0,real2025_qty:0,real2025_monto:0});
+    if(r.anio===ANIO){ e.producto=r.producto; e.presu_qty=n(r.presu_qty); e.presu_monto=n(r.presu_monto); e.real2026_qty=n(r.real_qty); e.real2026_monto=n(r.real_monto); }
+    else { e.real2025_qty=n(r.real_qty); e.real2025_monto=n(r.real_monto); }
+  });
+  PROD=Object.values(pr); REAL=[];
+  // Unidades del año (Compañía primero); se mantiene la elegida si existe
+  const actual=$("unidad").value;
+  const unidades=[...new Set(REF.filter(r=>MENSUAL.some(m=>m.anio===ANIO && m.unidad===r.unidad)).map(r=>r.unidad))]
+    .sort((a,b)=> a==='Compañía'?-1 : b==='Compañía'?1 : a.localeCompare(b,'es'));
+  $("unidad").innerHTML=unidades.map(u=>'<option'+(u===actual?' selected':'')+'>'+u+'</option>').join('');
+  // Meses: Ene → último mes con real del año (o todo el año si no hay real)
+  let ultimo=-1; REF.filter(r=>r.unidad==='Compañía').forEach(r=>{ if(r.real2026_monto>0 && r.mes-1>ultimo) ultimo=r.mes-1; });
+  mesDesde=0; mesHasta=ultimo>=0? ultimo : 11;
+  const opts=(sel)=>MESES.map((m,i)=>'<option value="'+i+'"'+(i===sel?' selected':'')+'>'+m+'</option>').join('');
+  $("mesDesde").innerHTML=opts(mesDesde); $("mesHasta").innerHTML=opts(mesHasta);
+  $("cliMes").innerHTML=MESES.map((m,i)=>'<option value="'+i+'"'+(i===mesHasta?' selected':'')+'>'+m+'</option>').join('');
+  $("estado").textContent= ultimo>=0 ? "Año "+ANIO+" · real cargado hasta "+MESES[ultimo]+" · compara contra "+prev : "Año "+ANIO+" · todavía sin ventas cargadas";
+  $("difTitulo").textContent="Diferencia "+ANIO+" vs "+prev+" · Top 10 productos";
+  render();
+}
+$("anio").onchange=(e)=>{ setAnio(+e.target.value).catch(err=>{ console.error(err); $("estado").textContent="No se pudo cargar "+e.target.value+"."; }); };
 $("unidad").onchange=render;
 $("mesDesde").onchange=(e)=>{ mesDesde=+e.target.value; if(mesDesde>mesHasta){ mesHasta=mesDesde; $("mesHasta").value=mesHasta; } render(); };
 $("mesHasta").onchange=(e)=>{ mesHasta=+e.target.value; if(mesHasta<mesDesde){ mesDesde=mesHasta; $("mesDesde").value=mesDesde; } render(); };
@@ -265,8 +309,8 @@ async function leerTexto(file){ const buf=await file.arrayBuffer();
 
 async function renderClientes(){
   const u=$("unidad").value;
-  const desde="2026-"+String(mesDesde+1).padStart(2,"0")+"-01";
-  const hasta="2026-"+String(mesHasta+1).padStart(2,"0")+"-01";
+  const desde=ANIO+"-"+String(mesDesde+1).padStart(2,"0")+"-01";
+  const hasta=ANIO+"-"+String(mesHasta+1).padStart(2,"0")+"-01";
   try{
     const res=await fetch(SUPABASE_URL+"/rest/v1/rpc/top_clientes",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_desde:desde,p_hasta:hasta,p_unidad:u,p_limit:20})});
     const data=await res.json();
@@ -279,7 +323,7 @@ async function renderClientes(){
 // Mes y año del archivo de clientes. Orden de prioridad:
 // 1) columnas MES / AÑO dentro del archivo (formato actual del sistema),
 // 2) nombre del archivo (p.ej. "Principales_Clientes_Septiembre__2026_20261001.xls"),
-// 3) selector "Mes" del tablero (año 2026), solo si no se detectó nada.
+// 3) selector "Mes" del tablero (año elegido arriba), solo si no se detectó nada.
 const MESES_LARGOS=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
 function mesDeTexto(t){ t=String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
   if(t==='SETIEMBRE') t='SEPTIEMBRE'; return MESES_LARGOS.indexOf(t); }
@@ -329,9 +373,9 @@ async function importarClientes(file){
     if(periodos.length===1){ periodo=periodos[0]; origen="según el archivo"; }
     else { const pn=periodoDeNombre(file.name);
       if(pn){ periodo=pn.anio+"-"+String(pn.mes+1).padStart(2,"0")+"-01"; origen="según el nombre del archivo"; }
-      else { const mesIdx=+$("cliMes").value; periodo="2026-"+String(mesIdx+1).padStart(2,"0")+"-01"; origen="elegido en el selector"; } }
+      else { const mesIdx=+$("cliMes").value; periodo=ANIO+"-"+String(mesIdx+1).padStart(2,"0")+"-01"; origen="elegido en el selector"; } }
     const mesIdx=+periodo.slice(5,7)-1, anio=periodo.slice(0,4);
-    if(anio==="2026") $("cliMes").value=mesIdx;
+    if(+anio===ANIO) $("cliMes").value=mesIdx;
     const nom=MESES[mesIdx]+" "+anio;
     const rows=Object.entries(agg).map(([cliente,v])=>({periodo,unidad:v.unidad,cliente,venta:v.venta}));
     if(!rows.length){ msg.style.color="#e1251b"; msg.textContent="El archivo no tiene datos válidos."; return; }
@@ -391,13 +435,82 @@ async function importarFacturacion(file){
       if(/cargar_facturacion_mes/.test(m) && /not find|no existe|does not exist/i.test(m)) m="Falta crear la función en Supabase (correr supabase/funcion_cargar_facturacion_mes.sql).";
       throw new Error(m); }
     const r=JSON.parse(txt);
-    await cargar();
+    await cargar(+anio);
     msg.style.color="#16a34a";
     msg.textContent="✓ "+nom+" cargado: $"+Math.round(totM).toLocaleString('es-AR')+" · "+Math.round(totQ).toLocaleString('es-AR')+" unidades · "+
-      (r.productos_nuevos? r.productos_nuevos+" producto(s) nuevo(s) agregados · ":"")+"Si ya existía, se reemplazó.";
+      "Si ya existía, se reemplazó.";
   }catch(e){ msg.style.color="#e1251b"; msg.textContent="No se pudo cargar: "+e.message; }
   finally{ btn.disabled=false; }
 }
+/* ===== Carga del presupuesto anual (planilla CUMPLIMIENTO_PRESUPUESTARIO.xlsx) =====
+   Lee las filas con ESTADO = PRESUPUESTADO (columnas TIPO CLIENTE, TIPO, AÑO, ESTADO,
+   PRODUCTO, ENE..DIC). TIPO "CANTIDAD..." = unidades, "FACTURACION..." = monto.
+   Por cada año que encuentre llama a cargar_presupuesto, que reemplaza el
+   presupuesto completo de ese año (no toca el real). */
+function cargarLectorExcel(){
+  if(window.XLSX) return Promise.resolve();
+  return new Promise((ok,ko)=>{ const sc=document.createElement('script');
+    sc.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    sc.onload=()=>ok(); sc.onerror=()=>ko(new Error('No se pudo cargar el lector de Excel. Revisá la conexión y probá de nuevo.'));
+    document.head.appendChild(sc); });
+}
+function parsePresupuesto(wb){
+  const limpio=(t)=>String(t==null?'':t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
+  const MES_COL=['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+  for(const nombre of wb.SheetNames){
+    const filas=XLSX.utils.sheet_to_json(wb.Sheets[nombre],{header:1,defval:null,raw:true});
+    const h=filas.findIndex(f=>{ const c=(f||[]).map(limpio); return c.includes('TIPO CLIENTE') && c.includes('PRODUCTO') && c.includes('ESTADO'); });
+    if(h<0) continue;
+    const enc=filas[h].map(limpio); const col=(n)=>enc.indexOf(n);
+    const cU=col('TIPO CLIENTE'), cT=col('TIPO'), cA=col('ANO'), cE=col('ESTADO'), cP=col('PRODUCTO');
+    const cM=MES_COL.map(col);
+    if([cU,cT,cA,cE,cP].some(i=>i<0) || cM.some(i=>i<0)) throw new Error('La hoja "'+nombre+'" no tiene todas las columnas esperadas (TIPO CLIENTE, TIPO, AÑO, ESTADO, PRODUCTO, ENE…DIC).');
+    const porAnio={};
+    for(let i=h+1;i<filas.length;i++){ const f=filas[i]||[];
+      if(!limpio(f[cE]).startsWith('PRESUP')) continue;
+      const anio=parseInt(f[cA],10); if(!(anio>2000)) continue;
+      const tipo=limpio(f[cT]); const med= tipo.startsWith('CANT')?'qty' : tipo.startsWith('FACT')?'monto' : null; if(!med) continue;
+      const unidad=normU(f[cU]); const producto=String(f[cP]==null?'':f[cP]).trim(); if(!producto) continue;
+      const A=porAnio[anio]||(porAnio[anio]={});
+      cM.forEach((c,m)=>{ const v=Number(f[c])||0; if(!v) return;
+        const k=unidad+'|'+producto+'|'+(m+1);
+        const e=A[k]||(A[k]={unidad,producto,mes:m+1,qty:0,monto:0}); e[med]+=v; });
+    }
+    return Object.fromEntries(Object.entries(porAnio).map(([a,o])=>[a,Object.values(o)]));
+  }
+  throw new Error('No encontré una hoja con el formato de la planilla de cumplimiento.');
+}
+async function importarPresupuesto(file){
+  const msg=$("factMsg"); msg.style.color="#5c6b78"; msg.textContent="Leyendo planilla…";
+  const btn=$("presuImport"); btn.disabled=true;
+  try{
+    await cargarLectorExcel();
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});
+    const porAnio=parsePresupuesto(wb);
+    const anios=Object.keys(porAnio).map(Number).sort((a,b)=>a-b);
+    if(!anios.length) throw new Error('La planilla no tiene filas con ESTADO = PRESUPUESTADO.');
+    const hechos=[];
+    for(const a of anios){
+      const filas=porAnio[a];
+      const tq=filas.reduce((s,r)=>s+r.qty,0), tm=filas.reduce((s,r)=>s+r.monto,0);
+      const unidades=[...new Set(filas.map(r=>r.unidad))].sort().join(', ');
+      if(!confirm("Cargar PRESUPUESTO "+a+"\n\nUnidades: "+unidades+"\nTotal: $"+Math.round(tm).toLocaleString('es-AR')+" · "+Math.round(tq).toLocaleString('es-AR')+" unidades\n\nReemplaza todo el presupuesto de "+a+" (el real no se toca). ¿Continuar?")) continue;
+      msg.textContent="Cargando presupuesto "+a+"…";
+      const res=await fetch(SUPABASE_URL+"/rest/v1/rpc/cargar_presupuesto",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_anio:a,p_filas:filas})});
+      const txt=await res.text();
+      if(!res.ok){ let m=txt; try{ m=JSON.parse(txt).message||txt; }catch{}
+        if(/cargar_presupuesto/.test(m) && /not find|no existe|does not exist/i.test(m)) m="Falta crear la función en Supabase (correr supabase/migracion_multianio.sql).";
+        throw new Error(m); }
+      hechos.push(a+" ($"+Math.round(tm).toLocaleString('es-AR')+")");
+    }
+    if(!hechos.length){ msg.textContent="Carga cancelada."; return; }
+    await cargar(anios[anios.length-1]);
+    msg.style.color="#16a34a"; msg.textContent="✓ Presupuesto cargado: "+hechos.join(" · ")+". Si ya existía, se reemplazó.";
+  }catch(e){ msg.style.color="#e1251b"; msg.textContent="No se pudo cargar el presupuesto: "+e.message; }
+  finally{ btn.disabled=false; }
+}
+$("presuImport").onclick=()=>$("presuFile").click();
+$("presuFile").onchange=(e)=>{ if(e.target.files[0]) importarPresupuesto(e.target.files[0]); e.target.value=""; };
 $("factImport").onclick=()=>$("factFile").click();
 $("factFile").onchange=(e)=>{ if(e.target.files[0]) importarFacturacion(e.target.files[0]); e.target.value=""; };
 $("cliImport").onclick=()=>$("cliFile").click();
@@ -441,21 +554,29 @@ function render(){
   const crec= r2025Acum? (realAcum/r2025Acum-1)*100 : 0;
   const proy= n? realAcum/n*12 : 0;
   // variación vs mes anterior (último mes con real vs el previo)
-  let variacion=null;
-  if(n>=2){ const ult=mesesReal[n-1], pen=mesesReal[n-2]; if(real[pen]) variacion=(real[ult]/real[pen]-1)*100; }
+  // Variación vs mes anterior: último mes con real DENTRO del filtro contra el mes
+  // calendario anterior, esté o no dentro del filtro (Sep–Sep compara Sep vs Ago;
+  // Ene–Ago compara Ago vs Jul). Enero compara contra diciembre del año anterior.
+  let variacion=null, varTexto='';
+  if(n){ const ult=mesesReal[n-1];
+    const prevVal= ult>0 ? real[ult-1] : r2025[11];
+    const prevNom= ult>0 ? MESES[ult-1] : 'Dic '+(ANIO-1);
+    varTexto=MESES[ult]+' vs '+prevNom;
+    if(prevVal>0) variacion=(real[ult]/prevVal-1)*100; else varTexto='Sin datos de '+prevNom; }
   const okc=(v)=>v>=100;
   const tag=(t,ok)=>'<span class="tag" style="background:'+(ok?'rgba(22,163,74,.12)':'rgba(225,37,27,.12)')+';color:'+(ok?'#16a34a':'#e1251b')+'">'+t+'</span>';
 
-  const abTot=(()=>{ let a=0,b=0; AB.filter(r=> enRango(new Date(r.periodo+"T00:00:00").getMonth()) && (u==="Compañía"||normU(r.unidad)===normU(u))).forEach(r=>{a+=Number(r.altas)||0;b+=Number(r.bajas)||0;}); return {a,b,neto:a-b}; })();
+  const abTot=(()=>{ let a=0,b=0; AB.filter(r=> String(r.periodo).startsWith(ANIO+"-") && enRango(new Date(r.periodo+"T00:00:00").getMonth()) && (u==="Compañía"||normU(r.unidad)===normU(u))).forEach(r=>{a+=Number(r.altas)||0;b+=Number(r.bajas)||0;}); return {a,b,neto:a-b}; })();
   $("kpis").innerHTML=[
     '<div class="card kpi"><div class="lab">Altas / Bajas (clientes)</div><div class="val"><span style="color:#16a34a">'+abTot.a+'</span> <span style="color:#94a1ab">/</span> <span style="color:#e1251b">'+abTot.b+'</span></div><div class="muted">Neto '+(abTot.neto>=0?'+':'')+abTot.neto+'</div></div>',
     '<div class="card kpi"><div class="lab">'+(medida==='monto'?'Facturación real':'Unidades vendidas')+' (acum)</div><div class="val">'+fmt(realAcum)+'</div><div class="muted">'+n+' mes(es)</div></div>',
     '<div class="card kpi"><div class="lab">Presupuesto (acum)</div><div class="val">'+fmt(presuAcum)+'</div></div>',
     (presuAcum ? '<div class="card kpi"><div class="lab">Cumplimiento</div><div class="val" style="color:'+(okc(cumpl)?'#16a34a':'#e1251b')+'">'+cumpl.toFixed(1)+'%</div>'+tag(okc(cumpl)?'En/sobre presup.':'Por debajo',okc(cumpl))+'</div>'
                : '<div class="card kpi"><div class="lab">Cumplimiento</div><div class="val" style="color:#94a1ab">—</div><div class="muted">Sin presupuesto cargado</div></div>'),
-    '<div class="card kpi"><div class="lab">Crecimiento vs 2025</div><div class="val" style="color:'+(crec>=0?'#16a34a':'#e1251b')+'">'+(crec>=0?'+':'')+crec.toFixed(1)+'%</div></div>',
-    '<div class="card kpi"><div class="lab">Var. vs mes anterior</div><div class="val" style="color:'+(variacion==null?'#94a1ab':variacion>=0?'#16a34a':'#e1251b')+'">'+(variacion==null?'—':(variacion>=0?'+':'')+variacion.toFixed(1)+'%')+'</div></div>',
-    '<div class="card kpi"><div class="lab">Proyección cierre 2026</div><div class="val">'+fmt(proy)+'</div><div class="muted">'+(presuAnual?(proy/presuAnual*100).toFixed(0):0)+'% del presup. anual</div></div>',
+    (r2025Acum ? '<div class="card kpi"><div class="lab">Crecimiento vs '+(ANIO-1)+'</div><div class="val" style="color:'+(crec>=0?'#16a34a':'#e1251b')+'">'+(crec>=0?'+':'')+crec.toFixed(1)+'%</div></div>'
+               : '<div class="card kpi"><div class="lab">Crecimiento vs '+(ANIO-1)+'</div><div class="val" style="color:#94a1ab">—</div><div class="muted">Sin datos de '+(ANIO-1)+'</div></div>'),
+    '<div class="card kpi"><div class="lab">Var. vs mes anterior</div><div class="val" style="color:'+(variacion==null?'#94a1ab':variacion>=0?'#16a34a':'#e1251b')+'">'+(variacion==null?'—':(variacion>=0?'+':'')+variacion.toFixed(1)+'%')+'</div>'+(varTexto?'<div class="muted">'+varTexto+'</div>':'')+'</div>',
+    '<div class="card kpi"><div class="lab">Proyección cierre '+ANIO+'</div><div class="val">'+fmt(proy)+'</div><div class="muted">'+(presuAnual?(proy/presuAnual*100).toFixed(0):0)+'% del presup. anual</div></div>',
     '<div class="card kpi"><div class="lab">Precio promedio</div><div class="val">$'+Math.round(acumReal(u,'qty')? acumReal(u,'monto')/acumReal(u,'qty'):0).toLocaleString('es-AR')+'</div><div class="muted">facturación ÷ unidades</div></div>',
   ].join('');
   $("nota").innerHTML='ⓘ Proyección al cierre = ritmo actual × 12 (facturación/unidades acumuladas ÷ meses con datos × 12). · Precio promedio = facturación ÷ unidades vendidas.';
@@ -522,15 +643,15 @@ function render(){
       return '<tr><td>'+p.producto+'</td><td class="num">'+fmt(p.real)+'</td><td class="num">'+fmt(p.presu)+'</td><td class="num" style="color:'+col+'">'+(c==null?'—':c.toFixed(0)+'%')+'</td><td class="num">$'+Math.round(p.precio).toLocaleString('es-AR')+'</td></tr>'; }).join('')+'</tbody>'
     : '<tbody><tr><td class="muted" style="padding:16px">Sin datos de productos.</td></tr></tbody>';
 
-  // Diferencia 2026 vs 2025 (Top 10 productos por variación) — punto 11
+  // Diferencia año elegido vs anterior (Top 10 productos por variación) — punto 11
   const dif=prodsD.map(p=>({producto:p.producto, dif:p.real-p.r2025, real:p.real, r2025:p.r2025}))
     .filter(x=>x.real||x.r2025).sort((a,b)=>b.dif-a.dif).slice(0,10);
-  $("dif").innerHTML = dif.length? '<thead><tr><th>Producto</th><th class="num">2025</th><th class="num">2026</th><th class="num">Dif.</th></tr></thead><tbody>'+
+  $("dif").innerHTML = dif.length? '<thead><tr><th>Producto</th><th class="num">'+(ANIO-1)+'</th><th class="num">'+ANIO+'</th><th class="num">Dif.</th></tr></thead><tbody>'+
     dif.map(x=>'<tr><td>'+x.producto+'</td><td class="num">'+fmt(x.r2025)+'</td><td class="num">'+fmt(x.real)+'</td><td class="num" style="color:'+(x.dif>=0?'#16a34a':'#e1251b')+'">'+(x.dif>=0?'+':'')+fmt(x.dif)+'</td></tr>').join('')+'</tbody>'
     : '<tbody><tr><td class="muted" style="padding:16px">Sin datos.</td></tr></tbody>';
 
   // Altas vs Bajas de clientes — punto 13 (respeta unidad y filtro de meses)
-  const enRangoAB=(r)=> enRango(new Date(r.periodo+'T00:00:00').getMonth());
+  const enRangoAB=(r)=> String(r.periodo).startsWith(ANIO+'-') && enRango(new Date(r.periodo+'T00:00:00').getMonth());
   const abU = AB.filter(r=> enRangoAB(r) && (u==='Compañía' || normU(r.unidad)===normU(u)));
   let tAlt=0,tBaj=0; abU.forEach(r=>{ tAlt+=Number(r.altas)||0; tBaj+=Number(r.bajas)||0; });
   const neto=tAlt-tBaj;
