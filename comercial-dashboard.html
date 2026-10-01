@@ -84,6 +84,9 @@
     <label style="font-size:12px;color:#94a1ab">Hasta</label>
     <select id="mesHasta" style="font:inherit;background:#f1f4f7;border:1px solid #cfd6dd;border-radius:8px;padding:6px 10px"></select>
     <button id="filtroReset" style="font:inherit;font-size:12px;background:none;border:1px solid #e3e8ed;border-radius:8px;padding:6px 10px;color:#5c6b78;cursor:pointer">Todo el año</button>
+    <button id="factImport" title="Subí el archivo Facturación_&lt;Mes&gt;_&lt;Año&gt; del sistema: carga facturación y unidades de ese mes" style="margin-left:auto;font:inherit;font-size:12px;font-weight:700;background:#223c7e;color:#fff;border:none;border-radius:9px;padding:7px 12px;cursor:pointer">📄 Cargar facturación del mes</button>
+    <input type="file" id="factFile" accept=".xls,.csv,.txt" hidden />
+    <div id="factMsg" style="flex-basis:100%;font-size:12px"></div>
   </div>
   <div class="kpis" id="kpis"></div>
   <div id="nota" class="muted" style="padding:0 6px 12px;font-size:11px"></div>
@@ -175,7 +178,7 @@ const $=(id)=>document.getElementById(id);
 let REF=[], REAL=[], PROD=[], AB=[], medida="monto", mesDesde=0, mesHasta=11;
 const enRango=(i)=> i>=mesDesde && i<=mesHasta;
 function normU(s){ s=String(s||'').trim().toUpperCase();
-  const m={'FAMILIA':'Familia','NEGOCIO':'Negocios','NEGOCIOS':'Negocios','EMPRESA':'Empresas','EMPRESAS':'Empresas','DISTRIBUIDOR':'Distribuidores','DISTRIBUIDORES':'Distribuidores','DISTRICUIDORES':'Distribuidores','PERSONAL':'Personal','REVENTA':'Reventa','SUCURSALES':'Sucursales','COMPAÑIA':'Compañía','COMPAÑÍA':'Compañía','COMPANIA':'Compañía'};
+  const m={'FAMILIA':'Familia','NEGOCIO':'Negocios','NEGOCIOS':'Negocios','EMPRESA':'Empresas','EMPRESAS':'Empresas','DISTRIBUIDOR':'Distribuidores','DISTRIBUIDORES':'Distribuidores','DISTRICUIDORES':'Distribuidores','PERSONAL':'Personal','OTROS':'Otros','COMERCIO':'Comercio','REVENTA':'Reventa','SUCURSALES':'Sucursales','COMPAÑIA':'Compañía','COMPAÑÍA':'Compañía','COMPANIA':'Compañía'};
   return m[s]||s; }
 function productosDe(unidad){
   const med = medida==='monto'?'monto':'qty';
@@ -343,6 +346,60 @@ async function importarClientes(file){
     renderClientes();
   }catch(e){ msg.style.color="#e1251b"; msg.textContent="No se pudo importar: "+e.message; }
 }
+/* ===== Carga mensual de facturación (archivo "Facturación_<Mes>_<Año>_*.xls") =====
+   Mismo criterio que cargar_mes_cumplimiento.py: siempre es real (EJECUTADO),
+   el mes sale de FECHA_DESDE, se suma por tipo de cliente y producto (sin vendedor),
+   monto = VENTA_BRUTA. La base la actualiza la función cargar_facturacion_mes
+   (supabase/funcion_cargar_facturacion_mes.sql) en una sola transacción. */
+function parseFacturacion(texto){
+  const lineas=texto.split(/\r?\n/).filter(l=>l.trim());
+  const enc=(lineas[0]||'').toUpperCase();
+  if(!enc.includes('FECHA_DESDE') || !enc.includes('VENTA_BRUTA')) throw new Error('No parece un archivo de facturación (faltan FECHA_DESDE / VENTA_BRUTA en el encabezado).');
+  const num=(x)=>{ const v=parseFloat(String(x||'').trim().replace(',','.')); return isNaN(v)?0:v; };
+  const agg={}; const periodos=new Set(); let malas=0;
+  for(let i=1;i<lineas.length;i++){
+    const c=lineas[i].split(';'); if(c.length<11){ malas++; continue; }
+    const f=c[0].trim().split('/'); if(f.length===3) periodos.add(f[2]+'-'+f[1].padStart(2,'0')+'-01');
+    const desc=c[4].trim().toUpperCase();
+    const k=c[3].trim()+'|'+c[5].trim()+'|'+c[6].trim();
+    const e=agg[k]||(agg[k]={tipocli:c[3].trim(), tipocli_desc:desc, unidad:normU(desc), idproducto:c[5].trim(), producto:c[6].trim(), cantidad:0, venta_neta:0, venta_bruta:0});
+    e.cantidad+=num(c[7]); e.venta_neta+=num(c[10]); e.venta_bruta+=num(c[9]);
+  }
+  const filas=Object.values(agg).filter(r=>r.cantidad||r.venta_bruta||r.venta_neta)
+    .map(r=>({...r, venta_bruta:Math.round(r.venta_bruta*100)/100, venta_neta:Math.round(r.venta_neta*100)/100}));
+  const porU={}; filas.forEach(r=>{ const u=porU[r.unidad]||(porU[r.unidad]={q:0,m:0}); u.q+=r.cantidad; u.m+=r.venta_bruta; });
+  return {filas, periodos:[...periodos], porU, malas};
+}
+async function importarFacturacion(file){
+  const msg=$("factMsg"); msg.style.color="#5c6b78"; msg.textContent="Leyendo archivo…";
+  const btn=$("factImport"); btn.disabled=true;
+  try{
+    const {filas, periodos, porU, malas}=parseFacturacion(await leerTexto(file));
+    if(periodos.length!==1) throw new Error(periodos.length? "El archivo trae más de un mes ("+periodos.join(", ")+"). Subí un archivo por mes." : "No encontré la fecha (FECHA_DESDE) en el archivo.");
+    if(!filas.length) throw new Error("El archivo no tiene ventas para cargar.");
+    const periodo=periodos[0], mesIdx=+periodo.slice(5,7)-1, anio=periodo.slice(0,4), nom=MESES[mesIdx]+" "+anio;
+    const totQ=filas.reduce((s,r)=>s+r.cantidad,0), totM=filas.reduce((s,r)=>s+r.venta_bruta,0);
+    const detalle=Object.entries(porU).sort((a,b)=>b[1].m-a[1].m)
+      .map(([u,v])=>"  • "+u+": $"+Math.round(v.m).toLocaleString('es-AR')+" · "+Math.round(v.q).toLocaleString('es-AR')+" u.").join("\n");
+    const ok=confirm("Cargar facturación de "+nom+"\n\n"+detalle+"\n\nTotal: $"+Math.round(totM).toLocaleString('es-AR')+" · "+Math.round(totQ).toLocaleString('es-AR')+" unidades"+
+      (malas?"\n("+malas+" fila(s) ilegibles quedaron afuera)":"")+"\n\nSi "+nom+" ya estaba cargado, se reemplaza. ¿Continuar?");
+    if(!ok){ msg.textContent="Carga cancelada."; return; }
+    msg.textContent="Cargando "+nom+" en la base…";
+    const res=await fetch(SUPABASE_URL+"/rest/v1/rpc/cargar_facturacion_mes",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_periodo:periodo,p_filas:filas})});
+    const txt=await res.text();
+    if(!res.ok){ let m=txt; try{ m=JSON.parse(txt).message||txt; }catch{} 
+      if(/cargar_facturacion_mes/.test(m) && /not find|no existe|does not exist/i.test(m)) m="Falta crear la función en Supabase (correr supabase/funcion_cargar_facturacion_mes.sql).";
+      throw new Error(m); }
+    const r=JSON.parse(txt);
+    await cargar();
+    msg.style.color="#16a34a";
+    msg.textContent="✓ "+nom+" cargado: $"+Math.round(totM).toLocaleString('es-AR')+" · "+Math.round(totQ).toLocaleString('es-AR')+" unidades · "+
+      (r.productos_nuevos? r.productos_nuevos+" producto(s) nuevo(s) agregados · ":"")+"Si ya existía, se reemplazó.";
+  }catch(e){ msg.style.color="#e1251b"; msg.textContent="No se pudo cargar: "+e.message; }
+  finally{ btn.disabled=false; }
+}
+$("factImport").onclick=()=>$("factFile").click();
+$("factFile").onchange=(e)=>{ if(e.target.files[0]) importarFacturacion(e.target.files[0]); e.target.value=""; };
 $("cliImport").onclick=()=>$("cliFile").click();
 $("cliFile").onchange=(e)=>{ if(e.target.files[0]) importarClientes(e.target.files[0]); e.target.value=""; };
 document.querySelectorAll('#medida button').forEach(b=> b.onclick=()=>{ medida=b.dataset.m; document.querySelectorAll('#medida button').forEach(x=>x.classList.toggle('on',x===b)); render(); });
@@ -394,7 +451,8 @@ function render(){
     '<div class="card kpi"><div class="lab">Altas / Bajas (clientes)</div><div class="val"><span style="color:#16a34a">'+abTot.a+'</span> <span style="color:#94a1ab">/</span> <span style="color:#e1251b">'+abTot.b+'</span></div><div class="muted">Neto '+(abTot.neto>=0?'+':'')+abTot.neto+'</div></div>',
     '<div class="card kpi"><div class="lab">'+(medida==='monto'?'Facturación real':'Unidades vendidas')+' (acum)</div><div class="val">'+fmt(realAcum)+'</div><div class="muted">'+n+' mes(es)</div></div>',
     '<div class="card kpi"><div class="lab">Presupuesto (acum)</div><div class="val">'+fmt(presuAcum)+'</div></div>',
-    '<div class="card kpi"><div class="lab">Cumplimiento</div><div class="val" style="color:'+(okc(cumpl)?'#16a34a':'#e1251b')+'">'+cumpl.toFixed(1)+'%</div>'+tag(okc(cumpl)?'En/sobre presup.':'Por debajo',okc(cumpl))+'</div>',
+    (presuAcum ? '<div class="card kpi"><div class="lab">Cumplimiento</div><div class="val" style="color:'+(okc(cumpl)?'#16a34a':'#e1251b')+'">'+cumpl.toFixed(1)+'%</div>'+tag(okc(cumpl)?'En/sobre presup.':'Por debajo',okc(cumpl))+'</div>'
+               : '<div class="card kpi"><div class="lab">Cumplimiento</div><div class="val" style="color:#94a1ab">—</div><div class="muted">Sin presupuesto cargado</div></div>'),
     '<div class="card kpi"><div class="lab">Crecimiento vs 2025</div><div class="val" style="color:'+(crec>=0?'#16a34a':'#e1251b')+'">'+(crec>=0?'+':'')+crec.toFixed(1)+'%</div></div>',
     '<div class="card kpi"><div class="lab">Var. vs mes anterior</div><div class="val" style="color:'+(variacion==null?'#94a1ab':variacion>=0?'#16a34a':'#e1251b')+'">'+(variacion==null?'—':(variacion>=0?'+':'')+variacion.toFixed(1)+'%')+'</div></div>',
     '<div class="card kpi"><div class="lab">Proyección cierre 2026</div><div class="val">'+fmt(proy)+'</div><div class="muted">'+(presuAnual?(proy/presuAnual*100).toFixed(0):0)+'% del presup. anual</div></div>',
@@ -443,7 +501,8 @@ function render(){
     '<div class="muted" style="font-size:11px;margin-top:6px"><span style="display:inline-block;width:10px;height:8px;background:#cfd6dd;border-radius:2px;vertical-align:middle"></span> presupuesto · <span style="display:inline-block;width:10px;height:8px;background:#16a34a;border-radius:2px;vertical-align:middle"></span> real (verde cumple / rojo no)</div>';
 
   // Participación por unidad (torta) — sobre el acumulado, en la medida elegida
-  const vals=uns.map(x=>{ const rr=realPorMes(x); return {u:x, v:rr.reduce((s,v,i)=>s+(v>0 && enRango(i)?v:0),0)}; });
+  const unsPie=[...uns, ...[...new Set(REF.map(r=>r.unidad))].filter(x=>x!=='Compañía' && !uns.includes(x))];
+  const vals=unsPie.map(x=>{ const rr=realPorMes(x); return {u:x, v:rr.reduce((s,v,i)=>s+(v>0 && enRango(i)?v:0),0)}; });
   const totP=vals.reduce((s,x)=>s+x.v,0)||1;
   let ang=0, stops=[], leg='';
   vals.sort((a,b)=>b.v-a.v).forEach(x=>{ const pct=x.v/totP*100, c=COLORS[x.u]||'#94a1ab';
