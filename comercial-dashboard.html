@@ -107,7 +107,7 @@
     <div class="sec" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
       <span>Principales clientes · Top 20</span>
       <div style="display:flex;gap:8px;align-items:center">
-        <label style="font-size:12px;color:#94a1ab">Mes del archivo</label>
+        <label style="font-size:12px;color:#94a1ab" title="Solo se usa si el archivo no trae el mes ni lo dice en el nombre">Mes (si el archivo no lo trae)</label>
         <select id="cliMes" style="font:inherit;font-size:12px;background:#f1f4f7;border:1px solid #cfd6dd;border-radius:8px;padding:6px 8px"></select>
         <button id="cliImport" style="font:inherit;font-size:12px;font-weight:700;background:#223c7e;color:#fff;border:none;border-radius:9px;padding:7px 12px;cursor:pointer">📄 Importar archivo</button>
         <input type="file" id="cliFile" accept=".xls,.csv,.txt" hidden />
@@ -273,20 +273,63 @@ async function renderClientes(){
   }catch(e){ $("clientes").innerHTML='<tbody><tr><td class="muted" style="padding:16px">No se pudo cargar. ¿Corriste el SQL de clientes (tabla + función)?</td></tr></tbody>'; }
 }
 
+// Mes y año del archivo de clientes. Orden de prioridad:
+// 1) columnas MES / AÑO dentro del archivo (formato actual del sistema),
+// 2) nombre del archivo (p.ej. "Principales_Clientes_Septiembre__2026_20261001.xls"),
+// 3) selector "Mes" del tablero (año 2026), solo si no se detectó nada.
+const MESES_LARGOS=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+function mesDeTexto(t){ t=String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+  if(t==='SETIEMBRE') t='SEPTIEMBRE'; return MESES_LARGOS.indexOf(t); }
+function periodoDeNombre(nombre){
+  const n=String(nombre||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+  const m=n.match(/(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|SETIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)[^0-9A-Z]*(20\d\d)(?!\d)/);
+  return m ? {mes:mesDeTexto(m[1]), anio:+m[2]} : null;
+}
+// Lee el archivo de clientes. Soporta:
+//  - formato actual: MES <tab> AÑO <tab> "VENDEDOR;NROCTA;NOMBRE;DIRECCION;TIPO_CLIENTE;VENTA"
+//  - formato viejo: solo la parte separada por ';'
+//  - registros partidos en dos líneas (una dirección con salto de línea adentro):
+//    se juntan hasta completar las 6 columnas.
+function parseClientes(texto){
+  const lineas=texto.split(/\r?\n/).filter(l=>l.trim());
+  const agg={}; const periodos=new Set(); let acc='', filas=0, descartadas=0;
+  for(let i=1;i<lineas.length;i++){
+    let payload=lineas[i];
+    const tab=payload.split('\t');
+    if(tab.length>=3){
+      const mi=mesDeTexto(tab[0]), an=parseInt(tab[1],10);
+      if(mi>=0 && an>2000) periodos.add(an+'-'+String(mi+1).padStart(2,'0')+'-01');
+      payload=tab.slice(2).join('\t');
+    }
+    payload=payload.trim().replace(/^"/,'').replace(/"$/,'');
+    acc = acc ? acc.trimEnd()+' '+payload.trimStart() : payload;
+    const c=acc.split(';');
+    if(c.length<6){ if(acc.length>2000){ descartadas++; acc=''; } continue; }
+    acc='';
+    const nombre=String(c[2]).trim(); if(!nombre){ descartadas++; continue; }
+    const tipo=normU(String(c[c.length-2]).trim());
+    const v=parseFloat(String(c[c.length-1]).replace(',','.'))||0;
+    if(!agg[nombre]) agg[nombre]={unidad:tipo,venta:0};
+    agg[nombre].venta+=v; filas++;
+  }
+  if(acc) descartadas++;
+  return {agg, periodos:[...periodos], filas, descartadas};
+}
+
 async function importarClientes(file){
   const msg=$("cliMsg"); msg.style.color="#5c6b78"; msg.textContent="Procesando archivo…";
-  const mesIdx=+$("cliMes").value; const periodo="2026-"+String(mesIdx+1).padStart(2,"0")+"-01"; const nom=MESES[mesIdx]+" 2026";
   try{
     const texto=await leerTexto(file);
-    const lineas=texto.split(/\r?\n/).filter(l=>l.trim());
-    const agg={};
-    for(let i=1;i<lineas.length;i++){ const c=lineas[i].split(";"); if(c.length<6) continue;
-      const nombre=String(c[2]).trim(); if(!nombre) continue;
-      const tipo=normU(String(c[4]).trim());
-      const v=parseFloat(String(c[5]).replace(",","."))||0;
-      if(!agg[nombre]) agg[nombre]={unidad:tipo,venta:0};
-      agg[nombre].venta+=v;
-    }
+    const {agg, periodos, filas, descartadas}=parseClientes(texto);
+    let periodo, origen;
+    if(periodos.length>1){ msg.style.color="#e1251b"; msg.textContent="El archivo trae más de un mes ("+periodos.join(", ")+"). Importá un archivo por mes."; return; }
+    if(periodos.length===1){ periodo=periodos[0]; origen="según el archivo"; }
+    else { const pn=periodoDeNombre(file.name);
+      if(pn){ periodo=pn.anio+"-"+String(pn.mes+1).padStart(2,"0")+"-01"; origen="según el nombre del archivo"; }
+      else { const mesIdx=+$("cliMes").value; periodo="2026-"+String(mesIdx+1).padStart(2,"0")+"-01"; origen="elegido en el selector"; } }
+    const mesIdx=+periodo.slice(5,7)-1, anio=periodo.slice(0,4);
+    if(anio==="2026") $("cliMes").value=mesIdx;
+    const nom=MESES[mesIdx]+" "+anio;
     const rows=Object.entries(agg).map(([cliente,v])=>({periodo,unidad:v.unidad,cliente,venta:v.venta}));
     if(!rows.length){ msg.style.color="#e1251b"; msg.textContent="El archivo no tiene datos válidos."; return; }
     await fetch(SUPABASE_URL+"/rest/v1/comercial_clientes?periodo=eq."+periodo,{method:"DELETE",headers:H()});
@@ -295,7 +338,8 @@ async function importarClientes(file){
       if(!res.ok) throw new Error(await res.text());
       msg.textContent="Subiendo… "+Math.min(i+1000,rows.length)+"/"+rows.length;
     }
-    msg.style.color="#16a34a"; msg.textContent="✓ "+nom+" cargado ("+rows.length+" clientes). Si ya existía, se reemplazó.";
+    msg.style.color="#16a34a";
+    msg.textContent="✓ "+nom+" cargado ("+origen+"): "+rows.length+" clientes de "+filas+" filas."+(descartadas?" "+descartadas+" fila(s) ilegibles quedaron afuera.":"")+" Si el mes ya existía, se reemplazó.";
     renderClientes();
   }catch(e){ msg.style.color="#e1251b"; msg.textContent="No se pudo importar: "+e.message; }
 }
