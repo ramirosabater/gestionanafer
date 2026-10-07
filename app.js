@@ -248,7 +248,7 @@
   var SETTINGS_TAB_PERMISOS = {
     routes:'grid', trucks:'grid', drivers:'grid', helpers:'grid', cargo:'grid',
     branches:'branches', companies:'company', occasionals:'occasional',
-    'centros-costo':'compras', conceptos:'compras'
+    'centros-costo':'compras', conceptos:'compras', rubros:'compras'
   };
   function settingsTabVisible(t){
     if(t==='auth') return canManageAccess();
@@ -262,7 +262,7 @@
   var SETTINGS_CATEGORIES = [
     {id:'flota',       label:'Flota y viajes',            tabs:['routes','trucks','drivers','helpers','cargo']},
     {id:'sucursales',  label:'Sucursales y empresas',     tabs:['branches','companies','occasionals']},
-    {id:'compras',     label:'Compras',                   tabs:['centros-costo','conceptos']},
+    {id:'compras',     label:'Compras',                   tabs:['centros-costo','conceptos','rubros']},
     {id:'acceso',      label:'Acceso',                     tabs:['auth']}
   ];
   function settingsCategoryVisible(catId){
@@ -294,7 +294,7 @@
     });
   }
   function firstVisibleSettingsTab(){
-    var order = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','auth'];
+    var order = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','auth'];
     for(var i=0;i<order.length;i++){ if(settingsTabVisible(order[i])) return order[i]; }
     return 'auth';
   }
@@ -401,6 +401,9 @@
     conceptos: [],
     editingCentroCostoId: null,
     editingConceptoId: null,
+    rubros: [],                 // [{id, nombre}] — lista administrable desde ⚙ → Compras → Rubros
+    editingRubroId: null,
+    editingFacturaItems: null,  // null = factura con una sola imputación; array = repartida en líneas
     // Facturas y Órdenes de pago: facturas de proveedor (con o sin orden de
     // compra asociada — la mayoría no tiene una) y órdenes de pago que
     // agrupan una o más facturas pendientes de un mismo proveedor.
@@ -2187,8 +2190,11 @@
     document.getElementById('kpi-gastos-total').textContent = fmtMoney(gastoTotal);
     document.getElementById('kpi-gastos-facturas').textContent = facturasPeriodo.length;
 
-    var porCentro = sumBy(facturasPeriodo, function(f){return f.centroCostoId;}, centroCostoLabel, function(f){return f.monto||0;}, '(Sin centro de costo)');
-    var porConcepto = sumBy(facturasPeriodo, function(f){return f.conceptoId;}, conceptoLabel, function(f){return f.monto||0;}, '(Sin concepto)');
+    // Facturas repartidas: cada línea suma a su centro de costo/concepto.
+    var lineasPeriodo = [];
+    facturasPeriodo.forEach(function(f){ facturaLineas(f).forEach(function(l){ lineasPeriodo.push(l); }); });
+    var porCentro = sumBy(lineasPeriodo, function(l){return l.centroCostoId;}, centroCostoLabel, function(l){return Number(l.monto||0);}, '(Sin centro de costo)');
+    var porConcepto = sumBy(lineasPeriodo, function(l){return l.conceptoId;}, conceptoLabel, function(l){return Number(l.monto||0);}, '(Sin concepto)');
     var porProveedorGasto = sumBy(facturasPeriodo, function(f){return f.proveedorId;}, proveedorNombre, function(f){return f.monto||0;}, '(Sin proveedor)');
 
     document.getElementById('kpi-gastos-centro').textContent = porCentro[0] ? porCentro[0].label+' ('+fmtMoney(porCentro[0].count)+')' : '—';
@@ -2231,7 +2237,7 @@
   }
 
   // ---------- Settings (ABM: rutas, camiones, choferes, ayudantes, etc.) ----------
-  var SETTINGS_ALL_TABS = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','auth'];
+  var SETTINGS_ALL_TABS = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','auth'];
   function switchSettingsTab(tab){
     refreshSettingsTabsVisibility();
     if(!settingsTabVisible(tab)) tab = firstVisibleSettingsTab();
@@ -2875,6 +2881,7 @@
     if(data.fecha && /^\d{4}-\d{2}-\d{2}$/.test(data.fecha)) document.getElementById('fm-fecha').value = data.fecha;
     if(data.monto!=null && !isNaN(parseFloat(data.monto))) document.getElementById('fm-monto').value = String(data.monto).replace('.',',');
     if(data.notas) document.getElementById('fm-notas').value = data.notas;
+    updateSplitTotal();
   }
 
   async function readFacturaFromFile(file){
@@ -3011,6 +3018,23 @@
     return base+'_'+n;
   }
 
+  // Líneas de imputación de una factura: si está repartida (2+ líneas en
+  // f.items) son esas; si no, una sola línea con la imputación y el monto
+  // de la factura. Todo lo que reparte gasto por centro/concepto (Dashboard,
+  // usos por proveedor, chequeos antes de borrar) pasa por acá.
+  function facturaLineas(f){
+    if(f.items && f.items.length>=2) return f.items;
+    return [{centroCostoId:f.centroCostoId, conceptoId:f.conceptoId, monto:Number(f.monto||0), detalle:''}];
+  }
+  // Monto escrito a mano: acepta "1234,56", "1.234,56" y "1234.56".
+  function parseMontoInput(str){
+    var t = String(str||'').trim().replace(/\s|\$/g,'');
+    if(t.indexOf(',')!==-1) t = t.replace(/\./g,'').replace(',','.');
+    var n = parseFloat(t);
+    return isNaN(n) ? NaN : n;
+  }
+  function fmtMontoInput(n){ return (Math.round((n||0)*100)/100).toString().replace('.',','); }
+
   // ---------- Imputaciones contables por proveedor ----------
   // Un proveedor puede tener varias combinaciones Centro de costo + Concepto
   // (p.imputaciones = [{centroCostoId, conceptoId}, ...]). La "por defecto"
@@ -3024,9 +3048,14 @@
   function imputUsos(proveedorId){
     var usos = {};
     state.facturas.forEach(function(f){
-      if(f.proveedorId!==proveedorId || !f.centroCostoId || !f.conceptoId) return;
-      var k = imputKey(f.centroCostoId, f.conceptoId);
-      usos[k] = (usos[k]||0)+1;
+      if(f.proveedorId!==proveedorId) return;
+      var vistos = {};
+      facturaLineas(f).forEach(function(l){
+        if(!l.centroCostoId || !l.conceptoId) return;
+        var k = imputKey(l.centroCostoId, l.conceptoId);
+        if(vistos[k]) return; vistos[k] = true;
+        usos[k] = (usos[k]||0)+1;
+      });
     });
     return usos;
   }
@@ -3135,7 +3164,7 @@
   document.getElementById('ccm-delete').addEventListener('click', function(){
     var id = state.editingCentroCostoId;
     if(!id) return;
-    var used = state.facturas.some(function(f){ return f.centroCostoId===id; });
+    var used = state.facturas.some(function(f){ return facturaLineas(f).some(function(l){ return l.centroCostoId===id; }); });
     if(used){ showToast('No se puede eliminar: hay facturas con este centro de costo.'); return; }
     state.centrosCosto = state.centrosCosto.filter(function(x){ return x.id!==id; });
     if(state.sb) state.sb.from('centros_costo').delete().eq('id', id).then(function(res){
@@ -3187,7 +3216,7 @@
   document.getElementById('cpm-delete').addEventListener('click', function(){
     var id = state.editingConceptoId;
     if(!id) return;
-    var used = state.facturas.some(function(f){ return f.conceptoId===id; });
+    var used = state.facturas.some(function(f){ return facturaLineas(f).some(function(l){ return l.conceptoId===id; }); });
     if(used){ showToast('No se puede eliminar: hay facturas con este concepto.'); return; }
     state.conceptos = state.conceptos.filter(function(x){ return x.id!==id; });
     if(state.sb) state.sb.from('conceptos').delete().eq('id', id).then(function(res){
@@ -3196,6 +3225,110 @@
     closeConceptoModal();
     renderConceptosList();
     showToast('Concepto eliminado.');
+  });
+
+  // ---------- Rubros (ABM) ----------
+  function rubroById(id){ return state.rubros.find(function(x){ return x.id===id; }) || null; }
+  function generateRubroId(nombre){
+    var base = slug(nombre) || 'rubro';
+    var used = {};
+    state.rubros.forEach(function(r){ used[r.id] = true; });
+    if(!used[base]) return base;
+    var n = 2;
+    while(used[base+'_'+n]) n++;
+    return base+'_'+n;
+  }
+  function proveedoresConRubro(nombre){
+    var k = (nombre||'').trim().toLowerCase();
+    return state.proveedores.filter(function(p){ return (p.rubro||'').trim().toLowerCase()===k; });
+  }
+  function writeRubro(r){
+    if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
+    state.sb.from('rubros').upsert({ id:r.id, nombre:r.nombre||'' }).then(function(res){
+      if(res.error) showToast('No se pudo guardar el rubro: '+res.error.message);
+    });
+  }
+  // Si el rubro elegido para un proveedor todavía no está en la lista, lo
+  // da de alta (caso "Otro (crear nuevo)...").
+  function asegurarRubro(nombre){
+    nombre = (nombre||'').trim();
+    if(!nombre) return;
+    if(state.rubros.some(function(r){ return (r.nombre||'').trim().toLowerCase()===nombre.toLowerCase(); })) return;
+    var r = {id:generateRubroId(nombre), nombre:nombre};
+    state.rubros.push(r);
+    writeRubro(r);
+    renderRubrosList();
+  }
+  function renderRubrosList(){
+    var body = document.getElementById('rubros-body');
+    if(!body) return;
+    body.innerHTML = '';
+    if(state.rubros.length===0){
+      body.innerHTML = '<tr class="day-row empty"><td colspan="2">Todavía no hay rubros cargados.</td></tr>';
+      return;
+    }
+    state.rubros.slice().sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); }).forEach(function(r){
+      var tr = document.createElement('tr');
+      tr.className = 'day-row';
+      tr.innerHTML = '<td class="day-route">'+esc(r.nombre)+'</td><td class="num">'+proveedoresConRubro(r.nombre).length+'</td>';
+      tr.addEventListener('click', function(){ openRubroModal(r.id); });
+      body.appendChild(tr);
+    });
+  }
+  function openRubroModal(id){
+    state.editingRubroId = id || null;
+    var r = id ? rubroById(id) : null;
+    document.getElementById('rbm-title').textContent = r ? 'Editar rubro' : 'Nuevo rubro';
+    document.getElementById('rbm-nombre').value = r ? r.nombre : '';
+    document.getElementById('rbm-delete').style.display = r ? '' : 'none';
+    document.getElementById('rubro-overlay').classList.add('show');
+  }
+  function closeRubroModal(){ document.getElementById('rubro-overlay').classList.remove('show'); }
+  document.getElementById('new-rubro-btn').addEventListener('click', function(){ openRubroModal(null); });
+  document.getElementById('rbm-cancel').addEventListener('click', closeRubroModal);
+  document.getElementById('rubro-overlay').addEventListener('click', function(e){ if(e.target===this) closeRubroModal(); });
+  document.getElementById('rbm-save').addEventListener('click', function(){
+    var nombre = document.getElementById('rbm-nombre').value.trim();
+    if(!nombre){ showToast('Ingresá el nombre del rubro.'); return; }
+    var id = state.editingRubroId;
+    var dup = state.rubros.some(function(r){ return r.id!==id && (r.nombre||'').trim().toLowerCase()===nombre.toLowerCase(); });
+    if(dup){ showToast('Ya existe un rubro con ese nombre.'); return; }
+    var isNew = !id;
+    var anterior = isNew ? null : (rubroById(id)||{}).nombre;
+    if(isNew) id = generateRubroId(nombre);
+    var r = {id:id, nombre:nombre};
+    if(isNew) state.rubros.push(r);
+    else { var idx = state.rubros.findIndex(function(x){ return x.id===id; }); if(idx>=0) state.rubros[idx]=r; }
+    writeRubro(r);
+    // Renombrar: se actualiza el rubro en todos los proveedores que lo tenían.
+    if(anterior && anterior!==nombre){
+      var afectados = proveedoresConRubro(anterior);
+      afectados.forEach(function(p){ p.rubro = nombre; });
+      if(afectados.length && state.sb){
+        state.sb.from('proveedores').update({rubro:nombre}).in('id', afectados.map(function(p){ return p.id; })).then(function(res){
+          if(res.error) showToast('No se pudo actualizar el rubro en los proveedores: '+res.error.message);
+        });
+      }
+      if(afectados.length) showToast('Rubro renombrado en '+afectados.length+' proveedor'+(afectados.length===1?'':'es')+'.');
+      else showToast('Rubro guardado.');
+    } else showToast('Rubro guardado.');
+    closeRubroModal();
+    renderRubrosList();
+    renderProveedoresList();
+  });
+  document.getElementById('rbm-delete').addEventListener('click', function(){
+    var id = state.editingRubroId;
+    var r = id ? rubroById(id) : null;
+    if(!r) return;
+    var n = proveedoresConRubro(r.nombre).length;
+    if(n){ showToast('No se puede eliminar: hay '+n+' proveedor'+(n===1?'':'es')+' con este rubro. Cambiales el rubro primero, o renombralo.'); return; }
+    state.rubros = state.rubros.filter(function(x){ return x.id!==id; });
+    if(state.sb) state.sb.from('rubros').delete().eq('id', id).then(function(res){
+      if(res.error) showToast('No se pudo eliminar: '+res.error.message);
+    });
+    closeRubroModal();
+    renderRubrosList();
+    showToast('Rubro eliminado.');
   });
 
   // ---------- Buscador de proveedor (combo), reemplaza los <select> nativos
@@ -3261,6 +3394,7 @@
     renderProveedoresList();
     renderCentrosCostoList();
     renderConceptosList();
+    renderRubrosList();
     renderOCList();
   }
 
@@ -3421,13 +3555,45 @@
     renderProveedorImputList();
   });
 
+  // Rubro: lista para elegir, administrable desde ⚙ → Compras → Rubros
+  // (tabla rubros). El proveedor guarda el nombre. "Otro..." deja escribir
+  // uno nuevo, que se da de alta en la lista al guardar el proveedor.
+  function rubrosDisponibles(){
+    return state.rubros.map(function(r){ return r.nombre; }).filter(Boolean)
+      .sort(function(a,b){ return a.localeCompare(b); });
+  }
+  function fillRubroSelect(valor){
+    var sel = document.getElementById('pm-rubro');
+    sel.innerHTML = '<option value="">— Sin rubro —</option>';
+    var lista = rubrosDisponibles();
+    var match = lista.find(function(r){ return r.toLowerCase()===(valor||'').trim().toLowerCase(); });
+    if(valor && !match){ lista = lista.concat([valor.trim()]); match = valor.trim(); }
+    lista.forEach(function(r){
+      var o = document.createElement('option'); o.value = r; o.textContent = r; sel.appendChild(o);
+    });
+    var otro = document.createElement('option'); otro.value = '__otro__'; otro.textContent = 'Otro (crear nuevo)...'; sel.appendChild(otro);
+    sel.value = match || '';
+    document.getElementById('pm-rubro-otro').value = '';
+    document.getElementById('pm-rubro-otro').hidden = true;
+  }
+  function rubroElegido(){
+    var v = document.getElementById('pm-rubro').value;
+    if(v==='__otro__') return document.getElementById('pm-rubro-otro').value.trim();
+    return v;
+  }
+  document.getElementById('pm-rubro').addEventListener('change', function(){
+    var otro = document.getElementById('pm-rubro-otro');
+    otro.hidden = this.value!=='__otro__';
+    if(!otro.hidden) otro.focus();
+  });
+
   function openProveedorModal(id){
     state.editingProveedorId = id || null;
     var p = id ? state.proveedores.find(function(x){ return x.id===id; }) : null;
     document.getElementById('pm-title').textContent = p ? 'Editar proveedor' : 'Nuevo proveedor';
     document.getElementById('pm-nombre').value = p ? p.nombre : '';
     document.getElementById('pm-cuit').value = p ? (p.cuit||'') : '';
-    document.getElementById('pm-rubro').value = p ? (p.rubro||'') : '';
+    fillRubroSelect(p ? (p.rubro||'') : '');
     document.getElementById('pm-contacto').value = p ? (p.contacto||'') : '';
     document.getElementById('pm-telefono').value = p ? (p.telefono||'') : '';
     document.getElementById('pm-email').value = p ? (p.email||'') : '';
@@ -3465,7 +3631,7 @@
     var baseData = {
       id:id, nombre:nombre,
       cuit: document.getElementById('pm-cuit').value.trim(),
-      rubro: document.getElementById('pm-rubro').value.trim(),
+      rubro: rubroElegido(),
       contacto: document.getElementById('pm-contacto').value.trim(),
       telefono: document.getElementById('pm-telefono').value.trim(),
       email: document.getElementById('pm-email').value.trim(),
@@ -3481,6 +3647,7 @@
       condicionPago: document.getElementById('pm-condicion-pago').value,
       imputaciones: state.editingProveedorImput.slice()
     };
+    asegurarRubro(baseData.rubro);
     var saveBtn = this;
     var tienePendientes = state.editingProveedorArchivos.some(function(a){ return a.pending; });
     if(tienePendientes){ saveBtn.disabled = true; showToast('Subiendo adjuntos a Google Drive...'); }
@@ -3654,6 +3821,11 @@
       state.conceptos = (res.data||[]).map(mapConceptoRow);
       renderCompras();
     });
+    state.sb.from('rubros').select('*').then(function(res){
+      if(res.error){ showToast('Error cargando rubros (¿corriste el schema.sql nuevo?): '+res.error.message); return; }
+      state.rubros = (res.data||[]).map(function(row){ return {id:row.id, nombre:row.nombre||''}; });
+      renderCompras();
+    });
   }
 
   // ---------- Pagos: facturas y órdenes de pago ----------
@@ -3748,7 +3920,8 @@
     state.sb.from('facturas').upsert({
       id:f.id, proveedor_id:f.proveedorId||'', oc_id:f.ocId||null,
       centro_costo_id:f.centroCostoId||null, concepto_id:f.conceptoId||null, numero:f.numero||'',
-      fecha:f.fecha||'', monto:f.monto||0, estado:f.estado||'pendiente', notas:f.notas||'', archivos:f.archivos||[]
+      fecha:f.fecha||'', monto:f.monto||0, estado:f.estado||'pendiente', notas:f.notas||'', archivos:f.archivos||[],
+      items:(f.items||[]).map(function(it){ return {centro_costo_id:it.centroCostoId, concepto_id:it.conceptoId, monto:it.monto||0, detalle:it.detalle||''}; })
     }).then(function(res){
       if(res.error) showToast('No se pudo guardar la factura: '+res.error.message);
     });
@@ -3777,6 +3950,7 @@
   // proveedor; debajo se muestran sus otras imputaciones como botones para
   // cambiar con un clic (o se cambia a mano en los desplegables).
   function aplicarImputacionDefault(proveedorId){
+    if(state.editingFacturaItems) return; // repartida: no se pisan las líneas
     var def = imputacionDefault(proveedorId);
     if(!def) return;
     var ccSel = document.getElementById('fm-centro-costo');
@@ -3790,10 +3964,11 @@
     box.innerHTML = '';
     var list = proveedorId ? imputacionesOrdenadas(proveedorId).filter(function(im){ return centroCostoById(im.centroCostoId) && conceptoById(im.conceptoId); }) : [];
     if(list.length<1){ box.hidden = true; return; }
-    var curKey = imputKey(document.getElementById('fm-centro-costo').value, document.getElementById('fm-concepto').value);
+    var curKey = state.editingFacturaItems ? '' : imputKey(document.getElementById('fm-centro-costo').value, document.getElementById('fm-concepto').value);
     var lbl = document.createElement('div');
     lbl.className = 'lbl';
-    lbl.textContent = list.length>1 ? 'Imputaciones de este proveedor' : 'Imputación de este proveedor';
+    lbl.textContent = state.editingFacturaItems ? 'Agregar línea con una imputación de este proveedor'
+      : (list.length>1 ? 'Imputaciones de este proveedor' : 'Imputación de este proveedor');
     box.appendChild(lbl);
     list.forEach(function(im){
       var b = document.createElement('button');
@@ -3801,6 +3976,10 @@
       b.className = 'imput-chip'+(imputKey(im.centroCostoId, im.conceptoId)===curKey ? ' on' : '');
       b.textContent = imputLabel(im)+(im.usos ? ' ('+im.usos+')' : '');
       b.addEventListener('click', function(){
+        if(state.editingFacturaItems){
+          agregarLineaSplit(im.centroCostoId, im.conceptoId);
+          return;
+        }
         document.getElementById('fm-centro-costo').value = im.centroCostoId;
         document.getElementById('fm-concepto').value = im.conceptoId;
         renderFacturaImputChips();
@@ -3813,6 +3992,98 @@
   document.getElementById('fm-concepto').addEventListener('change', renderFacturaImputChips);
   // Si la factura se guarda con una combinación que el proveedor todavía no
   // tenía, se le agrega a su lista de imputaciones.
+  // ---------- Factura repartida en varias imputaciones ----------
+  function facturaMontoActual(){ var n = parseMontoInput(document.getElementById('fm-monto').value); return isNaN(n) ? 0 : n; }
+  function splitAsignado(){ return (state.editingFacturaItems||[]).reduce(function(s,l){ return s+(Number(l.monto)||0); }, 0); }
+  function setSplitMode(on){
+    if(on){
+      var cc = document.getElementById('fm-centro-costo').value;
+      var co = document.getElementById('fm-concepto').value;
+      state.editingFacturaItems = [{centroCostoId:cc, conceptoId:co, monto:facturaMontoActual(), detalle:''},
+                                   {centroCostoId:'', conceptoId:'', monto:0, detalle:''}];
+    } else {
+      var first = (state.editingFacturaItems||[]).slice().sort(function(a,b){ return (b.monto||0)-(a.monto||0); })[0];
+      state.editingFacturaItems = null;
+      if(first){
+        document.getElementById('fm-centro-costo').value = first.centroCostoId||'';
+        document.getElementById('fm-concepto').value = first.conceptoId||'';
+      }
+    }
+    renderSplitUI();
+  }
+  function agregarLineaSplit(ccId, coId){
+    var falta = Math.round((facturaMontoActual()-splitAsignado())*100)/100;
+    // Si hay una línea vacía (sin imputación), se completa esa en vez de sumar otra.
+    var vacia = state.editingFacturaItems.find(function(l){ return !l.centroCostoId && !l.conceptoId; });
+    if(vacia){
+      vacia.centroCostoId = ccId||''; vacia.conceptoId = coId||'';
+      if(!vacia.monto && falta>0) vacia.monto = falta;
+    } else {
+      state.editingFacturaItems.push({centroCostoId:ccId||'', conceptoId:coId||'', monto: falta>0 ? falta : 0, detalle:''});
+    }
+    renderSplitUI();
+  }
+  function ccOptionsHtml(sel){
+    return '<option value="">Centro de costo</option>'+state.centrosCosto.map(function(c){ return {id:c.id, label:centroCostoLabel(c.id)}; })
+      .sort(function(a,b){ return a.label.localeCompare(b.label, undefined, {numeric:true}); })
+      .map(function(c){ return '<option value="'+esc(c.id)+'"'+(c.id===sel?' selected':'')+'>'+esc(c.label)+'</option>'; }).join('');
+  }
+  function coOptionsHtml(sel){
+    return '<option value="">Concepto</option>'+state.conceptos.slice().sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); })
+      .map(function(c){ return '<option value="'+esc(c.id)+'"'+(c.id===sel?' selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('');
+  }
+  function updateSplitTotal(){
+    var el = document.getElementById('fm-split-total');
+    if(!state.editingFacturaItems){ el.textContent=''; return; }
+    var total = facturaMontoActual(), asig = splitAsignado();
+    var diff = Math.round((total-asig)*100)/100;
+    var fmt = function(n){ return '$'+Number(n).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2}); };
+    if(!total){ el.textContent = 'Repartido: '+fmt(asig)+' (el monto de la factura se completa con este total)'; el.className = 'split-total ok'; return; }
+    if(Math.abs(diff)<0.005){ el.textContent = 'Repartido '+fmt(asig)+' de '+fmt(total)+' ✓'; el.className = 'split-total ok'; return; }
+    el.textContent = (diff>0 ? 'Falta repartir ' : 'Te pasaste por ')+fmt(Math.abs(diff))+' (repartido '+fmt(asig)+' de '+fmt(total)+')';
+    el.className = 'split-total bad';
+  }
+  function renderSplitUI(){
+    var on = !!state.editingFacturaItems;
+    document.getElementById('fm-imput-simple').hidden = on;
+    document.getElementById('fm-split').hidden = !on;
+    document.querySelector('.split-toggle-row').hidden = on;
+    var box = document.getElementById('fm-split-lines');
+    box.innerHTML = '';
+    if(on){
+      state.editingFacturaItems.forEach(function(l, i){
+        var row = document.createElement('div');
+        row.className = 'split-line';
+        row.innerHTML = '<select class="cc">'+ccOptionsHtml(l.centroCostoId)+'</select>'
+          +'<select class="co">'+coOptionsHtml(l.conceptoId)+'</select>'
+          +'<input type="text" class="detalle" maxlength="80" placeholder="Detalle (opcional)">'
+          +'<input type="text" class="monto" inputmode="decimal" placeholder="0,00">'
+          +'<button type="button" class="del" title="Quitar línea">✕</button>';
+        row.querySelector('.detalle').value = l.detalle||'';
+        row.querySelector('.monto').value = l.monto ? fmtMontoInput(l.monto) : '';
+        row.querySelector('.cc').addEventListener('change', function(){ l.centroCostoId = this.value; });
+        row.querySelector('.co').addEventListener('change', function(){ l.conceptoId = this.value; });
+        row.querySelector('.detalle').addEventListener('input', function(){ l.detalle = this.value; });
+        row.querySelector('.monto').addEventListener('input', function(){ var n = parseMontoInput(this.value); l.monto = isNaN(n) ? 0 : n; updateSplitTotal(); });
+        row.querySelector('.del').addEventListener('click', function(){
+          state.editingFacturaItems.splice(i,1);
+          if(state.editingFacturaItems.length===0) state.editingFacturaItems.push({centroCostoId:'', conceptoId:'', monto:0, detalle:''});
+          renderSplitUI();
+        });
+        box.appendChild(row);
+      });
+    }
+    updateSplitTotal();
+    renderFacturaImputChips();
+  }
+  document.getElementById('fm-split-on').addEventListener('click', function(){ setSplitMode(true); });
+  document.getElementById('fm-split-off').addEventListener('click', function(){ setSplitMode(false); });
+  document.getElementById('fm-split-add').addEventListener('click', function(){
+    state.editingFacturaItems.push({centroCostoId:'', conceptoId:'', monto:Math.max(0, Math.round((facturaMontoActual()-splitAsignado())*100)/100), detalle:''});
+    renderSplitUI();
+  });
+  document.getElementById('fm-monto').addEventListener('input', updateSplitTotal);
+
   function sumarImputacionAProveedor(proveedorId, ccId, coId){
     var p = state.proveedores.find(function(x){ return x.id===proveedorId; });
     if(!p || !ccId || !coId) return;
@@ -3847,7 +4118,7 @@
     document.getElementById('fm-centro-costo').value = f ? (f.centroCostoId||'') : '';
     fillFacturaConceptoSelect();
     document.getElementById('fm-concepto').value = f ? (f.conceptoId||'') : '';
-    renderFacturaImputChips();
+    state.editingFacturaItems = (f && f.items && f.items.length>=2) ? f.items.map(function(l){ return Object.assign({}, l); }) : null;
     document.getElementById('fm-numero').value = f ? (f.numero||'') : '';
     document.getElementById('fm-fecha').value = f ? (f.fecha||todayStr()) : todayStr();
     document.getElementById('fm-monto').value = f ? String(f.monto||0).replace('.',',') : '';
@@ -3856,6 +4127,7 @@
     state.editingFacturaArchivos = f ? (f.archivos||[]).slice() : [];
     renderAttachList('fm-archivos-list', function(){ return state.editingFacturaArchivos; });
     refreshFacturaReadAvailability();
+    renderSplitUI();
     document.getElementById('factura-overlay').classList.add('show');
   }
   function closeFacturaModal(){
@@ -3872,15 +4144,33 @@
   document.getElementById('fm-save').addEventListener('click', function(){
     var proveedorId = document.getElementById('fm-proveedor').value;
     if(!proveedorId){ showToast('Elegí un proveedor (buscalo por nombre en el campo Proveedor).'); return; }
-    var centroCostoId = document.getElementById('fm-centro-costo').value;
-    if(!centroCostoId){ showToast('Elegí un centro de costo.'); return; }
-    var conceptoId = document.getElementById('fm-concepto').value;
-    if(!conceptoId){ showToast('Elegí un concepto.'); return; }
     var numero = document.getElementById('fm-numero').value.trim();
     if(!numero){ showToast('Ingresá el número de factura.'); return; }
-    var montoRaw = document.getElementById('fm-monto').value.replace(',','.').trim();
-    var monto = parseFloat(montoRaw);
+    var monto = parseMontoInput(document.getElementById('fm-monto').value);
     if(isNaN(monto) || monto<0) monto = 0;
+    var centroCostoId, conceptoId, items = [];
+    if(state.editingFacturaItems){
+      // Repartida: se descartan líneas totalmente vacías; cada línea que
+      // quede necesita centro, concepto y monto, y la suma tiene que dar el
+      // total (si el total está vacío, se toma la suma).
+      var lineas = state.editingFacturaItems.filter(function(l){ return l.centroCostoId || l.conceptoId || l.monto || (l.detalle||'').trim(); });
+      for(var i=0;i<lineas.length;i++){
+        if(!lineas[i].centroCostoId || !lineas[i].conceptoId){ showToast('Línea '+(i+1)+': elegí centro de costo y concepto.'); return; }
+        if(!(lineas[i].monto>0)){ showToast('Línea '+(i+1)+': ingresá el monto.'); return; }
+      }
+      if(lineas.length===0){ showToast('Cargá al menos una línea de imputación.'); return; }
+      var suma = Math.round(lineas.reduce(function(s,l){ return s+l.monto; },0)*100)/100;
+      if(!monto) monto = suma;
+      if(Math.abs(suma-monto)>=0.005){ showToast('La suma de las líneas ($'+suma.toLocaleString('es-AR',{minimumFractionDigits:2})+') no coincide con el monto de la factura.'); return; }
+      var mayor = lineas.slice().sort(function(a,b){ return b.monto-a.monto; })[0];
+      centroCostoId = mayor.centroCostoId; conceptoId = mayor.conceptoId;
+      items = lineas.length>=2 ? lineas.map(function(l){ return {centroCostoId:l.centroCostoId, conceptoId:l.conceptoId, monto:Math.round(l.monto*100)/100, detalle:(l.detalle||'').trim()}; }) : [];
+    } else {
+      centroCostoId = document.getElementById('fm-centro-costo').value;
+      if(!centroCostoId){ showToast('Elegí un centro de costo.'); return; }
+      conceptoId = document.getElementById('fm-concepto').value;
+      if(!conceptoId){ showToast('Elegí un concepto.'); return; }
+    }
     var id = state.editingFacturaId;
     var isNew = !id;
     var existing = id ? facturaById(id) : null;
@@ -3892,6 +4182,7 @@
       ocId: document.getElementById('fm-oc').value || '',
       centroCostoId: centroCostoId,
       conceptoId: conceptoId,
+      items: items,
       numero:numero,
       fecha: document.getElementById('fm-fecha').value || todayStr(),
       monto: monto,
@@ -3906,7 +4197,7 @@
       if(isNew) state.facturas.push(f);
       else { var idx = state.facturas.findIndex(function(x){ return x.id===id; }); if(idx>=0) state.facturas[idx]=f; }
       writeFactura(f);
-      sumarImputacionAProveedor(f.proveedorId, f.centroCostoId, f.conceptoId);
+      facturaLineas(f).forEach(function(l){ sumarImputacionAProveedor(f.proveedorId, l.centroCostoId, l.conceptoId); });
       closeFacturaModal();
       renderPagos();
       renderProveedoresList();
@@ -4077,7 +4368,11 @@
       centroCostoId:row.centro_costo_id||'', conceptoId:row.concepto_id||'', numero:row.numero||'',
       fecha:row.fecha||'', monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0,
       estado:row.estado||'pendiente', notas:row.notas||'',
-      archivos: Array.isArray(row.archivos) ? row.archivos : []
+      archivos: Array.isArray(row.archivos) ? row.archivos : [],
+      items: (Array.isArray(row.items) ? row.items : []).map(function(it){
+        return {centroCostoId:it.centro_costo_id||'', conceptoId:it.concepto_id||'',
+                monto: typeof it.monto==='number' ? it.monto : parseFloat(it.monto)||0, detalle:it.detalle||''};
+      })
     };
   }
   function mapPagoRow(row){
@@ -4682,6 +4977,9 @@
       .subscribe();
     state.sb.channel('centros-costo-changes')
       .on('postgres_changes', {event:'*', schema:'public', table:'centros_costo'}, function(){ debounced('fetchCompras', fetchCompras); })
+      .subscribe();
+    state.sb.channel('rubros-changes')
+      .on('postgres_changes', {event:'*', schema:'public', table:'rubros'}, function(){ debounced('fetchCompras', fetchCompras); })
       .subscribe();
     state.sb.channel('conceptos-changes')
       .on('postgres_changes', {event:'*', schema:'public', table:'conceptos'}, function(){ debounced('fetchCompras', fetchCompras); })

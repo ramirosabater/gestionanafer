@@ -246,6 +246,8 @@
 
   .overlay{position:fixed; inset:0; background:rgba(10,9,6,0.45); display:none; align-items:center; justify-content:center; z-index:50; padding:16px;}
   .overlay.show{display:flex;}
+  /* Modales que se abren desde ⚙ (Configuración): van por encima de esa ventana */
+  #centro-costo-overlay, #concepto-overlay, #rubro-overlay{z-index:60;}
   #login-overlay{z-index:100; background:var(--bg);}
   .modal{background:var(--surface); border-radius:14px; box-shadow:var(--shadow); width:100%; max-width:380px; padding:20px; border:1px solid var(--border);}
   #cell-modal, #visit-modal{max-width:420px;}
@@ -392,6 +394,26 @@
   .imput-chip{border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:999px; padding:4px 10px; font-size:12px; cursor:pointer; font-family:inherit;}
   .imput-chip.on{background:var(--ink); color:var(--surface); border-color:var(--ink);}
   @media (max-width:520px){ .imput-add{grid-template-columns:1fr;} }
+  /* Factura repartida en varias imputaciones */
+  .link-btn{background:none; border:none; padding:0; color:var(--accent, #1a6fd1); font-family:inherit; font-size:12.5px; cursor:pointer; text-decoration:underline;}
+  .split-toggle-row{margin:-4px 0 12px;}
+  .split-toggle-row[hidden]{display:none;}
+  #fm-imput-simple[hidden]{display:none;}
+  .split-box{border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:12px; background:var(--surface-2, var(--bg));}
+  .split-box[hidden]{display:none;}
+  .split-head{display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px;}
+  .split-head .lbl{font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);}
+  .split-lines{display:flex; flex-direction:column; gap:6px;}
+  .split-line{display:grid; grid-template-columns:1.1fr 1.1fr 1fr 110px auto; gap:6px; align-items:center;}
+  .split-line select, .split-line input{font-family:inherit; font-size:13px; border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:8px; padding:6px 8px; min-width:0; width:100%;}
+  .split-line input.monto{text-align:right; font-family:"IBM Plex Mono",monospace;}
+  .split-line .del{border:none; background:none; cursor:pointer; color:var(--muted); font-size:15px; padding:0 4px;}
+  .split-line .del:hover{color:var(--danger);}
+  .split-foot{display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;}
+  .split-total{font-size:12.5px; font-family:"IBM Plex Mono",monospace;}
+  .split-total.ok{color:var(--ink-2);}
+  .split-total.bad{color:var(--danger);}
+  @media (max-width:620px){ .split-line{grid-template-columns:1fr 1fr; } .split-line .detalle{grid-column:1 / -1;} }
   .combo-menu{position:absolute; z-index:40; left:0; right:0; top:calc(100% + 4px); max-height:220px; overflow-y:auto; background:var(--surface); border:1px solid var(--border-strong); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.16);}
   .combo-item{padding:8px 10px; font-size:13.5px; cursor:pointer;}
   .combo-item:hover, .combo-item.active{background:var(--ghost-bg);}
@@ -1091,7 +1113,11 @@
     </div>
     <div class="crew-fields">
       <div class="field"><label for="pm-cuit">CUIT</label><input type="text" id="pm-cuit" maxlength="20" placeholder="20-12345678-9"></div>
-      <div class="field"><label for="pm-rubro">Rubro</label><input type="text" id="pm-rubro" maxlength="40" placeholder="Ej: Bienes, Honorarios"></div>
+      <div class="field">
+        <label for="pm-rubro">Rubro</label>
+        <select id="pm-rubro"></select>
+        <input type="text" id="pm-rubro-otro" maxlength="40" placeholder="Escribí el rubro nuevo" style="margin-top:6px;" hidden>
+      </div>
     </div>
     <div class="crew-fields">
       <div class="field">
@@ -1191,6 +1217,21 @@
   </div>
 </div>
 
+<div class="overlay" id="rubro-overlay">
+  <div class="modal" id="rubro-modal" style="max-width:380px;">
+    <h3 id="rbm-title">Nuevo rubro</h3>
+    <div class="sub">Se usa para clasificar a los proveedores</div>
+    <div class="field"><label for="rbm-nombre">Rubro</label><input type="text" id="rbm-nombre" maxlength="40" placeholder="Ej: Servicios"></div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="rbm-cancel">Cancelar</button>
+        <button class="btn" id="rbm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="rbm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="oc-overlay">
   <div class="modal" id="oc-modal" style="max-width:420px;">
     <h3 id="ocm-title">Nueva orden de compra</h3>
@@ -1257,7 +1298,7 @@
         <select id="fm-oc"></select>
       </div>
     </div>
-    <div class="crew-fields">
+    <div class="crew-fields" id="fm-imput-simple">
       <div class="field">
         <label for="fm-centro-costo">Centro de costo</label>
         <select id="fm-centro-costo"></select>
@@ -1268,6 +1309,18 @@
       </div>
     </div>
     <div class="imput-chips" id="fm-imputaciones" hidden></div>
+    <div class="split-box" id="fm-split" hidden>
+      <div class="split-head">
+        <span class="lbl">Imputación repartida</span>
+        <button type="button" class="link-btn" id="fm-split-off">Volver a una sola imputación</button>
+      </div>
+      <div class="split-lines" id="fm-split-lines"></div>
+      <div class="split-foot">
+        <button type="button" class="btn" id="fm-split-add">+ Agregar línea</button>
+        <span class="split-total" id="fm-split-total"></span>
+      </div>
+    </div>
+    <div class="split-toggle-row"><button type="button" class="link-btn" id="fm-split-on">Repartir esta factura en varias imputaciones</button></div>
     <div class="crew-fields">
       <div class="field"><label for="fm-numero">N° de factura</label><input type="text" id="fm-numero" maxlength="40" placeholder="Ej: A-0001-00012345"></div>
       <div class="field"><label for="fm-fecha">Fecha</label><input type="date" id="fm-fecha"></div>
@@ -1454,6 +1507,7 @@
         <div class="settings-tabs settings-subtabs" id="settings-subtabs-compras" hidden>
           <button class="stabbtn" id="stabbtn-centros-costo">Centros de costo</button>
           <button class="stabbtn" id="stabbtn-conceptos">Conceptos</button>
+          <button class="stabbtn" id="stabbtn-rubros">Rubros</button>
         </div>
         <div class="settings-tabs settings-subtabs" id="settings-subtabs-acceso" hidden>
           <button class="stabbtn" id="stabbtn-auth">Perfiles y permisos</button>
@@ -1512,6 +1566,16 @@
             </table>
           </div>
           <div class="addrow"><button class="btn primary" id="new-concepto-btn">+ Nuevo concepto</button></div>
+        </div>
+        <div id="stab-rubros" hidden>
+          <div class="sub" style="margin-bottom:10px;">Rubros para clasificar a los proveedores. Si renombrás uno, se actualiza en todos los proveedores que lo tienen.</div>
+          <div class="day-wrap">
+            <table class="day-table" id="rubros-table">
+              <thead><tr><th>Rubro</th><th class="num">Proveedores</th></tr></thead>
+              <tbody id="rubros-body"></tbody>
+            </table>
+          </div>
+          <div class="addrow"><button class="btn primary" id="new-rubro-btn">+ Nuevo rubro</button></div>
         </div>
         <div id="stab-auth" hidden>
           <div class="sub" style="margin-bottom:14px;">Cada perfil tiene su propia contraseña y sus propios permisos por pestaña. "Ver" deja mirar esa pestaña sin poder crear, editar ni borrar nada ahí; "Editar" da acceso completo. Los cambios se guardan recién al tocar "Guardar perfiles" — a quien uses una contraseña que cambiaste hay que avisarle la nueva.</div>
