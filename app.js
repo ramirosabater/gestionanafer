@@ -197,7 +197,6 @@
     {id:'compras',    label:'Compras'},
     {id:'pagos',      label:'Pagos'},
     {id:'tesoreria',  label:'Tesorería'},
-    {id:'simulador',  label:'Simulación'},
     {id:'day',        label:'Día'},
     {id:'dashboard',  label:'Dashboard'}
   ];
@@ -206,26 +205,26 @@
     TAB_DEFS.forEach(function(t){ p[t.id] = nivel; });
     return p;
   }
+  function defaultAuthRoles(){
+    var lecturaPermisos = defaultPermisos('oculta');
+    lecturaPermisos.day = 'ver';
+    return [
+      {id:'admin', nombre:'Admin', password:'admin', manageAccess:true, permisos:defaultPermisos('editar')},
+      {id:'lectura', nombre:'Lectura', password:'lectura', manageAccess:false, permisos:lecturaPermisos}
+    ];
+  }
   function currentRole(){
     return (state.auth.roles||[]).find(function(r){ return r.id===state.roleId; }) || null;
   }
   function isLoggedIn(){ return !!currentRole(); }
-  // Pestañas nuevas que los perfiles viejos todavía no tienen guardadas:
-  // heredan el permiso de una pestaña relacionada hasta que se re-guarde el perfil.
-  var TAB_PERMISO_FALLBACK = { simulador: 'tesoreria' };
   function tabPermiso(tabId){
     var r = currentRole();
     if(!r) return 'oculta';
-    var p = r.permisos || {};
-    if(p[tabId]) return p[tabId];
-    var fb = TAB_PERMISO_FALLBACK[tabId];
-    if(fb && p[fb]) return p[fb];
-    return 'oculta';
+    return (r.permisos && r.permisos[tabId]) || 'oculta';
   }
   function canEdit(tabId){ return tabPermiso(tabId)==='editar'; }
   function canEditAnything(){ return TAB_DEFS.some(function(t){ return canEdit(t.id); }); }
   function canManageAccess(){ var r = currentRole(); return !!(r && r.manageAccess); }
-  function canAutoplan(){ var r = currentRole(); if(!r) return false; var v = r.permisos && r.permisos.__autoplan; return v===undefined ? true : !!v; }
   function canOpenSettings(){
     return canManageAccess() || canEdit('grid') || canEdit('branches') || canEdit('company') || canEdit('occasional') || canEdit('compras');
   }
@@ -249,8 +248,7 @@
   var SETTINGS_TAB_PERMISOS = {
     routes:'grid', trucks:'grid', drivers:'grid', helpers:'grid', cargo:'grid',
     branches:'branches', companies:'company', occasionals:'occasional',
-    'centros-costo':'compras', conceptos:'compras',
-    'tipos-retencion':'compras', 'conceptos-retencion':'compras'
+    'centros-costo':'compras', conceptos:'compras'
   };
   function settingsTabVisible(t){
     if(t==='auth') return canManageAccess();
@@ -264,7 +262,7 @@
   var SETTINGS_CATEGORIES = [
     {id:'flota',       label:'Flota y viajes',            tabs:['routes','trucks','drivers','helpers','cargo']},
     {id:'sucursales',  label:'Sucursales y empresas',     tabs:['branches','companies','occasionals']},
-    {id:'compras',     label:'Compras y Tesorería',        tabs:['centros-costo','conceptos','tipos-retencion','conceptos-retencion']},
+    {id:'compras',     label:'Compras',                   tabs:['centros-costo','conceptos']},
     {id:'acceso',      label:'Acceso',                     tabs:['auth']}
   ];
   function settingsCategoryVisible(catId){
@@ -296,7 +294,7 @@
     });
   }
   function firstVisibleSettingsTab(){
-    var order = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','tipos-retencion','conceptos-retencion','auth'];
+    var order = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','auth'];
     for(var i=0;i<order.length;i++){ if(settingsTabVisible(order[i])) return order[i]; }
     return 'auth';
   }
@@ -376,18 +374,12 @@
       company: {items: DEFAULT_COMPANIES.slice(), visits:{}, dayVisits:{}, dashVisits:[], editingVisit:null, editingVisitCargo:{}},
       occasional: {items: DEFAULT_OCCASIONALS.slice(), visits:{}, dayVisits:{}, dashVisits:[], editingVisit:null, editingVisitCargo:{}}
     },
-    // Acceso: cada persona entra con su email y contraseña (Supabase Auth). La
-    // tabla usuarios dice qué perfil tiene cada email, y la tabla perfiles guarda
-    // los permisos por pestaña (ver TAB_DEFS más arriba). Se gestionan desde
-    // ⚙ → Acceso. Los permisos también los hace cumplir la base de datos (RLS).
-    auth: {roles: [], usuarios: []},
-    userEmail: '',         // email de quien inició sesión
-    authChecked: false,    // ya se sabe si hay sesión o no (evita mostrar el login de golpe)
-    started: false,        // ya se cargaron los datos y se abrieron las conexiones en vivo
-    accessLoading: false,
-    loggingOut: false,
-    deniedEmail: '',       // email al que se le negó el acceso (evita repetir la verificación por eventos atrasados)
-    pwRecovery: false,
+    // Acceso: perfiles con contraseña propia y permisos por pestaña (ver
+    // TAB_DEFS/defaultAuthRoles más arriba). Se guardan en la columna roles
+    // (jsonb) de app_config y se gestionan desde ⚙ → Acceso. roleId queda
+    // recordado en este navegador (localStorage) hasta que alguien toque
+    // "Salir".
+    auth: {roles: defaultAuthRoles()},
     roleId: null,          // null (sin loguear) o id de un perfil en state.auth.roles
     // Compras: proveedores y órdenes de compra (primer módulo de
     // Compras/Órdenes de pago/Tesorería — por ahora solo proveedores y
@@ -397,6 +389,8 @@
     ordenesCompra: [],
     editingProveedorId: null,
     editingProveedorArchivos: [], // adjuntos del proveedor que se está editando (Google Drive)
+    editingProveedorImput: [],    // imputaciones [{centroCostoId, conceptoId}] del proveedor que se está editando
+    proveedoresSearch: '',        // texto del buscador de la lista de proveedores
     editingOCId: null,
     ocFilterEstado: '',
     dashSubTab: 'viajes', // sub-pestaña activa del Dashboard: 'viajes' | 'gastos'
@@ -405,13 +399,7 @@
     // centro de costo/concepto en el dashboard.
     centrosCosto: [],
     conceptos: [],
-    tiposRetencion: [],
-    conceptosRetencion: [],
-    editingTipoRetencionId: null,
-    editingConceptoRetencionId: null,
     editingCentroCostoId: null,
-    deudaModo: 'resumido',
-    simSeleccion: {},
     editingConceptoId: null,
     // Facturas y Órdenes de pago: facturas de proveedor (con o sin orden de
     // compra asociada — la mayoría no tiene una) y órdenes de pago que
@@ -443,11 +431,15 @@
     try{ localStorage.setItem('hdr_who', this.value.slice(0,30)); }catch(e){}
   });
 
-  try{ localStorage.removeItem('hdr_role'); }catch(e){} // resto del login viejo
+  try {
+    var savedRoleId = localStorage.getItem('hdr_role');
+    if(savedRoleId==='viewer') savedRoleId = 'lectura'; // migración del rol antiguo
+    if(savedRoleId) state.roleId = savedRoleId;
+  } catch(e){}
 
-  // Quién carga cada cosa: sale del email con el que se inició sesión (ya no se tipea).
   function whoName(){
-    return state.userEmail || 'Sin nombre';
+    var v = document.getElementById('who-input').value.trim();
+    return v || 'Sin nombre';
   }
 
   function truckColorVar(id){
@@ -691,7 +683,6 @@
     if(!v || tabPermiso(v)==='oculta') v = firstAccessibleTab() || 'day'; // no navega a pestañas sin permiso
     state.view = v;
     document.body.classList.toggle('tab-readonly', tabPermiso(v)!=='editar');
-    document.body.classList.toggle('no-autoplan', !canAutoplan());
     refreshTabVisibility();
     document.getElementById('view-grid').hidden = (v!=='grid');
     document.getElementById('view-day').hidden = (v!=='day');
@@ -702,7 +693,6 @@
     document.getElementById('view-compras').hidden = (v!=='compras');
     document.getElementById('view-pagos').hidden = (v!=='pagos');
     document.getElementById('view-tesoreria').hidden = (v!=='tesoreria');
-    document.getElementById('view-simulador').hidden = (v!=='simulador');
     document.getElementById('tab-grid').classList.toggle('active', v==='grid');
     document.getElementById('tab-day').classList.toggle('active', v==='day');
     document.getElementById('tab-dashboard').classList.toggle('active', v==='dashboard');
@@ -712,7 +702,6 @@
     document.getElementById('tab-compras').classList.toggle('active', v==='compras');
     document.getElementById('tab-pagos').classList.toggle('active', v==='pagos');
     document.getElementById('tab-tesoreria').classList.toggle('active', v==='tesoreria');
-    document.getElementById('tab-simulador').classList.toggle('active', v==='simulador');
     document.getElementById('toolbar-grid').hidden = (v!=='grid');
     document.getElementById('toolbar-day').hidden = (v!=='day');
     document.getElementById('toolbar-dashboard').hidden = (v!=='dashboard');
@@ -722,8 +711,6 @@
     document.getElementById('toolbar-compras').hidden = (v!=='compras');
     document.getElementById('toolbar-pagos').hidden = (v!=='pagos');
     document.getElementById('toolbar-tesoreria').hidden = (v!=='tesoreria');
-    document.getElementById('toolbar-simulador').hidden = (v!=='simulador');
-    if(v==='simulador') renderSimulador();
     if(v==='day') fetchDay(state.day);
     if(v==='dashboard') fetchDashboard();
   }
@@ -736,7 +723,6 @@
   document.getElementById('tab-compras').addEventListener('click', function(){ setView('compras'); });
   document.getElementById('tab-pagos').addEventListener('click', function(){ setView('pagos'); });
   document.getElementById('tab-tesoreria').addEventListener('click', function(){ setView('tesoreria'); });
-  document.getElementById('tab-simulador').addEventListener('click', function(){ setView('simulador'); });
 
   // ---------- Rendering: grid view ----------
   function monthLabel(){ return MONTH_NAMES[state.month] + ' de ' + state.year; }
@@ -2245,7 +2231,7 @@
   }
 
   // ---------- Settings (ABM: rutas, camiones, choferes, ayudantes, etc.) ----------
-  var SETTINGS_ALL_TABS = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','tipos-retencion','conceptos-retencion','auth'];
+  var SETTINGS_ALL_TABS = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','auth'];
   function switchSettingsTab(tab){
     refreshSettingsTabsVisibility();
     if(!settingsTabVisible(tab)) tab = firstVisibleSettingsTab();
@@ -2433,7 +2419,10 @@
     var nombreInp = document.createElement('input');
     nombreInp.type = 'text'; nombreInp.className = 'role-nombre'; nombreInp.maxLength = 40;
     nombreInp.placeholder = 'Nombre del perfil'; nombreInp.value = role.nombre || '';
-    top.appendChild(nombreInp);
+    var pwInp = document.createElement('input');
+    pwInp.type = 'text'; pwInp.className = 'role-password'; pwInp.maxLength = 60;
+    pwInp.placeholder = 'Contraseña'; pwInp.value = role.password || '';
+    top.appendChild(nombreInp); top.appendChild(pwInp);
     card.appendChild(top);
 
     var manageRow = document.createElement('label');
@@ -2442,18 +2431,8 @@
     manageChk.type = 'checkbox'; manageChk.className = 'role-manage-access';
     manageChk.checked = !!role.manageAccess;
     manageRow.appendChild(manageChk);
-    manageRow.appendChild(document.createTextNode('Puede administrar perfiles y personas (⚙ Acceso)'));
+    manageRow.appendChild(document.createTextNode('Puede administrar perfiles y contraseñas (⚙ Acceso)'));
     card.appendChild(manageRow);
-
-    var apRow = document.createElement('label');
-    apRow.className = 'role-manage-row';
-    var apChk = document.createElement('input');
-    apChk.type = 'checkbox'; apChk.className = 'role-autoplan';
-    var apVal = role.permisos && role.permisos.__autoplan;
-    apChk.checked = (apVal===undefined ? true : !!apVal);
-    apRow.appendChild(apChk);
-    apRow.appendChild(document.createTextNode('Puede usar "Planificar automáticamente"'));
-    card.appendChild(apRow);
 
     var grid = document.createElement('div');
     grid.className = 'role-permisos-grid';
@@ -2485,87 +2464,6 @@
     list.innerHTML = '';
     (state.auth.roles||[]).forEach(function(role){
       list.appendChild(buildRoleCard(role));
-    });
-    renderUsuariosSettings();
-  }
-
-  // Personas con acceso: email + perfil. Para que alguien pueda entrar hacen falta
-  // dos cosas: su cuenta en Supabase (Authentication > Users) y estar en esta lista.
-  function perfilNombre(id){
-    var r = (state.auth.roles||[]).find(function(x){ return x.id===id; });
-    return r ? r.nombre : id;
-  }
-  function writeUsuario(u){
-    if(!state.sb) return;
-    state.sb.from('usuarios').upsert({email:u.email, perfil_id:u.perfil_id, activo:u.activo!==false}).then(function(res){
-      if(res.error) showToast('No se pudo guardar la persona: '+res.error.message);
-    });
-  }
-  function buildUsuarioRow(u){
-    var esYo = (u.email||'').toLowerCase()===state.userEmail;
-    var row = document.createElement('div');
-    row.className = 'setting-row usuario-row';
-    var toggle = document.createElement('button');
-    toggle.className = 'toggle'+(u.activo!==false?' on':'');
-    toggle.innerHTML = '<span class="knob"></span>';
-    toggle.title = esYo ? 'No podés quitarte el acceso a vos mismo' : (u.activo!==false ? 'Con acceso — clic para suspender' : 'Suspendido — clic para reactivar');
-    toggle.addEventListener('click', function(){
-      if(esYo){ showToast('No podés quitarte el acceso a vos mismo.'); return; }
-      u.activo = u.activo===false ? true : false;
-      writeUsuario(u);
-      renderUsuariosSettings();
-    });
-    var mail = document.createElement('span');
-    mail.className = 'usuario-email';
-    mail.textContent = u.email;
-    var sel = document.createElement('select');
-    sel.className = 'scope-select';
-    (state.auth.roles||[]).forEach(function(r){
-      var o = document.createElement('option'); o.value = r.id; o.textContent = r.nombre; sel.appendChild(o);
-    });
-    sel.value = u.perfil_id;
-    sel.addEventListener('change', function(){
-      if(esYo && !confirm('Estás cambiando tu propio perfil. Si el nuevo no puede administrar accesos, vas a perder este acceso. ¿Seguir?')){ this.value = u.perfil_id; return; }
-      u.perfil_id = this.value;
-      writeUsuario(u);
-    });
-    var del = document.createElement('button');
-    del.className = 'btn ghost';
-    del.textContent = '✕';
-    del.title = 'Quitar a esta persona de la lista';
-    del.addEventListener('click', function(){
-      if(esYo){ showToast('No podés quitarte el acceso a vos mismo.'); return; }
-      if(!confirm('¿Quitar a '+u.email+' de la lista? Ya no va a poder entrar.')) return;
-      state.sb.from('usuarios').delete().eq('email', u.email).then(function(res){
-        if(res.error){ showToast('No se pudo quitar: '+res.error.message); return; }
-        state.auth.usuarios = state.auth.usuarios.filter(function(x){ return x.email!==u.email; });
-        renderUsuariosSettings();
-      });
-    });
-    row.appendChild(toggle); row.appendChild(mail); row.appendChild(sel); row.appendChild(del);
-    return row;
-  }
-  function renderUsuariosSettings(){
-    var list = document.getElementById('usuarios-list');
-    if(!list) return;
-    list.innerHTML = '';
-    (state.auth.usuarios||[]).forEach(function(u){ list.appendChild(buildUsuarioRow(u)); });
-    var sel = document.getElementById('new-usuario-perfil');
-    if(sel){
-      var prev = sel.value;
-      sel.innerHTML = '';
-      (state.auth.roles||[]).forEach(function(r){
-        var o = document.createElement('option'); o.value = r.id; o.textContent = r.nombre; sel.appendChild(o);
-      });
-      if(prev) sel.value = prev;
-    }
-  }
-  function loadUsuarios(){
-    if(!state.sb || !canManageAccess()) return;
-    state.sb.from('usuarios').select('*').order('email').then(function(res){
-      if(res.error){ showToast('No se pudo cargar la lista de personas: '+res.error.message); return; }
-      state.auth.usuarios = res.data || [];
-      if(state.settingsTab==='auth') renderUsuariosSettings();
     });
   }
 
@@ -2639,18 +2537,10 @@
       if(res.error) showToast('No se pudo guardar '+kind.singularLower+': '+res.error.message);
     });
   }
-  function writeAuthRoles(roles, removedIds){
-    if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return Promise.resolve(false); }
-    var rows = roles.map(function(r){
-      return {id:r.id, nombre:r.nombre, permisos:r.permisos, gestiona_acceso:!!r.manageAccess};
-    });
-    return state.sb.from('perfiles').upsert(rows).then(function(res){
-      if(res.error){ showToast('No se pudieron guardar los perfiles: '+res.error.message); return false; }
-      if(!removedIds || !removedIds.length) return true;
-      return state.sb.from('perfiles').delete().in('id', removedIds).then(function(r2){
-        if(r2.error){ showToast('No se pudo eliminar un perfil (¿hay personas asignadas?): '+r2.error.message); return false; }
-        return true;
-      });
+  function writeAuthRoles(roles){
+    if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
+    state.sb.from('app_config').upsert({id:'auth', roles: roles}).then(function(res){
+      if(res.error) showToast('No se pudieron guardar los perfiles: '+res.error.message);
     });
   }
 
@@ -2854,7 +2744,6 @@
     el.innerHTML = '';
     if(!arr.length){
       el.innerHTML = '<div class="attach-empty">Sin archivos adjuntos.</div>';
-      if(containerId==='fm-archivos-list') syncFacturaPreview();
       return;
     }
     arr.forEach(function(a, idx){
@@ -2863,15 +2752,7 @@
       if(a.pending){
         var span = document.createElement('span');
         span.textContent = (a.name || 'archivo') + ' (se sube a Drive al guardar)';
-        span.style.flex = '1'; span.style.minWidth = '0';
         row.appendChild(span);
-        if(containerId==='fm-archivos-list' && isPreviewableFile(a.file)){
-          var verBtn = document.createElement('button');
-          verBtn.type = 'button'; verBtn.className = 'attach-view'; verBtn.textContent = '👁 Ver';
-          verBtn.title = 'Mostrar este archivo al costado del formulario';
-          verBtn.addEventListener('click', function(){ fmPreview.dismissed = false; showFacturaPreview(a.file); });
-          row.appendChild(verBtn);
-        }
       } else {
         var link = document.createElement('a');
         link.href = a.url; link.target = '_blank'; link.rel = 'noopener';
@@ -2893,7 +2774,6 @@
       row.appendChild(del);
       el.appendChild(row);
     });
-    if(containerId==='fm-archivos-list') syncFacturaPreview();
   }
 
   function wireAttachInput(inputId, containerId, getArr){
@@ -2912,10 +2792,8 @@
   }
 
   function refreshFacturaReadAvailability(){
-    // La lectura la hace el servidor (función leer-factura); acá solo se decide si se muestra el botón.
     var row = document.getElementById('fm-read-row');
-    if(row) row.hidden = !(state.sb && state.started && (canEdit('compras') || canEdit('pagos')));
-    if(typeof setReadStatus==='function') setReadStatus(null);
+    if(row) row.hidden = !window.ANTHROPIC_API_KEY;
   }
 
   wireAttachInput('pm-archivo-input', 'pm-archivos-list', function(){ return state.editingProveedorArchivos; });
@@ -2987,6 +2865,8 @@
       if(match){
         setProveedorComboValue('fm-proveedor', match.id);
         fillFacturaOCSelect(match.id);
+        aplicarImputacionDefault(match.id);
+        renderFacturaImputChips();
       }else{
         showToast('Proveedor leído: "'+nombreLeido+'" — no está en la lista, elegilo a mano.');
       }
@@ -2997,97 +2877,69 @@
     if(data.notas) document.getElementById('fm-notas').value = data.notas;
   }
 
-  // Prepara la imagen para mandarla al servidor: si es muy grande la achica y la pasa a JPG.
-  function normalizeInvoiceImage(blob){
-    var ok = ['image/png','image/jpeg','image/webp','image/gif'];
-    var passthrough = function(){
-      if(ok.indexOf(blob.type)===-1) return Promise.reject(new Error('formato'));
-      return blobToBase64(blob).then(function(b64){ return {base64:b64, mediaType:blob.type}; });
-    };
-    if(typeof createImageBitmap!=='function') return passthrough();
-    return createImageBitmap(blob).then(function(bmp){
-      var maxDim = 2200;
-      var scale = Math.min(1, maxDim/Math.max(bmp.width, bmp.height));
-      if(scale===1 && blob.size<=3500000 && ok.indexOf(blob.type)!==-1){ if(bmp.close) bmp.close(); return passthrough(); }
-      var cv = document.createElement('canvas');
-      cv.width = Math.max(1, Math.round(bmp.width*scale)); cv.height = Math.max(1, Math.round(bmp.height*scale));
-      var ctx = cv.getContext('2d');
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
-      ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
-      if(bmp.close) bmp.close();
-      return new Promise(function(resolve, reject){
-        cv.toBlob(function(b){
-          if(!b){ reject(new Error('convertir')); return; }
-          blobToBase64(b).then(function(b64){ resolve({base64:b64, mediaType:'image/jpeg'}); }, reject);
-        }, 'image/jpeg', 0.88);
-      });
-    }, function(){ return passthrough(); });
-  }
-
-  // Estado de la lectura, visible DENTRO del modal (el aviso de abajo dura pocos segundos y es fácil de perder)
-  function setReadStatus(kind, msg){
-    var el = document.getElementById('fm-read-status');
-    var inp = document.getElementById('fm-read-input');
-    var lbl = document.getElementById('fm-read-label');
-    if(inp) inp.disabled = (kind==='busy');
-    if(lbl) lbl.classList.toggle('disabled', kind==='busy');
-    if(!el) return;
-    if(!kind){ el.hidden = true; el.textContent = ''; el.className = 'factura-read-status'; return; }
-    el.hidden = false;
-    el.className = 'factura-read-status ' + kind;
-    el.textContent = (kind==='busy' ? '⏳ ' : kind==='ok' ? '✅ ' : '⚠ ') + msg;
-  }
-  function readFail(msg){ setReadStatus('error', msg); showToast(msg); }
-
-  async function facturaReadErrorMessage(error){
-    var status = error && error.context && error.context.status;
-    var detail = '';
-    try{ var j = await error.context.json(); detail = (j && j.error) || ''; }catch(e){}
-    console.error('leer-factura falló', status, detail, error);
-    if(status===404) return 'La lectura automática todavía no está activada en el servidor (falta desplegar la función leer-factura).';
-    if(status===401 || status===403) return detail || 'No tenés permiso para leer facturas automáticamente.';
-    if(status===429) return 'Demasiados pedidos por ahora — probá de nuevo en un momento.';
-    return 'No se pudo leer la factura automáticamente' + (detail ? ': '+detail : '') + ' — completá los datos a mano.';
-  }
-
   async function readFacturaFromFile(file){
-    if(!state.sb){ readFail('Sin conexión con el servidor.'); return; }
-    setReadStatus('busy', 'Leyendo la factura…');
+    if(!window.ANTHROPIC_API_KEY){ showToast('La lectura automática no está configurada (falta la clave en config.js).'); return; }
+    showToast('Leyendo factura...');
     try{
-      var isPdf = (file.type === 'application/pdf');
-      if(!isPdf && !/^image\//.test(file.type)){
-        readFail('Elegí un PDF o una imagen de la factura.');
+      var imageBlob = file;
+      if(file.type === 'application/pdf'){
+        imageBlob = await pdfFirstPageToImageBlob(file);
+      }else if(!/^image\//.test(file.type)){
+        showToast('Elegí un PDF o una imagen de la factura.');
         return;
       }
       // el archivo original queda como adjunto pendiente; se sube a Drive
-      // recién al Guardar, porque ahí ya sabemos a qué proveedor pertenece.
-      // Al agregarlo se muestra al costado del formulario para poder controlarlo.
+      // recién al Guardar, porque ahí ya sabemos a qué proveedor pertenece
       state.editingFacturaArchivos.push({ pending:true, file:file, name:file.name, contentType:file.type||'', sizeBytes:file.size||0 });
       renderAttachList('fm-archivos-list', function(){ return state.editingFacturaArchivos; });
 
-      var imageBlob = file;
-      if(isPdf){
-        imageBlob = await pdfFirstPageToImageBlob(file);
-      }
-
-      var img;
-      try{ img = await normalizeInvoiceImage(imageBlob); }
-      catch(e){ readFail('No se pudo leer esa imagen — probá con un PDF, JPG o PNG, o completá los datos a mano.'); return; }
-
-      // La lectura la hace el servidor: la clave de Anthropic nunca pasa por el navegador.
+      var base64 = await blobToBase64(imageBlob);
       var proveedorNombres = state.proveedores.map(function(p){ return p.nombre; });
-      var res = await state.sb.functions.invoke('leer-factura', {
-        body: { imagen: img.base64, mediaType: img.mediaType, proveedores: proveedorNombres }
+      var prompt = 'Esta imagen es una foto o escaneo de una factura de proveedor. Leé los datos y devolvé SOLO un objeto JSON con esta forma exacta, sin texto adicional:\n'
+        + '{"proveedor_nombre": string o null, "numero": string o null, "fecha": "YYYY-MM-DD" o null, "monto": number o null, "notas": string o null}\n'
+        + 'Los proveedores ya cargados en el sistema son: ' + JSON.stringify(proveedorNombres) + '. '
+        + 'Si el nombre del proveedor de la factura coincide (aunque sea parcialmente) con alguno de esa lista, devolvé el nombre EXACTO tal como aparece en la lista. '
+        + 'Si no coincide con ninguno, devolvé el nombre tal como figura impreso en la factura. '
+        + '"monto" es el monto TOTAL de la factura, como número (sin separador de miles, con punto decimal, sin símbolo de moneda). '
+        + 'Si algún dato no se puede leer con confianza, devolvé null en ese campo en vez de inventarlo.';
+
+      var aiHeaders = {
+        'Content-Type': 'application/json',
+        'x-api-key': window.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      };
+      if(window.ANTHROPIC_WORKSPACE_ID) aiHeaders['anthropic-workspace-id'] = window.ANTHROPIC_WORKSPACE_ID;
+      var resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: aiHeaders,
+        body: JSON.stringify({
+          model: window.ANTHROPIC_MODEL || 'claude-sonnet-4-5',
+          max_tokens: 1024,
+          messages: [{
+            role: 'user',
+            content: [
+              {type:'image', source:{type:'base64', media_type:'image/png', data: base64}},
+              {type:'text', text: prompt}
+            ]
+          }]
+        })
       });
-      if(res.error){ readFail(await facturaReadErrorMessage(res.error)); return; }
-      var data = res.data && res.data.data;
-      if(!data){ readFail('No se pudo interpretar la respuesta — completá los datos a mano.'); return; }
+      var body = await resp.json();
+      if(!resp.ok){
+        var msg = (body && body.error && body.error.message) || ('HTTP '+resp.status);
+        if(resp.status===401) showToast('La clave de la API de Anthropic no es válida — revisá config.js.');
+        else if(resp.status===429) showToast('Demasiados pedidos por ahora — probá de nuevo en un momento.');
+        else showToast('No se pudo leer la factura automáticamente: '+msg);
+        return;
+      }
+      var text = body && body.content && body.content[0] && body.content[0].text;
+      var data = extractJsonFromText(text);
+      if(!data){ showToast('No se pudo interpretar la respuesta — completá los datos a mano.'); return; }
       applyFacturaReadResult(data);
-      setReadStatus('ok', 'Factura leída — revisá los datos antes de guardar.');
       showToast('Factura leída — revisá los datos antes de guardar.');
     }catch(e){
-      console.error('lectura de factura', e);
-      readFail('No se pudo leer la factura automáticamente — completá los datos a mano.');
+      showToast('No se pudo leer la factura automáticamente — completá los datos a mano.');
     }
   }
 
@@ -3130,7 +2982,8 @@
   }
   function centroCostoLabel(id){
     var c = centroCostoById(id);
-    return c ? (c.codigo+' — '+c.descripcion) : '';
+    if(!c) return '';
+    return c.codigo ? (c.codigo+' — '+c.descripcion) : c.descripcion;
   }
   function generateCentroCostoId(codigo){
     var base = slug(codigo) || 'cc';
@@ -3158,6 +3011,51 @@
     return base+'_'+n;
   }
 
+  // ---------- Imputaciones contables por proveedor ----------
+  // Un proveedor puede tener varias combinaciones Centro de costo + Concepto
+  // (p.imputaciones = [{centroCostoId, conceptoId}, ...]). La "por defecto"
+  // es la que más se usó en sus facturas; si empatan o no tiene facturas,
+  // manda el orden de la lista (la primera = principal, marcada con ★).
+  function imputKey(ccId, coId){ return (ccId||'')+'|'+(coId||''); }
+  function imputLabel(im){
+    var cc = centroCostoById(im.centroCostoId), co = conceptoById(im.conceptoId);
+    return (cc ? cc.descripcion : '(centro eliminado)')+' · '+(co ? co.nombre : '(concepto eliminado)');
+  }
+  function imputUsos(proveedorId){
+    var usos = {};
+    state.facturas.forEach(function(f){
+      if(f.proveedorId!==proveedorId || !f.centroCostoId || !f.conceptoId) return;
+      var k = imputKey(f.centroCostoId, f.conceptoId);
+      usos[k] = (usos[k]||0)+1;
+    });
+    return usos;
+  }
+  // Lista de imputaciones del proveedor + las que aparezcan en sus facturas
+  // aunque no estén en la lista, cada una con {usos}, ordenada de más a
+  // menos usada (empate: orden de la lista del proveedor).
+  function imputacionesOrdenadas(proveedorId, listaOverride){
+    var p = state.proveedores.find(function(x){ return x.id===proveedorId; });
+    var lista = listaOverride || (p ? (p.imputaciones||[]) : []);
+    var usos = imputUsos(proveedorId);
+    var out = [], seen = {};
+    lista.forEach(function(im, i){
+      var k = imputKey(im.centroCostoId, im.conceptoId);
+      if(seen[k]) return; seen[k] = true;
+      out.push({centroCostoId:im.centroCostoId, conceptoId:im.conceptoId, usos:usos[k]||0, orden:i, enLista:true});
+    });
+    Object.keys(usos).forEach(function(k){
+      if(seen[k]) return; seen[k] = true;
+      var parts = k.split('|');
+      out.push({centroCostoId:parts[0], conceptoId:parts[1], usos:usos[k], orden:9999, enLista:false});
+    });
+    out.sort(function(a,b){ return (b.usos-a.usos) || (a.orden-b.orden); });
+    return out;
+  }
+  function imputacionDefault(proveedorId){
+    var list = imputacionesOrdenadas(proveedorId);
+    return list.length ? list[0] : null;
+  }
+
   function renderCentrosCostoList(){
     var body = document.getElementById('centros-costo-body');
     if(!body) return;
@@ -3169,7 +3067,7 @@
     state.centrosCosto.slice().sort(function(a,b){ return (a.codigo||'').localeCompare(b.codigo||'', undefined, {numeric:true}); }).forEach(function(c){
       var tr = document.createElement('tr');
       tr.className = 'day-row';
-      tr.innerHTML = '<td class="day-route num">'+esc(c.codigo)+'</td>'
+      tr.innerHTML = '<td class="day-route num">'+esc(c.codigo||'—')+'</td>'
         +'<td>'+esc(c.descripcion)+'</td>';
       tr.addEventListener('click', function(){ openCentroCostoModal(c.id); });
       body.appendChild(tr);
@@ -3247,44 +3145,6 @@
     renderCentrosCostoList();
     showToast('Centro de costo eliminado.');
   });
-
-  // ---------- Tesorería: ABM Tipos y Conceptos de retención (código+descripción) ----------
-  function setupRetencionABM(cfg){
-    function genId(codigo){ var base=slug(codigo)||cfg.slugBase; var used={}; state[cfg.list].forEach(function(c){used[c.id]=true;}); if(!used[base])return base; var n=2; while(used[base+'_'+n])n++; return base+'_'+n; }
-    function renderList(){ var body=document.getElementById(cfg.bodyId); if(!body)return; body.innerHTML='';
-      if(state[cfg.list].length===0){ body.innerHTML='<tr class="day-row empty"><td colspan="2">Todavía no hay '+cfg.entityPlural+' cargados.</td></tr>'; return; }
-      state[cfg.list].slice().sort(function(a,b){return (a.codigo||'').localeCompare(b.codigo||'',undefined,{numeric:true});}).forEach(function(c){
-        var tr=document.createElement('tr'); tr.className='day-row';
-        tr.innerHTML='<td class="day-route num">'+esc(c.codigo)+'</td><td>'+esc(c.descripcion)+'</td>';
-        tr.addEventListener('click',function(){ openModal(c.id); }); body.appendChild(tr); }); }
-    function write(c){ if(!state.sb){showToast('No se pudo guardar: sin conexión.');return;}
-      state.sb.from(cfg.table).upsert({id:c.id,codigo:c.codigo||'',descripcion:c.descripcion||''}).then(function(res){ if(res.error) showToast('No se pudo guardar: '+res.error.message); }); }
-    function openModal(id){ state[cfg.editKey]=id||null; var c=id?state[cfg.list].find(function(x){return x.id===id;}):null;
-      document.getElementById(cfg.pfx+'-title').textContent=c?cfg.titleEdit:cfg.titleNew;
-      document.getElementById(cfg.pfx+'-codigo').value=c?c.codigo:'';
-      document.getElementById(cfg.pfx+'-descripcion').value=c?c.descripcion:'';
-      document.getElementById(cfg.pfx+'-delete').style.display=c?'':'none';
-      document.getElementById(cfg.overlay).classList.add('show'); }
-    function closeModal(){ document.getElementById(cfg.overlay).classList.remove('show'); }
-    document.getElementById(cfg.newBtn).addEventListener('click',function(){ openModal(null); });
-    document.getElementById(cfg.pfx+'-cancel').addEventListener('click',closeModal);
-    document.getElementById(cfg.overlay).addEventListener('click',function(e){ if(e.target===this) closeModal(); });
-    document.getElementById(cfg.pfx+'-save').addEventListener('click',function(){
-      var codigo=document.getElementById(cfg.pfx+'-codigo').value.trim(); if(!codigo){showToast('Ingresá el código.');return;}
-      var descripcion=document.getElementById(cfg.pfx+'-descripcion').value.trim(); if(!descripcion){showToast('Ingresá la descripción.');return;}
-      var id=state[cfg.editKey]; var isNew=!id; if(isNew) id=genId(codigo);
-      var c={id:id,codigo:codigo,descripcion:descripcion};
-      if(isNew) state[cfg.list].push(c); else { var idx=state[cfg.list].findIndex(function(x){return x.id===id;}); if(idx>=0) state[cfg.list][idx]=c; }
-      write(c); closeModal(); renderList(); showToast(cfg.entityName+' guardado.'); });
-    document.getElementById(cfg.pfx+'-delete').addEventListener('click',function(){
-      var id=state[cfg.editKey]; if(!id)return;
-      state[cfg.list]=state[cfg.list].filter(function(x){return x.id!==id;});
-      if(state.sb) state.sb.from(cfg.table).delete().eq('id',id).then(function(res){ if(res.error) showToast('No se pudo eliminar: '+res.error.message); });
-      closeModal(); renderList(); showToast(cfg.entityName+' eliminado.'); });
-    return { renderList: renderList };
-  }
-  var retTiposABM = setupRetencionABM({ list:'tiposRetencion', editKey:'editingTipoRetencionId', table:'tipos_retencion', bodyId:'tipos-retencion-body', newBtn:'new-tipo-retencion-btn', overlay:'tipo-retencion-overlay', pfx:'trm', titleNew:'Nuevo tipo de retención', titleEdit:'Editar tipo de retención', entityName:'Tipo de retención', entityPlural:'tipos', slugBase:'tipo' });
-  var retConceptosABM = setupRetencionABM({ list:'conceptosRetencion', editKey:'editingConceptoRetencionId', table:'conceptos_retencion', bodyId:'conceptos-retencion-body', newBtn:'new-concepto-retencion-btn', overlay:'concepto-retencion-overlay', pfx:'crm', titleNew:'Nuevo concepto de retención', titleEdit:'Editar concepto de retención', entityName:'Concepto de retención', entityPlural:'conceptos', slugBase:'concepto' });
 
   function writeConcepto(c){
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
@@ -3379,7 +3239,7 @@
       var q = input.value.trim().toLowerCase();
       if(!q){ closeMenu(); return; }
       var list = state.proveedores.filter(function(p){
-        return (p.nombre||'').toLowerCase().indexOf(q)!==-1 || (p.cuit||'').toLowerCase().indexOf(q)!==-1;
+        return proveedorMatches(p, q) || (p.cuit||'').toLowerCase().indexOf(q)!==-1;
       }).sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); });
       openMenuWith(list);
     }
@@ -3397,43 +3257,65 @@
   wireProveedorCombo('fm-proveedor');
   wireProveedorCombo('pom-proveedor');
 
-  (function wireViewSubtabs(){
-    function sub(tabs){
-      function show(i){ tabs.forEach(function(t,j){ var b=document.getElementById(t[0]), sec=document.getElementById(t[1]); if(b) b.classList.toggle('active', i===j); if(sec) sec.hidden=(i!==j); }); }
-      tabs.forEach(function(t,i){ var b=document.getElementById(t[0]); if(b) b.addEventListener('click', function(){ show(i); }); });
-    }
-    sub([['ctab-proveedores','csec-proveedores'],['ctab-compra','csec-compra'],['ctab-oc','csec-oc']]);
-    sub([['ptab-pago','psec-pago'],['ptab-op','psec-op']]);
-  })();
-
   function renderCompras(){
     renderProveedoresList();
     renderCentrosCostoList();
     renderConceptosList();
     renderOCList();
-    renderFacturasList();
   }
 
+  function proveedorMatches(p, q){
+    if(!q) return true;
+    var qDigits = q.replace(/\D/g,'');
+    return (p.nombre||'').toLowerCase().indexOf(q)!==-1
+      || (p.nombreFantasia||'').toLowerCase().indexOf(q)!==-1
+      || (p.codigo||'').toLowerCase()===q
+      || (qDigits.length>=4 && (p.cuit||'').replace(/\D/g,'').indexOf(qDigits)!==-1);
+  }
+  var PROVEEDORES_MAX_FILAS = 200;
   function renderProveedoresList(){
     var body = document.getElementById('proveedores-body');
     if(!body) return;
     body.innerHTML = '';
+    var countEl = document.getElementById('proveedores-count');
+    if(countEl) countEl.textContent = state.proveedores.length ? '('+state.proveedores.length+')' : '';
     if(state.proveedores.length===0){
-      body.innerHTML = '<tr class="day-row empty"><td colspan="5">Todavía no hay proveedores cargados.</td></tr>';
+      body.innerHTML = '<tr class="day-row empty"><td colspan="6">Todavía no hay proveedores cargados.</td></tr>';
       return;
     }
-    state.proveedores.slice().sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); }).forEach(function(p){
+    var q = (state.proveedoresSearch||'').trim().toLowerCase();
+    var list = state.proveedores.filter(function(p){ return proveedorMatches(p, q); })
+      .sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); });
+    if(list.length===0){
+      body.innerHTML = '<tr class="day-row empty"><td colspan="6">Ningún proveedor coincide con la búsqueda.</td></tr>';
+      return;
+    }
+    var frag = document.createDocumentFragment();
+    list.slice(0, PROVEEDORES_MAX_FILAS).forEach(function(p){
       var tr = document.createElement('tr');
       tr.className = 'day-row';
-      tr.innerHTML = '<td class="day-route">'+esc(p.nombre)+'</td>'
+      var def = imputacionDefault(p.id);
+      var extra = (p.imputaciones||[]).length>1 ? ' <span style="color:var(--muted);">(+'+((p.imputaciones||[]).length-1)+')</span>' : '';
+      tr.innerHTML = '<td class="num">'+esc(p.codigo||'—')+'</td>'
+        +'<td class="day-route">'+esc(p.nombre)+(p.nombreFantasia ? ' <span style="color:var(--muted); font-weight:400;">· '+esc(p.nombreFantasia)+'</span>' : '')+'</td>'
+        +'<td class="num">'+esc(p.cuit||'—')+'</td>'
         +'<td>'+esc(p.rubro||'—')+'</td>'
-        +'<td>'+esc(p.contacto||'—')+'</td>'
-        +'<td class="num">'+esc(p.telefono||'—')+'</td>'
-        +'<td></td>';
+        +'<td>'+(def ? esc(imputLabel(def))+extra : '—')+'</td>'
+        +'<td class="num">'+esc(p.telefono||'—')+'</td>';
       tr.addEventListener('click', function(){ openProveedorModal(p.id); });
-      body.appendChild(tr);
+      frag.appendChild(tr);
     });
+    body.appendChild(frag);
+    if(list.length>PROVEEDORES_MAX_FILAS){
+      var more = document.createElement('tr');
+      more.innerHTML = '<td colspan="6" class="prov-more">Mostrando '+PROVEEDORES_MAX_FILAS+' de '+list.length+'. Usá el buscador para encontrar el resto.</td>';
+      body.appendChild(more);
+    }
   }
+  document.getElementById('proveedores-search').addEventListener('input', function(){
+    state.proveedoresSearch = this.value;
+    renderProveedoresList();
+  });
 
   function renderOCList(){
     var body = document.getElementById('oc-body');
@@ -3467,11 +3349,77 @@
       id:p.id, nombre:p.nombre, cuit:p.cuit||'', rubro:p.rubro||'', contacto:p.contacto||'',
       telefono:p.telefono||'', email:p.email||'', direccion:p.direccion||'',
       banco:p.banco||'', cbu:p.cbu||'', notas:p.notas||'', archivos:p.archivos||[],
-      condicion_iva:p.condicionIva||'', condicion_pago:p.condicionPago||'', localidad:p.localidad||'', provincia:p.provincia||'', zona:p.zona||'', categoria:p.categoria||'', imputacion:p.imputacion||'', fax:p.fax||'', orden_cheque:p.ordenCheque||'', responsable:p.responsable||''
+      codigo:p.codigo||'', nombre_fantasia:p.nombreFantasia||'', localidad:p.localidad||'',
+      provincia:p.provincia||'', condicion_iva:p.condicionIva||'', condicion_pago:p.condicionPago||'',
+      imputaciones:(p.imputaciones||[]).map(function(im){ return {centro_costo_id:im.centroCostoId, concepto_id:im.conceptoId}; })
     }).then(function(res){
       if(res.error) showToast('No se pudo guardar el proveedor: '+res.error.message);
     });
   }
+
+  // Si el valor guardado no está entre las opciones del <select> (ej. vino
+  // escrito distinto de otro sistema), se agrega como opción para no perderlo.
+  function setSelectValueLoose(selId, value){
+    var sel = document.getElementById(selId);
+    value = value || '';
+    if(value && !Array.prototype.some.call(sel.options, function(o){ return o.value===value; })){
+      var o = document.createElement('option'); o.value = value; o.textContent = value; sel.appendChild(o);
+    }
+    sel.value = value;
+  }
+  function fillImputAddSelects(){
+    fillSelect(document.getElementById('pm-imput-cc'),
+      state.centrosCosto.slice().sort(function(a,b){ return (a.descripcion||'').localeCompare(b.descripcion||''); }).map(function(c){ return {id:c.id, label:centroCostoLabel(c.id)}; }),
+      'id', 'label', 'Centro de costo');
+    fillSelect(document.getElementById('pm-imput-concepto'),
+      state.conceptos.slice().sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); }),
+      'id', 'nombre', 'Concepto');
+  }
+  function renderProveedorImputList(){
+    var box = document.getElementById('pm-imputaciones-list');
+    box.innerHTML = '';
+    var lista = state.editingProveedorImput;
+    if(!lista.length){
+      box.innerHTML = '<div class="imput-empty">Sin imputaciones cargadas. Se agregan solas al guardar facturas, o desde acá abajo.</div>';
+      return;
+    }
+    var usos = state.editingProveedorId ? imputUsos(state.editingProveedorId) : {};
+    var def = state.editingProveedorId ? imputacionesOrdenadas(state.editingProveedorId, lista)[0] : lista[0];
+    var defKey = def ? imputKey(def.centroCostoId, def.conceptoId) : '';
+    lista.forEach(function(im, i){
+      var k = imputKey(im.centroCostoId, im.conceptoId);
+      var n = usos[k]||0;
+      var row = document.createElement('div');
+      row.className = 'imput-row';
+      row.innerHTML = '<button type="button" class="star'+(i===0?' on':'')+'" title="'+(i===0?'Principal':'Marcar como principal')+'">'+(i===0?'★':'☆')+'</button>'
+        +'<span class="txt">'+esc(imputLabel(im))+(k===defKey ? ' <strong style="font-size:11px; color:var(--ink-2);">· por defecto</strong>' : '')+'</span>'
+        +'<span class="n">'+n+' factura'+(n===1?'':'s')+'</span>'
+        +'<button type="button" class="del edit-action" title="Quitar">✕</button>';
+      row.querySelector('.star').addEventListener('click', function(){
+        if(i===0) return;
+        var it = lista.splice(i,1)[0]; lista.unshift(it);
+        renderProveedorImputList();
+      });
+      row.querySelector('.del').addEventListener('click', function(){
+        lista.splice(i,1);
+        renderProveedorImputList();
+      });
+      box.appendChild(row);
+    });
+  }
+  document.getElementById('pm-imput-add').addEventListener('click', function(){
+    var cc = document.getElementById('pm-imput-cc').value;
+    var co = document.getElementById('pm-imput-concepto').value;
+    if(!cc || !co){ showToast('Elegí centro de costo y concepto.'); return; }
+    var k = imputKey(cc, co);
+    if(state.editingProveedorImput.some(function(im){ return imputKey(im.centroCostoId, im.conceptoId)===k; })){
+      showToast('Esa imputación ya está en la lista.'); return;
+    }
+    state.editingProveedorImput.push({centroCostoId:cc, conceptoId:co});
+    document.getElementById('pm-imput-cc').value = '';
+    document.getElementById('pm-imput-concepto').value = '';
+    renderProveedorImputList();
+  });
 
   function openProveedorModal(id){
     state.editingProveedorId = id || null;
@@ -3486,17 +3434,16 @@
     document.getElementById('pm-direccion').value = p ? (p.direccion||'') : '';
     document.getElementById('pm-banco').value = p ? (p.banco||'') : '';
     document.getElementById('pm-cbu').value = p ? (p.cbu||'') : '';
-    document.getElementById('pm-condicion-iva').value = p ? (p.condicionIva||'') : '';
-    document.getElementById('pm-condicion-pago').value = p ? (p.condicionPago||'') : '';
+    document.getElementById('pm-notas').value = p ? (p.notas||'') : '';
+    document.getElementById('pm-codigo').value = p ? (p.codigo||'') : '';
+    document.getElementById('pm-fantasia').value = p ? (p.nombreFantasia||'') : '';
     document.getElementById('pm-localidad').value = p ? (p.localidad||'') : '';
     document.getElementById('pm-provincia').value = p ? (p.provincia||'') : '';
-    document.getElementById('pm-zona').value = p ? (p.zona||'') : '';
-    document.getElementById('pm-categoria').value = p ? (p.categoria||'') : '';
-    document.getElementById('pm-imputacion').value = p ? (p.imputacion||'') : '';
-    document.getElementById('pm-fax').value = p ? (p.fax||'') : '';
-    document.getElementById('pm-orden-cheque').value = p ? (p.ordenCheque||'') : '';
-    document.getElementById('pm-responsable').value = p ? (p.responsable||'') : '';
-    document.getElementById('pm-notas').value = p ? (p.notas||'') : '';
+    setSelectValueLoose('pm-condicion-iva', p ? p.condicionIva : '');
+    setSelectValueLoose('pm-condicion-pago', p ? p.condicionPago : '');
+    state.editingProveedorImput = p ? (p.imputaciones||[]).map(function(im){ return {centroCostoId:im.centroCostoId, conceptoId:im.conceptoId}; }) : [];
+    fillImputAddSelects();
+    renderProveedorImputList();
     document.getElementById('pm-delete').style.display = p ? '' : 'none';
     state.editingProveedorArchivos = p ? (p.archivos||[]).slice() : [];
     renderAttachList('pm-archivos-list', function(){ return state.editingProveedorArchivos; });
@@ -3525,17 +3472,14 @@
       direccion: document.getElementById('pm-direccion').value.trim(),
       banco: document.getElementById('pm-banco').value.trim(),
       cbu: document.getElementById('pm-cbu').value.trim(),
-      condicionIva: document.getElementById('pm-condicion-iva').value,
-      condicionPago: document.getElementById('pm-condicion-pago').value,
+      notas: document.getElementById('pm-notas').value.trim(),
+      codigo: document.getElementById('pm-codigo').value.trim(),
+      nombreFantasia: document.getElementById('pm-fantasia').value.trim(),
       localidad: document.getElementById('pm-localidad').value.trim(),
       provincia: document.getElementById('pm-provincia').value.trim(),
-      zona: document.getElementById('pm-zona').value.trim(),
-      categoria: document.getElementById('pm-categoria').value.trim(),
-      imputacion: document.getElementById('pm-imputacion').value.trim(),
-      fax: document.getElementById('pm-fax').value.trim(),
-      ordenCheque: document.getElementById('pm-orden-cheque').value.trim(),
-      responsable: document.getElementById('pm-responsable').value.trim(),
-      notas: document.getElementById('pm-notas').value.trim()
+      condicionIva: document.getElementById('pm-condicion-iva').value,
+      condicionPago: document.getElementById('pm-condicion-pago').value,
+      imputaciones: state.editingProveedorImput.slice()
     };
     var saveBtn = this;
     var tienePendientes = state.editingProveedorArchivos.some(function(a){ return a.pending; });
@@ -3645,8 +3589,11 @@
       id:row.id, nombre:row.nombre||row.id, cuit:row.cuit||'', rubro:row.rubro||'',
       contacto:row.contacto||'', telefono:row.telefono||'', email:row.email||'',
       direccion:row.direccion||'', banco:row.banco||'', cbu:row.cbu||'', notas:row.notas||'',
-      condicionIva:row.condicion_iva||'', condicionPago:row.condicion_pago||'', localidad:row.localidad||'', provincia:row.provincia||'', zona:row.zona||'', categoria:row.categoria||'', imputacion:row.imputacion||'', fax:row.fax||'', ordenCheque:row.orden_cheque||'', responsable:row.responsable||'',
-      archivos: Array.isArray(row.archivos) ? row.archivos : []
+      archivos: Array.isArray(row.archivos) ? row.archivos : [],
+      codigo:row.codigo||'', nombreFantasia:row.nombre_fantasia||'', localidad:row.localidad||'',
+      provincia:row.provincia||'', condicionIva:row.condicion_iva||'', condicionPago:row.condicion_pago||'',
+      imputaciones: (Array.isArray(row.imputaciones) ? row.imputaciones : []).filter(function(im){ return im && im.centro_costo_id && im.concepto_id; })
+        .map(function(im){ return {centroCostoId:im.centro_costo_id, conceptoId:im.concepto_id}; })
     };
   }
   function mapOCRow(row){
@@ -3662,14 +3609,37 @@
   function mapConceptoRow(row){
     return { id:row.id, nombre:row.nombre||'' };
   }
+  // Supabase devuelve como máximo 1000 filas por consulta: con 1000+
+  // proveedores (o facturas, movimientos...) hay que pedir de a páginas.
+  // Devuelve una promesa con la misma forma {data, error} que .select().
+  function fetchAllRows(table){
+    var PAGE = 1000, all = [];
+    function page(from){
+      return state.sb.from(table).select('*').order('id').range(from, from+PAGE-1).then(function(res){
+        if(res.error) return {data:null, error:res.error};
+        all = all.concat(res.data||[]);
+        if((res.data||[]).length<PAGE) return {data:all, error:null};
+        return page(from+PAGE);
+      });
+    }
+    return page(0);
+  }
+  // Para las suscripciones en tiempo real: si llegan muchos cambios juntos
+  // (ej. al importar 1000+ proveedores de una), se vuelve a leer la tabla
+  // una sola vez en vez de una vez por fila.
+  var _debounceTimers = {};
+  function debounced(key, fn){
+    clearTimeout(_debounceTimers[key]);
+    _debounceTimers[key] = setTimeout(fn, 700);
+  }
   function fetchCompras(){
     if(!state.sb) return;
-    state.sb.from('proveedores').select('*').then(function(res){
+    fetchAllRows('proveedores').then(function(res){
       if(res.error){ showToast('Error cargando proveedores: '+res.error.message); return; }
       state.proveedores = (res.data||[]).map(mapProveedorRow);
       renderCompras();
     });
-    state.sb.from('ordenes_compra').select('*').then(function(res){
+    fetchAllRows('ordenes_compra').then(function(res){
       if(res.error){ showToast('Error cargando órdenes de compra: '+res.error.message); return; }
       state.ordenesCompra = (res.data||[]).map(mapOCRow);
       renderCompras();
@@ -3683,16 +3653,6 @@
       if(res.error){ showToast('Error cargando conceptos: '+res.error.message); return; }
       state.conceptos = (res.data||[]).map(mapConceptoRow);
       renderCompras();
-    });
-    state.sb.from('tipos_retencion').select('*').then(function(res){
-      if(res.error){ return; }
-      state.tiposRetencion = (res.data||[]).map(function(r){ return {id:r.id,codigo:r.codigo||'',descripcion:r.descripcion||''}; });
-      retTiposABM.renderList();
-    });
-    state.sb.from('conceptos_retencion').select('*').then(function(res){
-      if(res.error){ return; }
-      state.conceptosRetencion = (res.data||[]).map(function(r){ return {id:r.id,codigo:r.codigo||'',descripcion:r.descripcion||''}; });
-      retConceptosABM.renderList();
     });
   }
 
@@ -3724,38 +3684,20 @@
     writeFactura(f);
   }
 
-  function cuentaNombrePago(id){ var c=state.cuentas.find(function(x){ return x.id===id; }); return c?c.nombre:'—'; }
-  function renderPagoSubtab(){
-    var pend=document.getElementById('pago-pend-body'), real=document.getElementById('pago-real-body');
-    if(pend){
-      var ps=state.ordenesPago.filter(function(p){ return (p.estado||'pendiente')!=='pagada'; }).slice().sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
-      pend.innerHTML = ps.length ? ps.map(function(p){
-        return '<tr class="day-row"><td>'+esc(pagoNumeroLabel(p.numero))+'</td><td>'+esc(proveedorNombre(p.proveedorId))+'</td><td>'+esc(p.fecha||'—')+'</td><td class="num">'+fmtMoney(p.monto)+'</td><td><button class="btn primary edit-action pago-reg-btn" data-id="'+esc(p.id)+'">Registrar pago</button></td></tr>';
-      }).join('') : '<tr class="day-row empty"><td colspan="5">No hay órdenes de pago pendientes.</td></tr>';
-      Array.prototype.forEach.call(pend.querySelectorAll('.pago-reg-btn'), function(b){ b.addEventListener('click', function(ev){ ev.stopPropagation(); openPagoModal(b.getAttribute('data-id')); }); });
-    }
-    if(real){
-      var rs=state.ordenesPago.filter(function(p){ return (p.estado||'pendiente')==='pagada'; }).slice().sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
-      real.innerHTML = rs.length ? rs.map(function(p){
-        return '<tr class="day-row"><td>'+esc(pagoNumeroLabel(p.numero))+'</td><td>'+esc(proveedorNombre(p.proveedorId))+'</td><td>'+esc(p.fecha||'—')+'</td><td style="text-transform:capitalize">'+esc(p.medioPago||'—')+'</td><td>'+esc(cuentaNombrePago(p.cuentaId))+'</td><td class="num">'+fmtMoney(p.monto)+'</td></tr>';
-      }).join('') : '<tr class="day-row empty"><td colspan="6">Todavía no hay pagos realizados.</td></tr>';
-    }
-  }
   function renderPagos(){
+    renderFacturasList();
     renderPagosList();
-    renderPagoSubtab();
   }
 
   function renderFacturasList(){
     var body = document.getElementById('facturas-body');
     if(!body) return;
-    closeFileMenu();
     body.innerHTML = '';
     var list = state.facturas.slice();
     if(state.facturaFilterEstado) list = list.filter(function(f){ return f.estado===state.facturaFilterEstado; });
     list.sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
     if(list.length===0){
-      body.innerHTML = '<tr class="day-row empty"><td colspan="7">No hay facturas'+(state.facturaFilterEstado?' con ese estado':' cargadas')+'.</td></tr>';
+      body.innerHTML = '<tr class="day-row empty"><td colspan="6">No hay facturas'+(state.facturaFilterEstado?' con ese estado':' cargadas')+'.</td></tr>';
       return;
     }
     list.forEach(function(f){
@@ -3769,10 +3711,6 @@
         +'<td>'+(oc ? esc(ocNumeroLabel(oc.numero)) : '—')+'</td>'
         +'<td class="num">$'+montoStr+'</td>'
         +'<td><span class="oc-badge '+esc(f.estado||'pendiente')+'">'+facturaEstadoLabel(f.estado)+'</span></td>';
-      var tdArchivo = document.createElement('td');
-      tdArchivo.className = 'file-cell';
-      tdArchivo.appendChild(buildFileLinks((f.archivos||[]).filter(function(x){ return !x.pending && archivoUrl(x); })));
-      tr.appendChild(tdArchivo);
       tr.addEventListener('click', function(){ openFacturaModal(f.id); });
       body.appendChild(tr);
     });
@@ -3810,7 +3748,7 @@
     state.sb.from('facturas').upsert({
       id:f.id, proveedor_id:f.proveedorId||'', oc_id:f.ocId||null,
       centro_costo_id:f.centroCostoId||null, concepto_id:f.conceptoId||null, numero:f.numero||'',
-      fecha:f.fecha||'', vencimiento:f.vencimiento||null, monto:f.monto||0, estado:f.estado||'pendiente', notas:f.notas||'', archivos:f.archivos||[]
+      fecha:f.fecha||'', monto:f.monto||0, estado:f.estado||'pendiente', notas:f.notas||'', archivos:f.archivos||[]
     }).then(function(res){
       if(res.error) showToast('No se pudo guardar la factura: '+res.error.message);
     });
@@ -3828,12 +3766,67 @@
       sel.appendChild(opt);
     });
   }
-  document.getElementById('fm-proveedor').addEventListener('change', function(){ fillFacturaOCSelect(this.value); });
+  document.getElementById('fm-proveedor').addEventListener('change', function(){
+    fillFacturaOCSelect(this.value);
+    if(this.value) aplicarImputacionDefault(this.value);
+    renderFacturaImputChips();
+  });
+
+  // Imputación de la factura: al elegir proveedor se completan solos el
+  // centro de costo y el concepto con la combinación más usada de ese
+  // proveedor; debajo se muestran sus otras imputaciones como botones para
+  // cambiar con un clic (o se cambia a mano en los desplegables).
+  function aplicarImputacionDefault(proveedorId){
+    var def = imputacionDefault(proveedorId);
+    if(!def) return;
+    var ccSel = document.getElementById('fm-centro-costo');
+    var coSel = document.getElementById('fm-concepto');
+    if(centroCostoById(def.centroCostoId)) ccSel.value = def.centroCostoId;
+    if(conceptoById(def.conceptoId)) coSel.value = def.conceptoId;
+  }
+  function renderFacturaImputChips(){
+    var box = document.getElementById('fm-imputaciones');
+    var proveedorId = document.getElementById('fm-proveedor').value;
+    box.innerHTML = '';
+    var list = proveedorId ? imputacionesOrdenadas(proveedorId).filter(function(im){ return centroCostoById(im.centroCostoId) && conceptoById(im.conceptoId); }) : [];
+    if(list.length<1){ box.hidden = true; return; }
+    var curKey = imputKey(document.getElementById('fm-centro-costo').value, document.getElementById('fm-concepto').value);
+    var lbl = document.createElement('div');
+    lbl.className = 'lbl';
+    lbl.textContent = list.length>1 ? 'Imputaciones de este proveedor' : 'Imputación de este proveedor';
+    box.appendChild(lbl);
+    list.forEach(function(im){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'imput-chip'+(imputKey(im.centroCostoId, im.conceptoId)===curKey ? ' on' : '');
+      b.textContent = imputLabel(im)+(im.usos ? ' ('+im.usos+')' : '');
+      b.addEventListener('click', function(){
+        document.getElementById('fm-centro-costo').value = im.centroCostoId;
+        document.getElementById('fm-concepto').value = im.conceptoId;
+        renderFacturaImputChips();
+      });
+      box.appendChild(b);
+    });
+    box.hidden = false;
+  }
+  document.getElementById('fm-centro-costo').addEventListener('change', renderFacturaImputChips);
+  document.getElementById('fm-concepto').addEventListener('change', renderFacturaImputChips);
+  // Si la factura se guarda con una combinación que el proveedor todavía no
+  // tenía, se le agrega a su lista de imputaciones.
+  function sumarImputacionAProveedor(proveedorId, ccId, coId){
+    var p = state.proveedores.find(function(x){ return x.id===proveedorId; });
+    if(!p || !ccId || !coId) return;
+    var k = imputKey(ccId, coId);
+    p.imputaciones = p.imputaciones || [];
+    if(p.imputaciones.some(function(im){ return imputKey(im.centroCostoId, im.conceptoId)===k; })) return;
+    p.imputaciones.push({centroCostoId:ccId, conceptoId:coId});
+    writeProveedor(p);
+  }
 
   function fillFacturaCentroCostoSelect(){
     var sel = document.getElementById('fm-centro-costo');
     var current = sel.value;
-    fillSelect(sel, state.centrosCosto.slice().sort(function(a,b){ return (a.codigo||'').localeCompare(b.codigo||'', undefined, {numeric:true}); }).map(function(c){ return {id:c.id, label:c.codigo+' — '+c.descripcion}; }), 'id', 'label', 'Elegir centro de costo');
+    fillSelect(sel, state.centrosCosto.map(function(c){ return {id:c.id, label:centroCostoLabel(c.id)}; }).sort(function(a,b){ return a.label.localeCompare(b.label, undefined, {numeric:true}); }), 'id', 'label', 'Elegir centro de costo');
     sel.value = current;
   }
   function fillFacturaConceptoSelect(){
@@ -3843,137 +3836,8 @@
     sel.value = current;
   }
 
-  // ---------- Archivos de Drive: acceso directo desde la lista de facturas ----------
-  function archivoUrl(x){
-    if(!x) return '';
-    if(x.url) return x.url;
-    return x.id ? 'https://drive.google.com/file/d/'+x.id+'/view' : '';
-  }
-  var fileMenuEl = null;
-  function closeFileMenu(){ if(fileMenuEl){ fileMenuEl.remove(); fileMenuEl = null; } }
-  function toggleFileMenu(btn, files){
-    var same = fileMenuEl && fileMenuEl._btn===btn;
-    closeFileMenu();
-    if(same) return;
-    var m = document.createElement('div');
-    m.className = 'file-menu';
-    m._btn = btn;
-    files.forEach(function(f){
-      var lk = document.createElement('a');
-      lk.href = archivoUrl(f); lk.target = '_blank'; lk.rel = 'noopener';
-      lk.textContent = f.name || 'archivo'; lk.title = f.name || 'archivo';
-      lk.addEventListener('click', function(e){ e.stopPropagation(); setTimeout(closeFileMenu, 0); });
-      m.appendChild(lk);
-    });
-    document.body.appendChild(m);
-    var r = btn.getBoundingClientRect();
-    m.style.top = (r.bottom + 4) + 'px';
-    m.style.left = Math.max(8, r.right - m.offsetWidth) + 'px';
-    fileMenuEl = m;
-  }
-  document.addEventListener('click', closeFileMenu);
-  window.addEventListener('resize', closeFileMenu);
-  window.addEventListener('scroll', closeFileMenu, true);
-
-  // Celda "Archivo": sin adjuntos un guion; con uno, enlace directo; con varios, un menú
-  function buildFileLinks(files){
-    var wrap = document.createElement('span');
-    if(!files.length){ wrap.className = 'file-none'; wrap.textContent = '—'; return wrap; }
-    if(files.length===1){
-      var lk = document.createElement('a');
-      lk.className = 'file-link'; lk.href = archivoUrl(files[0]); lk.target = '_blank'; lk.rel = 'noopener';
-      lk.title = files[0].name || 'Abrir archivo en Drive'; lk.textContent = '📎 Ver';
-      lk.addEventListener('click', function(e){ e.stopPropagation(); });
-      wrap.appendChild(lk);
-      return wrap;
-    }
-    var btn = document.createElement('button');
-    btn.type = 'button'; btn.className = 'file-link'; btn.title = 'Ver los '+files.length+' archivos';
-    btn.textContent = '📎 '+files.length;
-    btn.addEventListener('click', function(e){ e.stopPropagation(); toggleFileMenu(btn, files); });
-    wrap.appendChild(btn);
-    return wrap;
-  }
-
-  // ---------- Vista previa del archivo al costado del formulario de factura ----------
-  var fmPreview = { url:null, file:null, dismissed:false, lastCount:0 };
-  function isPreviewableFile(file){
-    if(!file) return false;
-    var t = file.type || '';
-    var n = (file.name || '').toLowerCase();
-    return t==='application/pdf' || t.indexOf('image/')===0 || n.slice(-4)==='.pdf';
-  }
-  function fmPreviewRelease(){
-    if(fmPreview.url){ try{ URL.revokeObjectURL(fmPreview.url); }catch(e){} }
-    fmPreview.url = null; fmPreview.file = null;
-  }
-  function hideFacturaPreview(){
-    fmPreviewRelease();
-    var panel = document.getElementById('fm-preview');
-    var body = document.getElementById('fm-preview-body');
-    var modal = document.getElementById('factura-modal');
-    if(body) body.innerHTML = '';
-    if(panel) panel.hidden = true;
-    if(modal) modal.classList.remove('has-preview');
-  }
-  function resetFacturaPreview(){
-    fmPreview.dismissed = false; fmPreview.lastCount = 0;
-    hideFacturaPreview();
-  }
-  function showFacturaPreview(file){
-    var panel = document.getElementById('fm-preview');
-    var body = document.getElementById('fm-preview-body');
-    var modal = document.getElementById('factura-modal');
-    var title = document.getElementById('fm-preview-name');
-    if(!panel || !body || !modal || !isPreviewableFile(file)) return;
-    if(typeof URL==='undefined' || !URL.createObjectURL) return;
-    fmPreviewRelease();
-    body.innerHTML = '';
-    var url = URL.createObjectURL(file);
-    fmPreview.url = url; fmPreview.file = file;
-    var isPdf = (file.type==='application/pdf') || (file.name||'').toLowerCase().slice(-4)==='.pdf';
-    title.textContent = file.name || 'Archivo';
-    if(isPdf){
-      var fr = document.createElement('iframe');
-      fr.className = 'fm-preview-frame'; fr.title = 'Vista previa de la factura'; fr.src = url + '#view=FitH';
-      body.appendChild(fr);
-    } else {
-      var img = document.createElement('img');
-      img.className = 'fm-preview-img'; img.alt = 'Vista previa de la factura'; img.src = url;
-      img.title = 'Clic para acercar o alejar';
-      img.addEventListener('click', function(){ img.classList.toggle('zoom'); });
-      img.addEventListener('error', function(){
-        body.innerHTML = '<div class="fm-preview-fallback">No se puede mostrar esta imagen acá. Usá «Abrir» para verla en otra pestaña.</div>';
-      });
-      body.appendChild(img);
-    }
-    panel.hidden = false;
-    modal.classList.add('has-preview');
-  }
-  // Decide qué archivo pendiente mostrar cada vez que cambia la lista de adjuntos:
-  // el último que se agregó; si se quitan todos, se cierra el panel.
-  function syncFacturaPreview(){
-    var pend = (state.editingFacturaArchivos || []).filter(function(x){ return x.pending && isPreviewableFile(x.file); });
-    var count = pend.length;
-    var increased = count > (fmPreview.lastCount || 0);
-    fmPreview.lastCount = count;
-    if(increased) fmPreview.dismissed = false;
-    if(!count){ hideFacturaPreview(); return; }
-    if(fmPreview.dismissed) return;
-    var want = increased ? pend[pend.length-1] : (pend.filter(function(x){ return x.file===fmPreview.file; })[0] || pend[pend.length-1]);
-    if(want.file !== fmPreview.file) showFacturaPreview(want.file);
-  }
-  document.getElementById('fm-preview-close').addEventListener('click', function(){
-    fmPreview.dismissed = true;
-    hideFacturaPreview();
-  });
-  document.getElementById('fm-preview-open').addEventListener('click', function(){
-    if(fmPreview.url) window.open(fmPreview.url, '_blank');
-  });
-
   function openFacturaModal(id){
     state.editingFacturaId = id || null;
-    resetFacturaPreview();
     var f = id ? facturaById(id) : null;
     document.getElementById('fm-title').textContent = f ? 'Editar factura' : 'Nueva factura';
     setProveedorComboValue('fm-proveedor', f ? f.proveedorId : '');
@@ -3983,9 +3847,9 @@
     document.getElementById('fm-centro-costo').value = f ? (f.centroCostoId||'') : '';
     fillFacturaConceptoSelect();
     document.getElementById('fm-concepto').value = f ? (f.conceptoId||'') : '';
+    renderFacturaImputChips();
     document.getElementById('fm-numero').value = f ? (f.numero||'') : '';
     document.getElementById('fm-fecha').value = f ? (f.fecha||todayStr()) : todayStr();
-    document.getElementById('fm-vencimiento').value = f ? (f.vencimiento||'') : '';
     document.getElementById('fm-monto').value = f ? String(f.monto||0).replace('.',',') : '';
     document.getElementById('fm-notas').value = f ? (f.notas||'') : '';
     document.getElementById('fm-delete').style.display = f ? '' : 'none';
@@ -3996,7 +3860,6 @@
   }
   function closeFacturaModal(){
     document.getElementById('factura-overlay').classList.remove('show');
-    resetFacturaPreview();
   }
 
   document.getElementById('new-factura-btn').addEventListener('click', function(){ openFacturaModal(null); });
@@ -4031,7 +3894,6 @@
       conceptoId: conceptoId,
       numero:numero,
       fecha: document.getElementById('fm-fecha').value || todayStr(),
-      vencimiento: document.getElementById('fm-vencimiento').value || null,
       monto: monto,
       estado: existing ? (existing.estado||'pendiente') : 'pendiente',
       notas: document.getElementById('fm-notas').value.trim()
@@ -4044,8 +3906,10 @@
       if(isNew) state.facturas.push(f);
       else { var idx = state.facturas.findIndex(function(x){ return x.id===id; }); if(idx>=0) state.facturas[idx]=f; }
       writeFactura(f);
+      sumarImputacionAProveedor(f.proveedorId, f.centroCostoId, f.conceptoId);
       closeFacturaModal();
       renderPagos();
+      renderProveedoresList();
       showToast('Factura guardada.');
     }).catch(function(err){
       showToast('No se pudieron subir uno o más adjuntos a Drive: '+((err&&err.message)||'error')+'. Probá guardar de nuevo.');
@@ -4211,7 +4075,7 @@
     return {
       id:row.id, proveedorId:row.proveedor_id||'', ocId:row.oc_id||'',
       centroCostoId:row.centro_costo_id||'', conceptoId:row.concepto_id||'', numero:row.numero||'',
-      fecha:row.fecha||'', vencimiento:row.vencimiento||'', monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0,
+      fecha:row.fecha||'', monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0,
       estado:row.estado||'pendiente', notas:row.notas||'',
       archivos: Array.isArray(row.archivos) ? row.archivos : []
     };
@@ -4226,13 +4090,14 @@
   }
   function fetchFacturasYPagos(){
     if(!state.sb) return;
-    state.sb.from('facturas').select('*').then(function(res){
+    fetchAllRows('facturas').then(function(res){
       if(res.error){ showToast('Error cargando facturas: '+res.error.message); return; }
       state.facturas = (res.data||[]).map(mapFacturaRow);
       renderPagos();
+      renderProveedoresList(); // la imputación por defecto depende de las facturas
       if(state.view==='dashboard') renderDashboard();
     });
-    state.sb.from('ordenes_pago').select('*').then(function(res){
+    fetchAllRows('ordenes_pago').then(function(res){
       if(res.error){ showToast('Error cargando órdenes de pago: '+res.error.message); return; }
       state.ordenesPago = (res.data||[]).map(mapPagoRow);
       renderPagos();
@@ -4272,111 +4137,7 @@
     return Number(c.saldoInicial||0) - egresos;
   }
 
-  function fillDeudaProveedorFilter(){
-    var sel=document.getElementById('deuda-proveedor-filter'); if(!sel) return;
-    var cur=sel.value;
-    var opts='<option value="">Todos los proveedores</option>';
-    state.proveedores.slice().sort(function(a,b){return (a.nombre||'').localeCompare(b.nombre||'');}).forEach(function(pr){ opts+='<option value="'+esc(pr.id)+'">'+esc(pr.nombre)+'</option>'; });
-    sel.innerHTML=opts; sel.value=cur;
-  }
-  function renderDeudaProveedores(){
-    var body=document.getElementById('deuda-body'), head=document.getElementById('deuda-head'); if(!body||!head) return;
-    var modo=state.deudaModo||'resumido';
-    var br=document.getElementById('deuda-modo-resumido'), bd=document.getElementById('deuda-modo-detallado');
-    if(br) br.classList.toggle('primary', modo==='resumido');
-    if(bd) bd.classList.toggle('primary', modo==='detallado');
-    var fEl=document.getElementById('deuda-proveedor-filter'); var filtro=fEl?fEl.value:'';
-    var pend=state.facturas.filter(function(f){ return (f.estado||'pendiente')==='pendiente' && (!filtro||f.proveedorId===filtro); });
-    var total=pend.reduce(function(sm,f){ return sm+Number(f.monto||0); },0);
-    var tEl=document.getElementById('deuda-total'); if(tEl) tEl.textContent='Deuda total pendiente: '+fmtMoney(total)+'  ·  '+pend.length+' factura(s)';
-    if(modo==='detallado'){
-      head.innerHTML='<tr><th>Proveedor</th><th>Factura</th><th>Fecha</th><th>Monto</th></tr>';
-      var ss=pend.slice().sort(function(a,b){ return (proveedorNombre(a.proveedorId)||'').localeCompare(proveedorNombre(b.proveedorId)||'') || (a.fecha||'').localeCompare(b.fecha||''); });
-      body.innerHTML = ss.length ? ss.map(function(f){ return '<tr class="day-row"><td>'+esc(proveedorNombre(f.proveedorId))+'</td><td>'+esc(f.numero||'—')+'</td><td>'+esc(f.fecha||'—')+'</td><td class="num">'+fmtMoney(f.monto)+'</td></tr>'; }).join('') : '<tr class="day-row empty"><td colspan="4">No hay deuda pendiente.</td></tr>';
-    } else {
-      head.innerHTML='<tr><th>Proveedor</th><th>Facturas pendientes</th><th>Deuda</th></tr>';
-      var by={}; pend.forEach(function(f){ var k=f.proveedorId||''; if(!by[k]) by[k]={c:0,t:0}; by[k].c++; by[k].t+=Number(f.monto||0); });
-      var rows=Object.keys(by).map(function(k){ return {n:proveedorNombre(k),c:by[k].c,t:by[k].t}; }).sort(function(a,b){ return b.t-a.t; });
-      body.innerHTML = rows.length ? rows.map(function(r){ return '<tr class="day-row"><td>'+esc(r.n)+'</td><td class="num">'+r.c+'</td><td class="num">'+fmtMoney(r.t)+'</td></tr>'; }).join('') : '<tr class="day-row empty"><td colspan="3">No hay deuda pendiente.</td></tr>';
-    }
-  }
-  (function wireDeuda(){
-    var br=document.getElementById('deuda-modo-resumido'); if(br) br.addEventListener('click',function(){ state.deudaModo='resumido'; renderDeudaProveedores(); });
-    var bd=document.getElementById('deuda-modo-detallado'); if(bd) bd.addEventListener('click',function(){ state.deudaModo='detallado'; renderDeudaProveedores(); });
-    var fp=document.getElementById('deuda-proveedor-filter'); if(fp) fp.addEventListener('change', renderDeudaProveedores);
-  })();
-
-  function simDiasHasta(fechaStr){
-    if(!fechaStr) return null;
-    var hoy=new Date(TODAY+'T00:00:00'); var v=new Date(fechaStr+'T00:00:00');
-    if(isNaN(v)) return null;
-    return Math.round((v-hoy)/86400000);
-  }
-  function simDisponible(){
-    var el=document.getElementById('sim-disponible');
-    if(el && el.value.trim()!==''){ var n=parseFloat(el.value.replace(/\./g,'').replace(',','.')); return isNaN(n)?0:n; }
-    return state.cuentas.reduce(function(sm,c){ return sm+cuentaSaldoActual(c.id); }, 0);
-  }
-  function simFacturasPendientes(){
-    return state.facturas.filter(function(f){ return (f.estado||'pendiente')==='pendiente'; })
-      .slice().sort(function(a,b){
-        var va=a.vencimiento||'9999-12-31', vb=b.vencimiento||'9999-12-31';
-        return va.localeCompare(vb) || (a.fecha||'').localeCompare(b.fecha||'');
-      });
-  }
-  function renderSimuladorResumen(){
-    var el=document.getElementById('sim-resumen'); if(!el) return;
-    var pend=simFacturasPendientes();
-    var totalPend=pend.reduce(function(sm,f){ return sm+Number(f.monto||0); },0);
-    var sel=pend.filter(function(f){ return state.simSeleccion[f.id]; });
-    var totalSel=sel.reduce(function(sm,f){ return sm+Number(f.monto||0); },0);
-    var disp=simDisponible(); var rest=disp-totalSel;
-    el.innerHTML =
-      '<div><b>Disponible:</b> '+fmtMoney(disp)+'</div>'+
-      '<div style="color:var(--brand-red,#e30613)"><b>A pagar ('+sel.length+'):</b> '+fmtMoney(totalSel)+'</div>'+
-      '<div style="color:'+(rest<0?'var(--danger)':'inherit')+'"><b>Restante:</b> '+fmtMoney(rest)+'</div>'+
-      '<div style="color:var(--ink-2)"><b>Deuda total ('+pend.length+'):</b> '+fmtMoney(totalPend)+'</div>';
-  }
-  function simAuto(){
-    var rest=simDisponible(); state.simSeleccion={};
-    simFacturasPendientes().forEach(function(f){ var m=Number(f.monto||0); if(m<=rest){ state.simSeleccion[f.id]=true; rest-=m; } });
-    renderSimulador();
-  }
-  function renderSimulador(){
-    var body=document.getElementById('sim-body'); if(!body) return;
-    var pend=simFacturasPendientes();
-    if(pend.length===0){ body.innerHTML='<tr class="day-row empty"><td colspan="6">No hay facturas pendientes.</td></tr>'; renderSimuladorResumen(); return; }
-    body.innerHTML='';
-    pend.forEach(function(f){
-      var tr=document.createElement('tr'); tr.className='day-row';
-      var d=simDiasHasta(f.vencimiento); var estadoTxt, color='var(--ink-2)';
-      if(!f.vencimiento){ estadoTxt='Sin vencimiento'; }
-      else if(d<0){ estadoTxt='Vencida hace '+(-d)+'d'; color='var(--danger)'; }
-      else if(d===0){ estadoTxt='Vence hoy'; color='var(--danger)'; }
-      else { estadoTxt='Vence en '+d+'d'; if(d<=7) color='#b8860b'; }
-      var checked=state.simSeleccion[f.id]?'checked':'';
-      tr.innerHTML='<td><input type="checkbox" class="sim-chk" data-id="'+esc(f.id)+'" '+checked+'></td>'+
-        '<td>'+esc(f.vencimiento||'—')+'</td>'+
-        '<td style="color:'+color+'">'+estadoTxt+'</td>'+
-        '<td>'+esc(proveedorNombre(f.proveedorId))+'</td>'+
-        '<td>'+esc(f.numero||'—')+'</td>'+
-        '<td class="num">'+fmtMoney(f.monto)+'</td>';
-      body.appendChild(tr);
-    });
-    Array.prototype.forEach.call(body.querySelectorAll('.sim-chk'), function(chk){
-      chk.addEventListener('change', function(){ var id=chk.getAttribute('data-id'); if(chk.checked) state.simSeleccion[id]=true; else delete state.simSeleccion[id]; renderSimuladorResumen(); });
-    });
-    renderSimuladorResumen();
-  }
-  (function wireSimulador(){
-    var a=document.getElementById('sim-auto-btn'); if(a) a.addEventListener('click', simAuto);
-    var l=document.getElementById('sim-limpiar-btn'); if(l) l.addEventListener('click', function(){ state.simSeleccion={}; renderSimulador(); });
-    var d=document.getElementById('sim-disponible'); if(d) d.addEventListener('input', renderSimuladorResumen);
-  })();
-
   function renderTesoreria(){
-    fillDeudaProveedorFilter();
-    renderDeudaProveedores();
     renderCuentasList();
     fillMovFilterCuentaSelect();
     renderMovimientosList();
@@ -4629,7 +4390,7 @@
       state.cuentas = (res.data||[]).map(mapCuentaRow);
       renderTesoreria();
     });
-    state.sb.from('movimientos').select('*').then(function(res){
+    fetchAllRows('movimientos').then(function(res){
       if(res.error){ showToast('Error cargando movimientos: '+res.error.message); return; }
       state.movimientos = (res.data||[]).map(mapMovimientoRow);
       renderTesoreria();
@@ -4648,57 +4409,34 @@
 
   document.getElementById('add-role-btn').addEventListener('click', function(){
     var list = document.getElementById('roles-list');
-    list.appendChild(buildRoleCard({id:'perfil_'+Date.now().toString(36), nombre:'', manageAccess:false, permisos:defaultPermisos('oculta')}));
+    list.appendChild(buildRoleCard({id:'perfil_'+Date.now().toString(36), nombre:'', password:'', manageAccess:false, permisos:defaultPermisos('oculta')}));
   });
 
   document.getElementById('auth-save-btn').addEventListener('click', function(){
     var cards = document.querySelectorAll('#roles-list .role-card');
     if(cards.length===0){ showToast('Tiene que haber al menos un perfil.'); return; }
     var roles = [];
+    var pwSeen = {};
     var anyManage = false;
     for(var i=0;i<cards.length;i++){
       var card = cards[i];
       var nombre = card.querySelector('.role-nombre').value.trim();
-      if(!nombre){ showToast('Completá el nombre de todos los perfiles.'); return; }
+      var password = card.querySelector('.role-password').value.trim();
+      if(!nombre || !password){ showToast('Completá nombre y contraseña de todos los perfiles.'); return; }
+      if(pwSeen[password]){ showToast('Las contraseñas de los perfiles tienen que ser todas distintas.'); return; }
+      pwSeen[password] = true;
       var manageAccess = card.querySelector('.role-manage-access').checked;
       if(manageAccess) anyManage = true;
       var permisos = {};
       card.querySelectorAll('.role-permiso-select').forEach(function(sel){ permisos[sel.dataset.tab] = sel.value; });
-      var apEl = card.querySelector('.role-autoplan'); permisos.__autoplan = apEl ? apEl.checked : true;
-      roles.push({id: card.dataset.roleId, nombre: nombre, manageAccess: manageAccess, permisos: permisos});
+      roles.push({id: card.dataset.roleId, nombre: nombre, password: password, manageAccess: manageAccess, permisos: permisos});
     }
     if(!anyManage){ showToast('Al menos un perfil tiene que poder administrar el acceso.'); return; }
-    var me = roles.find(function(r){ return r.id===state.roleId; });
-    if(!me){ showToast('No podés eliminar tu propio perfil.'); return; }
-    if(!me.manageAccess){ showToast('Tu propio perfil tiene que poder administrar el acceso.'); return; }
-    var newIds = roles.map(function(r){ return r.id; });
-    var removedIds = (state.auth.roles||[]).map(function(r){ return r.id; }).filter(function(id){ return newIds.indexOf(id)===-1; });
-    writeAuthRoles(roles, removedIds).then(function(ok){
-      if(!ok) return;
-      state.auth.roles = roles;
-      refreshTabVisibility();
-      refreshSettingsTabsVisibility();
-      renderUsuariosSettings();
-      showToast('Perfiles guardados.');
-    });
-  });
-
-  document.getElementById('add-usuario-btn').addEventListener('click', function(){
-    var inp = document.getElementById('new-usuario-email');
-    var email = inp.value.trim().toLowerCase();
-    var perfilId = document.getElementById('new-usuario-perfil').value;
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ showToast('Escribí un email válido.'); return; }
-    if(!perfilId){ showToast('Elegí un perfil.'); return; }
-    if((state.auth.usuarios||[]).some(function(u){ return u.email===email; })){ showToast('Esa persona ya está en la lista.'); return; }
-    var u = {email:email, perfil_id:perfilId, activo:true};
-    state.sb.from('usuarios').upsert(u).then(function(res){
-      if(res.error){ showToast('No se pudo agregar: '+res.error.message); return; }
-      state.auth.usuarios.push(u);
-      state.auth.usuarios.sort(function(x,y){ return x.email.localeCompare(y.email); });
-      inp.value = '';
-      renderUsuariosSettings();
-      showToast('Persona agregada. Recordá crearle la cuenta en Supabase (Authentication > Users).');
-    });
+    state.auth.roles = roles;
+    writeAuthRoles(roles);
+    refreshTabVisibility();
+    refreshSettingsTabsVisibility();
+    showToast('Perfiles guardados.');
   });
 
   document.getElementById('add-route-btn').addEventListener('click', function(){
@@ -4857,13 +4595,37 @@
         }
       });
     });
+    state.sb.from('app_config').select('*').eq('id','auth').then(function(res){
+      if(!res.error && res.data && res.data.length){
+        var row = res.data[0];
+        if(row.roles && Array.isArray(row.roles) && row.roles.length){
+          state.auth.roles = row.roles;
+        }else if(row.admin_password || row.viewer_password){
+          // Migración automática del modelo anterior de 2 contraseñas fijas.
+          var migrated = defaultAuthRoles();
+          if(row.admin_password) migrated[0].password = row.admin_password;
+          if(row.viewer_password) migrated[1].password = row.viewer_password;
+          state.auth.roles = migrated;
+          writeAuthRoles(migrated);
+        }
+        refreshTabVisibility();
+        refreshSettingsTabsVisibility();
+        if(state.settingsTab==='auth') renderSettings();
+      }
+    });
   }
 
-  // Carga de datos y conexiones en vivo. Solo se llama DESPUES de iniciar sesión
-  // (la base de datos ya no responde a nadie sin login).
-  function startData(){
-    if(state.started || !state.sb) return;
-    state.started = true;
+  function initSupabase(){
+    if(!window.supabase || !window.SUPABASE_URL || window.SUPABASE_URL.indexOf('TU-PROYECTO')!==-1){
+      document.getElementById('conn-banner').classList.add('show');
+      return;
+    }
+    try{
+      state.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+    }catch(e){
+      document.getElementById('conn-banner').classList.add('show');
+      return;
+    }
     fetchConfig();
     fetchMonth();
     fetchVisitsMonth();
@@ -4909,597 +4671,81 @@
         })
         .subscribe();
     });
+    state.sb.channel('app-config-changes')
+      .on('postgres_changes', {event:'*', schema:'public', table:'app_config'}, function(){ fetchConfig(); })
+      .subscribe();
     state.sb.channel('proveedores-changes')
-      .on('postgres_changes', {event:'*', schema:'public', table:'proveedores'}, function(){ fetchCompras(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'proveedores'}, function(){ debounced('fetchCompras', fetchCompras); })
       .subscribe();
     state.sb.channel('ordenes-compra-changes')
-      .on('postgres_changes', {event:'*', schema:'public', table:'ordenes_compra'}, function(){ fetchCompras(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'ordenes_compra'}, function(){ debounced('fetchCompras', fetchCompras); })
       .subscribe();
     state.sb.channel('centros-costo-changes')
-      .on('postgres_changes', {event:'*', schema:'public', table:'centros_costo'}, function(){ fetchCompras(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'centros_costo'}, function(){ debounced('fetchCompras', fetchCompras); })
       .subscribe();
     state.sb.channel('conceptos-changes')
-      .on('postgres_changes', {event:'*', schema:'public', table:'conceptos'}, function(){ fetchCompras(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'conceptos'}, function(){ debounced('fetchCompras', fetchCompras); })
       .subscribe();
     state.sb.channel('facturas-changes')
-      .on('postgres_changes', {event:'*', schema:'public', table:'facturas'}, function(){ fetchFacturasYPagos(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'facturas'}, function(){ debounced('fetchFacturasYPagos', fetchFacturasYPagos); })
       .subscribe();
     state.sb.channel('ordenes-pago-changes')
-      .on('postgres_changes', {event:'*', schema:'public', table:'ordenes_pago'}, function(){ fetchFacturasYPagos(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'ordenes_pago'}, function(){ debounced('fetchFacturasYPagos', fetchFacturasYPagos); })
       .subscribe();
     state.sb.channel('cuentas-changes')
-      .on('postgres_changes', {event:'*', schema:'public', table:'cuentas'}, function(){ fetchTesoreria(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'cuentas'}, function(){ debounced('fetchTesoreria', fetchTesoreria); })
       .subscribe();
     state.sb.channel('movimientos-changes')
-      .on('postgres_changes', {event:'*', schema:'public', table:'movimientos'}, function(){ fetchTesoreria(); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'movimientos'}, function(){ debounced('fetchTesoreria', fetchTesoreria); })
       .subscribe();
   }
 
-  function initSupabase(){
-    if(!window.supabase || !window.SUPABASE_URL || window.SUPABASE_URL.indexOf('TU-PROYECTO')!==-1){
-      document.getElementById('conn-banner').classList.add('show');
-      state.authChecked = true; updateAuthVisibility();
-      return;
-    }
-    try{
-      state.sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
-    }catch(e){
-      document.getElementById('conn-banner').classList.add('show');
-      state.authChecked = true; updateAuthVisibility();
-      return;
-    }
-    // Ojo: dentro de este callback no se llama a Supabase directamente (puede trabarse); por eso el setTimeout.
-    state.sb.auth.onAuthStateChange(function(event, session){
-      if(event==='PASSWORD_RECOVERY'){ setTimeout(function(){ openPasswordModal(true); }, 0); return; }
-      if(event==='SIGNED_OUT'){
-        if(state.loggingOut) return;
-        if(state.started){ window.location.reload(); return; }
-        state.authChecked = true; updateAuthVisibility();
-        return;
-      }
-      if(session && (event==='SIGNED_IN' || event==='INITIAL_SESSION' || event==='TOKEN_REFRESHED')){
-        setTimeout(function(){ handleSession(session); }, 0);
-      }
-    });
-    state.sb.auth.getSession().then(function(res){
-      var s = res && res.data && res.data.session;
-      if(s){ handleSession(s); }
-      else if(!state.accessLoading){ state.authChecked = true; updateAuthVisibility(); }
-    }, function(){ state.authChecked = true; updateAuthVisibility(); });
-  }
-
-  // ---------- Login con usuarios reales (Supabase Auth) ----------
-  function mapPerfilRow(row){
-    return {id:row.id, nombre:row.nombre||row.id, manageAccess:!!row.gestiona_acceso, permisos:row.permisos||{}};
-  }
-
+  // ---------- Login por perfiles (contraseña propia y permisos por pestaña) ----------
   function updateAuthVisibility(){
     var loggedIn = isLoggedIn();
-    document.getElementById('login-overlay').classList.toggle('show', state.authChecked && !loggedIn);
+    document.getElementById('login-overlay').classList.toggle('show', !loggedIn);
     document.querySelector('.shell').hidden = !loggedIn;
   }
 
-  function showLoginError(msg){
-    var el = document.getElementById('login-error');
-    el.textContent = msg; el.style.display = '';
-    document.getElementById('login-info').style.display = 'none';
-  }
-  function showLoginInfo(msg){
-    var el = document.getElementById('login-info');
-    el.textContent = msg; el.style.display = '';
-    document.getElementById('login-error').style.display = 'none';
-  }
-  function setLoginBusy(busy){
-    var btn = document.getElementById('login-btn');
-    btn.disabled = busy;
-    btn.textContent = busy ? 'Ingresando…' : 'Ingresar';
-  }
-
-  // Busca qué perfil tiene este email y carga los perfiles. Resultado: 'ok' | 'sin_acceso' | 'error'
-  function loadAccess(){
-    return state.sb.from('usuarios').select('email,perfil_id,activo').eq('email', state.userEmail).then(function(res){
-      if(res.error) return 'error';
-      var row = (res.data||[])[0];
-      if(!row || row.activo===false) return 'sin_acceso';
-      return state.sb.from('perfiles').select('*').then(function(r2){
-        if(r2.error) return 'error';
-        state.auth.roles = (r2.data||[]).map(mapPerfilRow);
-        state.roleId = row.perfil_id;
-        return currentRole() ? 'ok' : 'sin_acceso';
-      });
-    }, function(){ return 'error'; });
-  }
-
-  function handleSession(session){
-    if(!session || !session.user) return;
-    if(state.started || state.accessLoading) return;
-    var em = (session.user.email||'').toLowerCase();
-    if(state.deniedEmail && state.deniedEmail===em) return; // evento atrasado de una cuenta ya rechazada
-    state.accessLoading = true;
-    state.userEmail = em;
-    loadAccess().then(function(result){
-      state.accessLoading = false;
-      state.authChecked = true;
-      setLoginBusy(false);
-      if(result==='ok'){
-        document.getElementById('login-password').value = '';
-        hideLoginMessages();
-        startData();
-        enterApp();
-        loadUsuarios();
-        return;
-      }
-      var msg = result==='sin_acceso'
-        ? 'Tu cuenta todavía no tiene acceso a esta aplicación. Pedile acceso al administrador.'
-        : 'No se pudo verificar tu acceso. Probá de nuevo en un momento.';
-      state.deniedEmail = state.userEmail;
-      state.userEmail = ''; state.roleId = null;
-      state.loggingOut = true;
-      var done = function(){ state.loggingOut = false; updateAuthVisibility(); showLoginError(msg); };
-      state.sb.auth.signOut({scope:'local'}).then(done, done);
-    });
-  }
-
-  function hideLoginMessages(){
-    document.getElementById('login-error').style.display = 'none';
-    document.getElementById('login-info').style.display = 'none';
-  }
-
   function enterApp(){
-    document.getElementById('who-fields').style.display = 'none';
-    var em = document.getElementById('user-email');
-    if(em){ em.textContent = state.userEmail; em.title = state.userEmail + ' — ' + (currentRole() ? currentRole().nombre : ''); }
+    document.getElementById('who-fields').style.display = canEditAnything() ? 'contents' : 'none';
     refreshTabVisibility();
     updateAuthVisibility();
     setView(firstAccessibleTab() || 'day');
   }
 
   function logout(){
-    if(!state.sb){ window.location.reload(); return; }
-    state.loggingOut = true;
-    var done = function(){ window.location.reload(); };
-    // scope local: cierra la sesión solo en este navegador (no en los demás dispositivos)
-    state.sb.auth.signOut({scope:'local'}).then(done, done);
+    state.roleId = null;
+    try{ localStorage.removeItem('hdr_role'); }catch(e){}
+    document.getElementById('login-password').value = '';
+    document.getElementById('login-error').style.display = 'none';
+    updateAuthVisibility();
   }
 
   function tryLogin(){
-    if(!state.sb) return;
-    var email = document.getElementById('login-email').value.trim().toLowerCase();
     var pw = document.getElementById('login-password').value;
-    if(!email || !pw){ showLoginError('Ingresá tu email y tu contraseña.'); return; }
-    hideLoginMessages();
-    setLoginBusy(true);
-    state.deniedEmail = '';
-    state.sb.auth.signInWithPassword({email:email, password:pw}).then(function(res){
-      if(res.error || !res.data || !res.data.session){
-        setLoginBusy(false);
-        showLoginError('Email o contraseña incorrectos.');
-        return;
-      }
-      handleSession(res.data.session);
-    }, function(){
-      setLoginBusy(false);
-      showLoginError('No se pudo conectar. Revisá tu conexión e intentá de nuevo.');
-    });
-  }
-
-  function forgotPassword(){
-    if(!state.sb) return;
-    var email = document.getElementById('login-email').value.trim().toLowerCase();
-    if(!email){ showLoginError('Escribí tu email arriba y volvé a tocar "Olvidé mi contraseña".'); return; }
-    state.sb.auth.resetPasswordForEmail(email, {redirectTo: window.location.origin + window.location.pathname}).then(function(res){
-      if(res.error){ showLoginError('No se pudo enviar el correo: '+res.error.message); return; }
-      showLoginInfo('Si ese email tiene una cuenta, le llegó un link para elegir una contraseña nueva.');
-    });
-  }
-
-  // Cambiar contraseña (desde el header) o elegir una nueva (desde el link del correo)
-  function openPasswordModal(recovery){
-    state.pwRecovery = !!recovery;
-    document.getElementById('password-title').textContent = recovery ? 'Elegí tu contraseña nueva' : 'Cambiar mi contraseña';
-    document.getElementById('password-new').value = '';
-    document.getElementById('password-new2').value = '';
-    document.getElementById('password-error').style.display = 'none';
-    document.getElementById('password-overlay').classList.add('show');
-    document.getElementById('password-new').focus();
-  }
-  function closePasswordModal(){
-    document.getElementById('password-overlay').classList.remove('show');
-  }
-  function savePassword(){
-    var p1 = document.getElementById('password-new').value;
-    var p2 = document.getElementById('password-new2').value;
-    var err = document.getElementById('password-error');
-    function fail(m){ err.textContent = m; err.style.display = ''; }
-    if(p1.length < 8){ fail('La contraseña tiene que tener al menos 8 caracteres.'); return; }
-    if(p1 !== p2){ fail('Las dos contraseñas no coinciden.'); return; }
-    state.sb.auth.updateUser({password:p1}).then(function(res){
-      if(res.error){ fail('No se pudo cambiar: '+res.error.message); return; }
-      closePasswordModal();
-      if(state.pwRecovery){ try{ window.history.replaceState(null, '', window.location.pathname + window.location.search); }catch(e){} }
-      showToast('Contraseña actualizada.');
-    });
+    var role = (state.auth.roles||[]).find(function(r){ return pw && r.password===pw; });
+    if(!role){
+      document.getElementById('login-error').style.display = '';
+      return;
+    }
+    document.getElementById('login-error').style.display = 'none';
+    document.getElementById('login-password').value = '';
+    state.roleId = role.id;
+    try{ localStorage.setItem('hdr_role', role.id); }catch(e){}
+    enterApp();
   }
 
   document.getElementById('login-btn').addEventListener('click', tryLogin);
   document.getElementById('login-password').addEventListener('keydown', function(e){ if(e.key==='Enter') tryLogin(); });
-  document.getElementById('login-email').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('login-password').focus(); });
-  document.getElementById('login-forgot').addEventListener('click', forgotPassword);
   document.getElementById('logout-btn').addEventListener('click', logout);
-  document.getElementById('pwd-btn').addEventListener('click', function(){ openPasswordModal(false); });
-  document.getElementById('password-save').addEventListener('click', savePassword);
-  document.getElementById('password-cancel').addEventListener('click', closePasswordModal);
-  document.getElementById('password-new2').addEventListener('keydown', function(e){ if(e.key==='Enter') savePassword(); });
-
-
-
-  // ---------- Ayuda in-app ----------
-  var HELP_ARTICLES = [
-    {
-      id: 'proveedor',
-      title: 'Cómo dar de alta un proveedor',
-      keywords: 'proveedor alta nuevo cargar compras',
-      steps: [
-        'Andá a la pestaña <strong>Compras</strong>.',
-        'En la sección <strong>PROVEEDORES</strong>, hacé clic en el botón azul <strong>+ Nuevo proveedor</strong>.',
-        'Completá los datos: <strong>Nombre / Razón social</strong> (obligatorio), CUIT, Rubro, Contacto, Teléfono, Email, Dirección, Banco y CBU / Alias.',
-        'Podés agregar <strong>Notas</strong> y <strong>archivos adjuntos</strong> si hace falta.',
-        'Hacé clic en <strong>Guardar</strong>.'
-      ],
-      tip: 'Una vez guardado, el proveedor aparece en la lista y lo podés usar al crear órdenes de compra y facturas.',
-      img: 'assets/help/nuevo-proveedor.png'
-    },
-    {
-      id: 'viaje',
-      title: 'Cómo cargar un viaje en Flota Pesada',
-      keywords: 'viaje cargar flota pesada grilla camión chofer ruta celda',
-      steps: [
-        'Andá a la pestaña <strong>FlotaPesada</strong>.',
-        'En la grilla del mes, hacé clic en una <strong>celda vacía</strong> (intersección de un día y una ruta).',
-        'Se abre el formulario del viaje. Elegí el <strong>Camión</strong>, el <strong>Chofer</strong> y el <strong>Ayudante</strong>.',
-        'Completá la <strong>Carga</strong> (productos y cantidades) y, si querés, una <strong>Nota</strong>.',
-        'Hacé clic en <strong>Guardar</strong>. El viaje aparece de inmediato en la grilla con el color del camión.'
-      ],
-      tip: 'También podés hacer clic en un viaje ya cargado para editarlo o eliminarlo.',
-      img: 'assets/help/viaje-modal.png'
-    },
-    {
-      id: 'sucursal-empresa',
-      title: 'Cómo dar de alta una sucursal o empresa',
-      keywords: 'sucursal empresa eventual alta nuevo configuración settings',
-      steps: [
-        'Hacé clic en el ícono <strong>⚙</strong> (arriba a la derecha).',
-        'En el menú de la izquierda elegí <strong>Sucursales y empresas</strong>.',
-        'Vas a ver tres pestañas: <strong>Sucursales</strong>, <strong>Empresas</strong> y <strong>Eventuales</strong>.',
-        'Escribí el nombre en el campo de abajo (ej: “KM 15” o “Acme S.A.”) y hacé clic en el botón <strong>+</strong>.',
-        'Podés activar o desactivar las existentes con el interruptor.',
-        'Cuando termines, hacé clic en <strong>Listo</strong>.'
-      ],
-      tip: 'Las sucursales y empresas desactivadas no aparecen al cargar envíos, pero se conservan en el historial.',
-      img: 'assets/help/sucursales-config.png'
-    },
-    {
-      id: 'autoplan',
-      title: 'Cómo planificar automáticamente',
-      keywords: 'planificar automático sugerencias autoplan flota',
-      steps: [
-        'Andá a la pestaña <strong>FlotaPesada</strong>.',
-        'Arriba a la derecha hacé clic en el botón <strong>✨ Planificar automáticamente</strong>.',
-        'El sistema analiza el historial y te sugiere camiones, choferes y cargas para los días y rutas vacíos.',
-        'Revisá las sugerencias y confirmá las que quieras aplicar.'
-      ],
-      tip: 'La planificación automática se basa en el historial real de viajes. Cuantos más datos haya, mejores son las sugerencias.'
-    },
-    {
-      id: 'factura',
-      title: 'Cómo cargar una factura',
-      keywords: 'factura nueva cargar pagos proveedor monto leer archivo',
-      steps: [
-        'Andá a la pestaña <strong>Pagos</strong>.',
-        'En la sección <strong>FACTURAS</strong> hacé clic en <strong>+ Nueva factura</strong>.',
-        'Completá el <strong>Proveedor</strong> (buscá por nombre), Orden de compra (opcional), Centro de costo, Concepto, N° de factura, Fecha y Monto.',
-        'Podés subir el PDF o foto de la factura en <strong>Archivos adjuntos</strong>.',
-        'Si está habilitado, usá el botón <strong>Leer desde archivo</strong> para que complete los datos automáticamente desde el PDF o foto.',
-        'Hacé clic en <strong>Guardar</strong>.'
-      ],
-      tip: 'Una factura no necesita tener una orden de compra asociada. Después podés agrupar varias facturas pendientes en una orden de pago.',
-      img: 'assets/help/nueva-factura.png'
-    },
-    {
-      id: 'orden-compra',
-      title: 'Cómo crear una orden de compra',
-      keywords: 'orden compra oc nueva compras proveedor',
-      steps: [
-        'Andá a la pestaña <strong>Compras</strong>.',
-        'En la sección <strong>ÓRDENES DE COMPRA</strong> hacé clic en <strong>+ Nueva orden de compra</strong>.',
-        'Elegí el <strong>Proveedor</strong>, la Fecha, el Monto y la Descripción (qué se compra).',
-        'Elegí el <strong>Estado</strong> (Pendiente / Aprobada / Recibida) y agregá notas si hace falta.',
-        'Hacé clic en <strong>Guardar</strong>. El sistema le asigna automáticamente un número (ej: OC-0002).'
-      ],
-      tip: 'Las órdenes de compra se pueden vincular después a las facturas del mismo proveedor.',
-      img: 'assets/help/nueva-oc.png'
-    },
-    {
-      id: 'vista-dia',
-      title: 'Cómo usar la vista Día',
-      keywords: 'día vista diaria resumen viajes sucursales envíos',
-      steps: [
-        'Andá a la pestaña <strong>Día</strong>.',
-        'Arriba podés cambiar de día con las flechas <strong>‹ ›</strong> o con el calendario.',
-        'Vas a ver las secciones: <strong>Viajes de Flota Pesada</strong>, <strong>Sucursales</strong>, <strong>Empresas</strong> y <strong>Eventuales</strong> del día elegido.',
-        'Hacé clic en cualquier fila para cargar o editar ese viaje o envío.'
-      ],
-      tip: 'Es la vista más práctica para el trabajo diario: ves todo lo del día en un solo lugar.',
-      img: 'assets/help/vista-dia.png'
-    },
-    {
-      id: 'envio-sucursal',
-      title: 'Cómo cargar un envío a sucursal',
-      keywords: 'envío sucursal visits cargar grilla sucursales',
-      steps: [
-        'Andá a la pestaña <strong>Sucursales</strong>.',
-        'La grilla funciona igual que Flota Pesada: cada columna es una sucursal y cada fila un día.',
-        'Hacé clic en una celda vacía para cargar el envío.',
-        'Elegí camión, chofer, ayudante y la carga enviada.',
-        'Guardá. El envío queda registrado para ese día y sucursal.'
-      ],
-      tip: 'También podés cargar envíos desde la vista Día, haciendo clic en la fila de la sucursal correspondiente.'
-    },
-    {
-      id: 'orden-pago',
-      title: 'Cómo crear una orden de pago',
-      keywords: 'orden pago op facturas pendientes pagos',
-      steps: [
-        'Andá a la pestaña <strong>Pagos</strong>.',
-        'En la sección <strong>ÓRDENES DE PAGO</strong> hacé clic en <strong>+ Nueva orden de pago</strong>.',
-        'Elegí el proveedor y seleccioná las facturas pendientes que querés agrupar.',
-        'Completá fecha y estado, y guardá.'
-      ],
-      tip: 'Una orden de pago puede agrupar varias facturas pendientes del mismo proveedor.'
-    },
-    {
-      id: 'tesoreria',
-      title: 'Cómo usar Tesorería',
-      keywords: 'tesorería caja banco movimientos saldo',
-      steps: [
-        'Andá a la pestaña <strong>Tesorería</strong>.',
-        'Ahí ves los movimientos de caja/banco y los saldos.',
-        'Podés registrar ingresos y egresos con fecha, monto y concepto.',
-        'Usá los filtros de fecha para ver un período puntual.'
-      ],
-      tip: 'Los movimientos de tesorería son independientes de las facturas; sirven para el control de caja diario.'
-    },
-    {
-      id: 'dashboard',
-      title: 'Cómo leer el Dashboard',
-      keywords: 'dashboard gráficos reportes indicadores kpi',
-      steps: [
-        'Andá a la pestaña <strong>Dashboard</strong>.',
-        'Arriba elegí el rango de fechas que querés analizar.',
-        'Vas a ver indicadores de viajes, camiones, rutas, sucursales y gastos según el período.',
-        'Los gráficos se actualizan al cambiar las fechas.'
-      ],
-      tip: 'El dashboard usa el historial cargado (viajes reales + envíos a sucursales) para mostrar tendencias.'
-    },
-    {
-      id: 'acceso',
-      title: 'Cómo administrar usuarios y permisos',
-      keywords: 'acceso usuarios perfiles permisos login configuración',
-      steps: [
-        'Hacé clic en <strong>⚙</strong> → <strong>Acceso</strong>.',
-        'Ahí se administran los <strong>perfiles</strong> (qué pestañas puede ver/editar cada rol) y las <strong>personas</strong> (email + perfil).',
-        'Para que alguien pueda entrar hacen falta dos cosas: su cuenta en Supabase Authentication y estar en la lista de usuarios de la app.',
-        'Podés cambiar tu propia contraseña con el botón <strong>🔑</strong> del header.'
-      ],
-      tip: 'No compartas el link de la app ni las contraseñas públicamente.'
-    },
-    {
-      id: 'camiones-rutas',
-      title: 'Cómo administrar camiones, rutas, choferes y cargas',
-      keywords: 'camiones rutas choferes ayudantes cargas configuración flota',
-      steps: [
-        'Hacé clic en <strong>⚙</strong> → <strong>Flota y viajes</strong>.',
-        'Usá las pestañas <strong>Rutas</strong>, <strong>Camiones</strong>, <strong>Choferes</strong>, <strong>Ayudantes</strong> y <strong>Cargas</strong>.',
-        'Activá/desactivá ítems con el interruptor, o agregá nuevos con el campo de abajo y el botón +.',
-        'Los desactivados no aparecen al cargar viajes nuevos, pero se conservan en el historial.'
-      ],
-      tip: 'El chofer y ayudante “habitual” de un camión se sugieren al cargar un viaje, pero se pueden cambiar en cada carga.'
-    }
-  ];
-
-  var helpChatHistory = [];
-
-  function openHelp(articleId){
-    document.getElementById('help-overlay').classList.add('show');
-    document.getElementById('help-search').value = '';
-    setHelpMode('guides');
-    renderHelpNav('');
-    if(articleId) showHelpArticle(articleId);
-    else if(HELP_ARTICLES.length) showHelpArticle(HELP_ARTICLES[0].id);
-    setTimeout(function(){ document.getElementById('help-search').focus(); }, 50);
-  }
-  function closeHelp(){
-    document.getElementById('help-overlay').classList.remove('show');
-  }
-  function setHelpMode(mode){
-    var guides = document.getElementById('help-mode-guides');
-    var chat = document.getElementById('help-mode-chat');
-    var bodyGuides = document.getElementById('help-body-guides');
-    var bodyChat = document.getElementById('help-body-chat');
-    if(!guides) return;
-    guides.classList.toggle('active', mode==='guides');
-    chat.classList.toggle('active', mode==='chat');
-    bodyGuides.style.display = mode==='guides' ? '' : 'none';
-    bodyChat.style.display = mode==='chat' ? 'flex' : 'none';
-    if(mode==='chat'){
-      var input = document.getElementById('help-chat-input');
-      if(input) setTimeout(function(){ input.focus(); }, 50);
-    }
-  }
-  function renderHelpNav(query){
-    var q = (query||'').toLowerCase().trim();
-    var nav = document.getElementById('help-nav');
-    if(!nav) return;
-    nav.innerHTML = '';
-    var list = HELP_ARTICLES.filter(function(a){
-      if(!q) return true;
-      var hay = (a.title + ' ' + a.keywords + ' ' + a.steps.join(' ')).toLowerCase();
-      return hay.indexOf(q) !== -1;
-    });
-    if(!list.length){
-      nav.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:13px;">Sin resultados</div>';
-      document.getElementById('help-content').innerHTML = '<div id="help-empty">No hay artículos que coincidan con “'+esc(q)+'”.</div>';
-      return;
-    }
-    list.forEach(function(a){
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = a.title;
-      btn.dataset.id = a.id;
-      btn.addEventListener('click', function(){ showHelpArticle(a.id); });
-      nav.appendChild(btn);
-    });
-  }
-  function showHelpArticle(id){
-    var a = HELP_ARTICLES.find(function(x){ return x.id === id; });
-    if(!a) return;
-    Array.from(document.querySelectorAll('#help-nav button')).forEach(function(b){
-      b.classList.toggle('active', b.dataset.id === id);
-    });
-    var html = '<h4>'+esc(a.title)+'</h4><ol>';
-    a.steps.forEach(function(s){ html += '<li>'+s+'</li>'; });
-    html += '</ol>';
-    if(a.img){
-      html += '<div class="help-img-wrap"><img class="help-img" src="'+esc(a.img)+'" alt="'+esc(a.title)+'" onerror="this.parentNode.style.display=\'none\'"></div>';
-    }
-    if(a.tip) html += '<div class="help-tip"><strong>Tip:</strong> '+a.tip+'</div>';
-    document.getElementById('help-content').innerHTML = html;
-  }
-
-  function buildHelpContext(){
-    return HELP_ARTICLES.map(function(a){
-      return '## '+a.title+'\n'+a.steps.map(function(s,i){
-        return (i+1)+'. '+s.replace(/<[^>]+>/g,'');
-      }).join('\n')+(a.tip ? '\nTip: '+a.tip.replace(/<[^>]+>/g,'') : '');
-    }).join('\n\n');
-  }
-
-  function appendChatBubble(role, text){
-    var log = document.getElementById('help-chat-log');
-    if(!log) return;
-    var div = document.createElement('div');
-    div.className = 'help-chat-bubble '+role;
-    div.innerHTML = role==='assistant' ? text : esc(text);
-    log.appendChild(div);
-    log.scrollTop = log.scrollHeight;
-  }
-
-  function sendHelpChat(){
-    var input = document.getElementById('help-chat-input');
-    var q = (input.value||'').trim();
-    if(!q) return;
-    input.value = '';
-    appendChatBubble('user', q);
-    helpChatHistory.push({role:'user', content:q});
-
-    var apiKey = (window.ANTHROPIC_API_KEY||'').trim();
-    if(!apiKey){
-      // Fallback local: buscar en artículos
-      var ql = q.toLowerCase();
-      var matches = HELP_ARTICLES.filter(function(a){
-        var hay = (a.title+' '+a.keywords+' '+a.steps.join(' ')).toLowerCase();
-        return ql.split(/\s+/).some(function(w){ return w.length>2 && hay.indexOf(w)!==-1; });
-      });
-      var reply;
-      if(matches.length){
-        var a = matches[0];
-        reply = '<strong>'+esc(a.title)+'</strong><ol>'+
-          a.steps.map(function(s){ return '<li>'+s+'</li>'; }).join('')+
-          '</ol>'+(a.tip?'<div class="help-tip"><strong>Tip:</strong> '+a.tip+'</div>':'')+
-          '<p style="margin-top:10px;font-size:12.5px;color:var(--muted);">Respuesta local (sin IA). Para respuestas más inteligentes, configurá <code>ANTHROPIC_API_KEY</code> en config.js.</p>';
-      } else {
-        reply = 'No encontré un instructivo exacto para eso. Probá con: proveedor, viaje, factura, sucursal, orden de compra, vista día, tesorería o dashboard.<br><br><span style="font-size:12.5px;color:var(--muted);">Tip: si configurás la clave de Anthropic en config.js, el chat puede responder preguntas más libres.</span>';
-      }
-      appendChatBubble('assistant', reply);
-      helpChatHistory.push({role:'assistant', content:reply});
-      return;
-    }
-
-    var thinking = document.createElement('div');
-    thinking.className = 'help-chat-bubble assistant';
-    thinking.textContent = 'Pensando…';
-    thinking.id = 'help-chat-thinking';
-    document.getElementById('help-chat-log').appendChild(thinking);
-
-    var system = 'Sos el asistente de ayuda de la app Gestión Anafer (logística: viajes, flota, sucursales, compras, pagos y tesorería). Respondé en español argentino, de forma clara y paso a paso. Usá SOLO la documentación siguiente. Si no está en la documentación, decilo. No inventes pantallas ni botones.\n\nDOCUMENTACIÓN:\n'+buildHelpContext();
-
-    var msgs = [{role:'user', content: system + '\n\nPregunta del usuario: '+q}];
-    // Anthropic messages API style via their messages endpoint
-    var body = {
-      model: window.ANTHROPIC_MODEL || 'claude-sonnet-4-5',
-      max_tokens: 1024,
-      messages: [{role:'user', content: 'Documentación de la app:\n'+buildHelpContext()+'\n\nPregunta: '+q}],
-      system: 'Sos el asistente de ayuda de Gestión Anafer. Respondé en español argentino, claro y paso a paso. Usá solo la documentación dada. Si no sabés, decilo. No inventes funciones.'
-    };
-    var headers = {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    };
-    if(window.ANTHROPIC_WORKSPACE_ID) headers['anthropic-workspace-id'] = window.ANTHROPIC_WORKSPACE_ID;
-
-    fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(body)
-    }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
-    .then(function(res){
-      var el = document.getElementById('help-chat-thinking');
-      if(el) el.remove();
-      var text;
-      if(!res.ok){
-        text = 'No pude consultar la IA ('+(res.j.error && res.j.error.message || 'error')+'). Usá los instructivos de la pestaña Guías.';
-      } else {
-        var blocks = (res.j.content||[]).filter(function(b){ return b.type==='text'; });
-        text = blocks.map(function(b){ return b.text; }).join('\n') || 'Sin respuesta.';
-        // simple markdown-ish to html
-        text = esc(text).replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
-        text = '<p>'+text+'</p>';
-      }
-      appendChatBubble('assistant', text);
-      helpChatHistory.push({role:'assistant', content:text});
-    }).catch(function(err){
-      var el = document.getElementById('help-chat-thinking');
-      if(el) el.remove();
-      appendChatBubble('assistant', 'Error de red al consultar la IA. Revisá la conexión o usá las Guías.');
-    });
-  }
-
-  document.getElementById('help-btn').addEventListener('click', function(){ openHelp(); });
-  document.getElementById('help-close').addEventListener('click', closeHelp);
-  document.getElementById('help-overlay').addEventListener('click', function(e){ if(e.target===this) closeHelp(); });
-  document.getElementById('help-search').addEventListener('input', function(){
-    var q = this.value;
-    renderHelpNav(q);
-    var first = document.querySelector('#help-nav button');
-    if(first) showHelpArticle(first.dataset.id);
-  });
-  document.addEventListener('keydown', function(e){
-    if(e.key === 'Escape' && document.getElementById('help-overlay').classList.contains('show')) closeHelp();
-  });
-  var modeGuides = document.getElementById('help-mode-guides');
-  var modeChat = document.getElementById('help-mode-chat');
-  if(modeGuides) modeGuides.addEventListener('click', function(){ setHelpMode('guides'); });
-  if(modeChat) modeChat.addEventListener('click', function(){ setHelpMode('chat'); });
-  var chatSend = document.getElementById('help-chat-send');
-  var chatInput = document.getElementById('help-chat-input');
-  if(chatSend) chatSend.addEventListener('click', sendHelpChat);
-  if(chatInput) chatInput.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendHelpChat(); } });
-
 
   // ---------- Init ----------
   renderAll();
-  updateAuthVisibility();
   initSupabase();
+  if(isLoggedIn()){
+    enterApp();
+  }else{
+    updateAuthVisibility();
+  }
 })();

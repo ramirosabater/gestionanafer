@@ -3,10 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#223C7E">
 <title>Gestión Anafer</title>
 <link rel="icon" type="image/svg+xml" href="assets/anafer-logo.svg">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
   :root{
     color-scheme: light;
@@ -243,7 +242,6 @@
   body.tab-readonly td.cell.empty:hover::after{content:none;}
   body.tab-readonly .cell-add-btn{display:none;}
   body.tab-readonly .edit-action{display:none;}
-  body.no-autoplan #autoplan-btn, body.no-autoplan #branch-autoplan-btn{display:none;}
   body.tab-readonly .legend{display:none;}
 
   .overlay{position:fixed; inset:0; background:rgba(10,9,6,0.45); display:none; align-items:center; justify-content:center; z-index:50; padding:16px;}
@@ -371,6 +369,29 @@
 
   /* Buscador de proveedor (combo), para no tener que scrollear un <select> con miles */
   .combo{position:relative;}
+  /* Imputaciones contables por proveedor */
+  #proveedor-modal{max-height:calc(100vh - 32px); overflow-y:auto;}
+  .prov-search{font-family:inherit; font-size:13.5px; border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:8px; padding:7px 10px; width:260px; max-width:100%;}
+  .prov-count{font-weight:500; text-transform:none; letter-spacing:0; color:var(--muted); font-size:12.5px; margin-left:4px;}
+  .prov-wrap{max-height:62vh; overflow:auto;}
+  .prov-more{padding:10px; font-size:12.5px; color:var(--muted); text-align:center;}
+  .imput-help{font-size:12px; color:var(--ink-2); margin-bottom:8px; line-height:1.4;}
+  .imput-list{display:flex; flex-direction:column; gap:4px; margin-bottom:8px;}
+  .imput-row{display:flex; align-items:center; gap:8px; border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:13px; background:var(--bg);}
+  .imput-row .txt{flex:1 1 auto; min-width:0;}
+  .imput-row .n{font-size:11.5px; color:var(--muted); white-space:nowrap;}
+  .imput-row button{border:none; background:none; cursor:pointer; color:var(--muted); font-size:15px; padding:0 4px; line-height:1;}
+  .imput-row button.star.on{color:#d4a017;}
+  .imput-row button:hover{color:var(--ink);}
+  .imput-empty{font-size:12.5px; color:var(--muted); padding:4px 0;}
+  .imput-add{display:grid; grid-template-columns:1fr 1fr auto; gap:6px;}
+  .imput-add select{font-family:inherit; font-size:13px; border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:8px; padding:6px 8px; min-width:0;}
+  .imput-chips{display:flex; flex-wrap:wrap; gap:6px; margin:-4px 0 12px;}
+  .imput-chips[hidden]{display:none;}
+  .imput-chips .lbl{font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); width:100%;}
+  .imput-chip{border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:999px; padding:4px 10px; font-size:12px; cursor:pointer; font-family:inherit;}
+  .imput-chip.on{background:var(--ink); color:var(--surface); border-color:var(--ink);}
+  @media (max-width:520px){ .imput-add{grid-template-columns:1fr;} }
   .combo-menu{position:absolute; z-index:40; left:0; right:0; top:calc(100% + 4px); max-height:220px; overflow-y:auto; background:var(--surface); border:1px solid var(--border-strong); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.16);}
   .combo-item{padding:8px 10px; font-size:13.5px; cursor:pointer;}
   .combo-item:hover, .combo-item.active{background:var(--ghost-bg);}
@@ -466,195 +487,6 @@
   .toast.show{opacity:1;}
 
   ::selection{background:var(--accent); color:var(--accent-ink);}
-  #password-overlay{z-index:110;}
-  .user-email{font-size:12px; color:var(--ink-2); max-width:290px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .acceso-h{margin:22px 0 6px; font-size:13px;}
-  .usuario-row .usuario-email{flex:1; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  @media (max-width:640px){ .user-email{display:none;} }
-
-  /* ---- Factura: vista previa del archivo al costado del formulario ---- */
-  .factura-layout{display:flex; gap:16px; flex:1 1 auto; min-height:0;}
-  .factura-layout .modal-scroll-body{flex:1 1 0; min-width:0;}
-  #factura-modal.has-preview{max-width:min(1320px, calc(100vw - 32px)) !important; height:calc(100vh - 32px);}
-  #factura-modal.has-preview .modal-scroll-body{flex:0 0 470px; max-width:470px;}
-  .factura-preview{flex:1 1 0; min-width:0; display:flex; flex-direction:column; border:1px solid var(--border); border-radius:14px; background:var(--surface-2); overflow:hidden;}
-  .fm-preview-head{display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--surface); border-bottom:1px solid var(--border);}
-  .fm-preview-name{flex:1; min-width:0; font-size:12.5px; font-weight:600; color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .fm-pv-btn{flex:none; border:1px solid var(--border); background:var(--surface-2); color:var(--ink); border-radius:8px; padding:5px 10px; font:inherit; font-size:12px; font-weight:600; cursor:pointer;}
-  .fm-pv-btn:hover{background:#e9eef6;}
-  .fm-preview-body{flex:1 1 auto; min-height:0; overflow:auto;}
-  .fm-preview-frame{display:block; width:100%; height:100%; border:0;}
-  .fm-preview-img{display:block; width:100%; height:auto; cursor:zoom-in;}
-  .fm-preview-img.zoom{width:200%; max-width:none; cursor:zoom-out;}
-  .fm-preview-fallback{padding:24px; font-size:13px; color:var(--ink-2);}
-  .attach-view{flex:none; border:0; background:var(--ghost-bg); color:var(--accent); font:inherit; font-size:11.5px; font-weight:600; padding:3px 8px; border-radius:6px; cursor:pointer;}
-  .attach-view:hover{background:rgba(34,60,126,0.14);}
-  @media (max-width:900px){
-    .factura-layout{flex-direction:column;}
-    .factura-preview{order:-1; flex:0 0 40vh;}
-    #factura-modal.has-preview .modal-scroll-body{flex:1 1 0; max-width:none;}
-  }
-
-  /* ---- Lista de facturas: acceso directo al archivo de Drive ---- */
-  .file-cell{white-space:nowrap;}
-  .file-none{color:var(--muted);}
-  .file-link{display:inline-block; font:inherit; font-size:12.5px; font-weight:600; color:var(--accent); text-decoration:none; background:var(--ghost-bg); border:0; padding:4px 10px; border-radius:999px; cursor:pointer;}
-  .file-link:hover{background:rgba(34,60,126,0.14);}
-  .file-menu{position:fixed; z-index:400; min-width:200px; max-width:320px; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); padding:6px;}
-  .file-menu a{display:block; padding:7px 10px; border-radius:8px; color:var(--ink); text-decoration:none; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .file-menu a:hover{background:var(--surface-2); color:var(--accent);}
-
-  /* =====================================================================
-     TEMA ANAFER — colores del logo: azul #223C7E · celeste #009FE3 · rojo #E30613
-     Estilo: fondo gris azulado, tarjetas blancas redondeadas y pestañas en
-     forma de píldora con la activa en rojo. Va al final para pisar lo anterior.
-     ===================================================================== */
-  :root{
-    --brand-navy:#223C7E; --brand-cyan:#009FE3; --brand-red:#E30613;
-    --bg:#edf0f4;
-    --surface:#ffffff;
-    --surface-2:#f3f5f9;
-    --ink:#1a2338;
-    --ink-2:#56627d;
-    --muted:#8b96ad;
-    --border:#e1e6ee;
-    --border-strong:#c9d2e0;
-    --accent:#223C7E;
-    --accent-ink:#ffffff;
-    --ghost-bg:rgba(34,60,126,0.07);
-    --today:rgba(0,159,227,0.10);
-    --danger:#E30613;
-    --shadow:0 18px 40px -18px rgba(26,35,56,0.38), 0 3px 8px -3px rgba(26,35,56,0.14);
-    --card-shadow:0 1px 2px rgba(26,35,56,0.05), 0 8px 24px -16px rgba(26,35,56,0.22);
-    --chart-weekday:#223C7E;
-  }
-  body{font-family:"Inter","IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
-  ::selection{background:rgba(0,159,227,0.25);}
-  [hidden]{display:none !important;}
-
-  /* Encabezado: tarjeta blanca con el logo arriba a la izquierda y franja tricolor */
-  .topbar{position:relative; overflow:hidden; align-items:center; background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:20px 22px 14px; margin-bottom:12px; box-shadow:var(--card-shadow);}
-  .topbar::before{content:""; position:absolute; left:0; right:0; top:0; height:5px; background:linear-gradient(90deg,var(--brand-navy) 0 55%,var(--brand-cyan) 55% 80%,var(--brand-red) 80% 100%);}
-  .brand-logo{height:50px;}
-  .brand h1{font-size:22px; font-weight:800; color:var(--brand-navy); letter-spacing:-0.02em;}
-  .brand .tag{color:var(--ink-2);}
-  .user-email{background:var(--surface-2); border:1px solid var(--border); border-radius:999px; padding:6px 12px; font-size:12px; color:var(--ink-2);}
-  .who .btn.ghost{border-radius:10px;}
-
-  /* Pestañas: barra blanca redondeada; la activa en rojo */
-  .viewtabs{background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:8px; gap:4px; margin-bottom:16px; flex-wrap:wrap; box-shadow:var(--card-shadow);}
-  .viewtab{border:0; border-radius:12px; padding:11px 16px; margin:0; font-size:13.5px; font-weight:600; color:var(--ink-2); transition:background .12s,color .12s;}
-  .viewtab:hover{background:var(--surface-2); color:var(--ink);}
-  .viewtab.active{background:var(--brand-red); color:#fff; box-shadow:0 6px 14px -8px rgba(227,6,19,0.7);}
-
-  /* Botones */
-  .btn{border-radius:12px; padding:8px 14px; background:var(--surface-2); color:var(--ink); border:1px solid var(--border); font-weight:600;}
-  .btn:hover{border-color:var(--border-strong); background:#e9eef6;}
-  .btn.primary{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
-  .btn.primary:hover{background:#2c4b99; border-color:#2c4b99; filter:none;}
-  .btn.ghost{background:transparent; border-color:transparent;}
-  .btn.ghost:hover{background:var(--ghost-bg);}
-  .monthnav button{border-radius:10px; background:var(--surface);}
-  .monthnav .label{color:var(--brand-navy); font-weight:700;}
-
-  /* Tarjetas y tablas */
-  .gridwrap, .day-wrap{border-radius:20px; box-shadow:var(--card-shadow); border-color:var(--border);}
-  .chip-stat{border-radius:999px; background:var(--surface); border-color:var(--border); box-shadow:0 1px 2px rgba(26,35,56,0.04);}
-  .chip-stat.total{background:var(--brand-navy); color:#fff; border-color:var(--brand-navy);}
-  .chip-stat.total .lbl, .chip-stat.total .n{color:#fff;}
-  table.grid th{color:var(--ink-2);}
-  .modal{border-radius:20px; border:1px solid var(--border);}
-  .overlay{background:rgba(20,30,52,0.48);}
-  #login-overlay{background:var(--bg);}
-  .banner{border-radius:12px;}
-
-  /* Campos: fondo gris claro y esquinas redondeadas */
-  input[type=text], input[type=password], input[type=date], input[type=number], input[type=email], input[type=search], select, textarea{background:var(--surface-2); border-color:var(--border); border-radius:10px; color:var(--ink);}
-  .field input[type=text], .field input[type=password], .field select, .field textarea, .who input, .addrow input{border-radius:10px; background:var(--surface-2);}
-  .field input[type=date], .field input[type=number], .field input[type=email]{width:100%; box-sizing:border-box; font-family:inherit; font-size:14px; border:1px solid var(--border); border-radius:10px; padding:8px 10px; background:var(--surface-2); color:var(--ink);}
-  .field input[type=file]{font-family:inherit; font-size:12.5px; color:var(--ink-2); max-width:100%;}
-  .field input[type=file]::file-selector-button{font-family:inherit; font-weight:600; font-size:12.5px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink); border-radius:10px; padding:7px 12px; margin-right:10px; cursor:pointer;}
-  .field input[type=file]::file-selector-button:hover{background:#e9eef6; border-color:var(--border-strong);}
-  input:focus, select:focus, textarea:focus{outline:2px solid rgba(0,159,227,0.55); outline-offset:1px; border-color:var(--brand-cyan);}
-  .who input:focus{outline-color:rgba(0,159,227,0.55);}
-  .field label, .settings-col h4{color:var(--muted);}
-  select.scope-select{border:1px solid var(--border); background:var(--surface-2); border-radius:10px; padding:7px 10px; font-family:inherit; font-size:12.5px; color:var(--ink);}
-  .toggle.on{background:var(--brand-cyan);}
-  .suggest-hint{color:var(--brand-navy);}
-
-  /* Estado de la lectura de facturas */
-  .factura-read-status{margin:-6px 0 14px; padding:9px 12px; border-radius:10px; font-size:12.5px; background:var(--surface-2); color:var(--ink-2);}
-  .factura-read-status.ok{background:rgba(21,138,99,0.10); color:#0f6e4f;}
-  .factura-read-status.error{background:rgba(227,6,19,0.08); color:#b3050f;}
-  .factura-read-row label.btn.disabled{opacity:0.5; pointer-events:none;}
-
-  /* Arreglo: los modales que se abren DESDE Configuración (nuevo centro de costo / concepto)
-     quedaban tapados por el panel de Configuración porque tenían la misma capa. */
-  #centro-costo-overlay, #concepto-overlay, #tipo-retencion-overlay, #concepto-retencion-overlay{z-index:70;}
-  /* Los avisos siempre por encima de cualquier modal */
-  .toast{z-index:300;}
-
-  /* Login */
-  #login-modal{max-width:380px !important; padding:34px 30px 26px; border-radius:24px; position:relative; overflow:hidden; box-shadow:var(--shadow);}
-  #login-modal::before{content:""; position:absolute; left:0; right:0; top:0; height:5px; background:linear-gradient(90deg,var(--brand-navy) 0 55%,var(--brand-cyan) 55% 80%,var(--brand-red) 80% 100%);}
-  #login-modal .brand-logo{height:62px !important; margin:0 auto 8px !important; display:block;}
-  #login-modal h3{text-align:center; font-size:20px; font-weight:800; color:var(--brand-navy); margin-bottom:4px;}
-  #login-modal .sub{text-align:center; margin-bottom:18px;}
-  #login-modal .modal-actions{align-items:center;}
-  #password-overlay .modal{border-radius:22px;}
-
-  @media (max-width:640px){
-    .topbar{padding:18px 16px 12px;}
-    .viewtabs{padding:6px; border-radius:16px;}
-    .viewtab{padding:9px 12px;}
-  }
-
-  /* ---------- Ayuda in-app ---------- */
-  #help-btn{font-weight:800; font-size:16px; width:36px; padding:0;}
-  #help-overlay{z-index:90;}
-  #help-modal{max-width:720px; width:min(720px,94vw); max-height:88vh; display:flex; flex-direction:column; padding:0; overflow:hidden;}
-  #help-modal .help-head{padding:18px 20px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px;}
-  #help-modal .help-head h3{margin:0; flex:1; font-size:18px;}
-  #help-search{flex:1; max-width:280px; font-family:inherit; font-size:13.5px; padding:8px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2); color:var(--ink);}
-  #help-search:focus{outline:none; border-color:var(--accent);}
-  #help-body{display:flex; flex:1; min-height:0; overflow:hidden;}
-  #help-nav{width:220px; flex-shrink:0; border-right:1px solid var(--border); overflow-y:auto; padding:10px 8px; background:var(--surface-2);}
-  #help-nav button{display:block; width:100%; text-align:left; font-family:inherit; font-size:13px; font-weight:500; color:var(--ink-2); background:transparent; border:none; border-radius:8px; padding:9px 12px; cursor:pointer; margin-bottom:2px;}
-  #help-nav button:hover{background:var(--ghost-bg); color:var(--ink);}
-  #help-nav button.active{background:var(--accent); color:var(--accent-ink); font-weight:600;}
-  #help-content{flex:1; overflow-y:auto; padding:18px 22px 28px;}
-  #help-content h4{margin:0 0 12px; font-size:16px; font-weight:700;}
-  #help-content ol{margin:0 0 14px; padding-left:22px;}
-  #help-content li{margin-bottom:8px; line-height:1.45; color:var(--ink);}
-  #help-content .help-tip{background:var(--today); border-radius:10px; padding:10px 14px; font-size:13px; color:var(--ink-2); margin-top:12px;}
-  #help-content .help-tip strong{color:var(--ink);}
-  #help-empty{color:var(--muted); font-size:14px; padding:20px 0;}
-
-  .help-modes{display:flex; gap:4px; background:var(--surface-2); border-radius:10px; padding:3px;}
-  .help-mode{font-family:inherit; font-size:12.5px; font-weight:600; border:none; background:transparent; color:var(--ink-2); padding:6px 12px; border-radius:8px; cursor:pointer;}
-  .help-mode.active{background:var(--surface); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,0.08);}
-  #help-body-guides, #help-body-chat{flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden;}
-  #help-body{display:flex; flex:1; min-height:0; overflow:hidden;}
-  .help-img-wrap{margin:14px 0; border-radius:12px; overflow:hidden; border:1px solid var(--border); background:var(--surface-2);}
-  .help-img{display:block; width:100%; height:auto;}
-  #help-chat-log{flex:1; overflow-y:auto; padding:16px 18px; display:flex; flex-direction:column; gap:10px;}
-  .help-chat-bubble{max-width:92%; padding:10px 14px; border-radius:14px; font-size:13.5px; line-height:1.45; word-break:break-word;}
-  .help-chat-bubble.user{align-self:flex-end; background:var(--accent); color:var(--accent-ink); border-bottom-right-radius:4px;}
-  .help-chat-bubble.assistant{align-self:flex-start; background:var(--surface-2); color:var(--ink); border-bottom-left-radius:4px;}
-  .help-chat-bubble.assistant ol{margin:8px 0 0; padding-left:20px;}
-  .help-chat-bubble.assistant li{margin-bottom:4px;}
-  .help-chat-input-row{display:flex; gap:8px; padding:12px 14px; border-top:1px solid var(--border);}
-  #help-chat-input{flex:1; font-family:inherit; font-size:13.5px; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--ink);}
-  #help-chat-input:focus{outline:none; border-color:var(--accent);}
-  .help-chat-hint{font-size:11.5px; color:var(--muted); padding:0 14px 10px;}
-  #help-modal{max-width:780px;}
-
-  @media (max-width:640px){
-    #help-body{flex-direction:column;}
-    #help-nav{width:100%; border-right:none; border-bottom:1px solid var(--border); max-height:140px; display:flex; flex-wrap:wrap; gap:4px; padding:8px;}
-    #help-nav button{width:auto; flex:1 1 auto;}
-  }
-
 </style>
 </head>
 <body>
@@ -669,13 +501,10 @@
       </div>
     </div>
     <div class="who">
-      <span id="who-fields" style="display:none;">
+      <span id="who-fields" style="display:contents;">
         <label for="who-input">Cargado por</label>
         <input id="who-input" type="text" placeholder="tu nombre" maxlength="30">
       </span>
-      <span class="user-email" id="user-email"></span>
-      <button class="btn ghost" id="pwd-btn" title="Cambiar mi contraseña">🔑</button>
-      <button class="btn ghost" id="help-btn" title="Ayuda">?</button>
       <button class="btn ghost" id="settings-btn" title="Configuración">⚙</button>
       <button class="btn ghost" id="logout-btn" title="Cerrar sesión">Salir</button>
     </div>
@@ -691,7 +520,6 @@
     <button class="viewtab" id="tab-compras">Compras</button>
     <button class="viewtab" id="tab-pagos">Pagos</button>
     <button class="viewtab" id="tab-tesoreria">Tesorería</button>
-    <button class="viewtab" id="tab-simulador">Simulación</button>
     <button class="viewtab" id="tab-day">Día</button>
     <button class="viewtab" id="tab-dashboard">Dashboard</button>
   </div>
@@ -938,154 +766,99 @@
 
   <div id="view-compras" hidden>
     <div class="toolbar" id="toolbar-compras">
-      <div style="font-size:12.5px; color:var(--ink-2);">Proveedores, compras y órdenes de compra</div>
-    </div>
-    <div class="settings-subtabs" style="display:flex; gap:18px; border-bottom:1px solid var(--line); margin-bottom:14px;">
-      <button class="stabbtn active" id="ctab-proveedores">Proveedores</button>
-      <button class="stabbtn" id="ctab-compra">Compra</button>
-      <button class="stabbtn" id="ctab-oc">Orden de compra</button>
+      <div style="font-size:12.5px; color:var(--ink-2);">Proveedores y órdenes de compra</div>
     </div>
 
-    <div id="csec-proveedores">
-      <div class="compras-section-head">
-        <h3>Proveedores</h3>
+    <div class="compras-section-head">
+      <h3>Proveedores <span class="prov-count" id="proveedores-count"></span></h3>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="search" id="proveedores-search" class="prov-search" placeholder="Buscar por nombre, CUIT o código..." autocomplete="off">
         <button class="btn primary edit-action" id="new-proveedor-btn">+ Nuevo proveedor</button>
       </div>
-      <div class="day-wrap">
-        <table class="day-table" id="proveedores-table">
-          <thead><tr><th>Proveedor</th><th>Rubro</th><th>Contacto</th><th>Teléfono</th><th></th></tr></thead>
-          <tbody id="proveedores-body"></tbody>
-        </table>
-      </div>
-      <div class="legend"><div class="item">Hacé clic en un proveedor para editarlo</div></div>
+    </div>
+    <div class="day-wrap prov-wrap">
+      <table class="day-table" id="proveedores-table">
+        <thead><tr><th>Cód.</th><th>Proveedor</th><th>CUIT</th><th>Rubro</th><th>Imputación por defecto</th><th>Teléfono</th></tr></thead>
+        <tbody id="proveedores-body"></tbody>
+      </table>
     </div>
 
-    <div id="csec-compra" hidden>
-      <div class="compras-section-head">
-        <h3>Compras (facturas)</h3>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <select id="factura-filter-estado" class="scope-select" style="max-width:170px;">
-            <option value="">Todos los estados</option>
-            <option value="pendiente">Pendiente</option>
-            <option value="pagada">Pagada</option>
-          </select>
-          <button class="btn primary edit-action" id="new-factura-btn">+ Nueva compra</button>
-        </div>
+    <div class="compras-section-head">
+      <h3>Órdenes de compra</h3>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select id="oc-filter-estado" class="scope-select" style="max-width:170px;">
+          <option value="">Todos los estados</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="aprobada">Aprobada</option>
+          <option value="recibida">Recibida</option>
+        </select>
+        <button class="btn primary edit-action" id="new-oc-btn">+ Nueva orden de compra</button>
       </div>
-      <div class="day-wrap">
-        <table class="day-table" id="facturas-table">
-          <thead><tr><th>Proveedor</th><th>N° Factura</th><th>Fecha</th><th>Orden de compra</th><th>Monto</th><th>Estado</th><th>Archivo</th></tr></thead>
-          <tbody id="facturas-body"></tbody>
-        </table>
-      </div>
-      <div class="legend"><div class="item">Una compra (factura) no necesita tener una orden de compra asociada</div></div>
+    </div>
+    <div class="day-wrap">
+      <table class="day-table" id="oc-table">
+        <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Descripción</th><th>Monto</th><th>Estado</th></tr></thead>
+        <tbody id="oc-body"></tbody>
+      </table>
     </div>
 
-    <div id="csec-oc" hidden>
-      <div class="compras-section-head">
-        <h3>Órdenes de compra</h3>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <select id="oc-filter-estado" class="scope-select" style="max-width:170px;">
-            <option value="">Todos los estados</option>
-            <option value="pendiente">Pendiente</option>
-            <option value="aprobada">Aprobada</option>
-            <option value="recibida">Recibida</option>
-          </select>
-          <button class="btn primary edit-action" id="new-oc-btn">+ Nueva orden de compra</button>
-        </div>
-      </div>
-      <div class="day-wrap">
-        <table class="day-table" id="oc-table">
-          <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Descripción</th><th>Monto</th><th>Estado</th></tr></thead>
-          <tbody id="oc-body"></tbody>
-        </table>
-      </div>
-      <div class="legend">
-        <div class="item">Hacé clic en una orden de compra para editarla</div>
-        <div class="item">Centros de costo y Conceptos se administran desde ⚙ → Compras y Tesorería</div>
-      </div>
+    <div class="legend">
+      <div class="item">Hacé clic en un proveedor o una orden de compra para editarlo</div>
+      <div class="item">Centros de costo y Conceptos se administran desde ⚙ → Compras</div>
     </div>
   </div>
 
   <div id="view-pagos" hidden>
     <div class="toolbar" id="toolbar-pagos">
-      <div style="font-size:12.5px; color:var(--ink-2);">Pagos y órdenes de pago</div>
-    </div>
-    <div class="settings-subtabs" style="display:flex; gap:18px; border-bottom:1px solid var(--line); margin-bottom:14px;">
-      <button class="stabbtn active" id="ptab-pago">Pago</button>
-      <button class="stabbtn" id="ptab-op">Orden de Pago</button>
+      <div style="font-size:12.5px; color:var(--ink-2);">Facturas y órdenes de pago</div>
     </div>
 
-    <div id="psec-pago">
-      <div class="compras-section-head">
-        <h3>Registrar pago</h3>
-        <div style="font-size:12px; color:var(--ink-2);">Órdenes de pago pendientes</div>
-      </div>
-      <div class="day-wrap">
-        <table class="day-table" id="pago-pend-table">
-          <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Monto</th><th></th></tr></thead>
-          <tbody id="pago-pend-body"></tbody>
-        </table>
-      </div>
-
-      <div class="compras-section-head" style="margin-top:18px;">
-        <h3>Pagos realizados</h3>
-      </div>
-      <div class="day-wrap">
-        <table class="day-table" id="pago-real-table">
-          <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Medio</th><th>Cuenta</th><th>Monto</th></tr></thead>
-          <tbody id="pago-real-body"></tbody>
-        </table>
-      </div>
-      <div class="legend">
-        <div class="item">"Registrar pago" abre la orden para elegir el medio (efectivo, cheque, transferencia) y la cuenta, y genera el egreso automáticamente</div>
+    <div class="compras-section-head">
+      <h3>Facturas</h3>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select id="factura-filter-estado" class="scope-select" style="max-width:170px;">
+          <option value="">Todos los estados</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="pagada">Pagada</option>
+        </select>
+        <button class="btn primary edit-action" id="new-factura-btn">+ Nueva factura</button>
       </div>
     </div>
+    <div class="day-wrap">
+      <table class="day-table" id="facturas-table">
+        <thead><tr><th>Proveedor</th><th>N° Factura</th><th>Fecha</th><th>Orden de compra</th><th>Monto</th><th>Estado</th></tr></thead>
+        <tbody id="facturas-body"></tbody>
+      </table>
+    </div>
 
-    <div id="psec-op" hidden>
-      <div class="compras-section-head">
-        <h3>Órdenes de pago</h3>
-        <div style="display:flex; gap:8px; align-items:center;">
-          <select id="pago-filter-estado" class="scope-select" style="max-width:170px;">
-            <option value="">Todos los estados</option>
-            <option value="pendiente">Pendiente</option>
-            <option value="pagada">Pagada</option>
-          </select>
-          <button class="btn primary edit-action" id="new-pago-btn">+ Nueva orden de pago</button>
-        </div>
+    <div class="compras-section-head">
+      <h3>Órdenes de pago</h3>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select id="pago-filter-estado" class="scope-select" style="max-width:170px;">
+          <option value="">Todos los estados</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="pagada">Pagada</option>
+        </select>
+        <button class="btn primary edit-action" id="new-pago-btn">+ Nueva orden de pago</button>
       </div>
-      <div class="day-wrap">
-        <table class="day-table" id="pagos-table">
-          <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Facturas</th><th>Monto</th><th>Estado</th></tr></thead>
-          <tbody id="pagos-body"></tbody>
-        </table>
-      </div>
-      <div class="legend">
-        <div class="item">Una orden de pago puede agrupar varias facturas pendientes del mismo proveedor</div>
-        <div class="item">Hacé clic en una orden de pago para editarla</div>
-      </div>
+    </div>
+    <div class="day-wrap">
+      <table class="day-table" id="pagos-table">
+        <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Facturas</th><th>Monto</th><th>Estado</th></tr></thead>
+        <tbody id="pagos-body"></tbody>
+      </table>
+    </div>
+
+    <div class="legend">
+      <div class="item">Una factura no necesita tener una orden de compra asociada</div>
+      <div class="item">Una orden de pago puede agrupar varias facturas pendientes del mismo proveedor</div>
+      <div class="item">Hacé clic en una factura o una orden de pago para editarla</div>
     </div>
   </div>
 
   <div id="view-tesoreria" hidden>
     <div class="toolbar" id="toolbar-tesoreria">
-      <div style="font-size:12.5px; color:var(--ink-2);">Deuda de proveedores, cuentas y movimientos de caja/banco</div>
-    </div>
-
-    <div class="compras-section-head">
-      <h3>Deuda de proveedores</h3>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <select id="deuda-proveedor-filter" class="scope-select" style="max-width:220px;"><option value="">Todos los proveedores</option></select>
-        <button class="btn" id="deuda-modo-resumido">Resumido</button>
-        <button class="btn" id="deuda-modo-detallado">Detallado</button>
-      </div>
-    </div>
-    <div id="deuda-total" style="font-size:13px; color:var(--ink-2); margin:2px 0 8px;"></div>
-    <div class="day-wrap">
-      <table class="day-table" id="deuda-table">
-        <thead id="deuda-head"></thead>
-        <tbody id="deuda-body"></tbody>
-      </table>
+      <div style="font-size:12.5px; color:var(--ink-2);">Cuentas y movimientos de caja/banco</div>
     </div>
 
     <div class="compras-section-head">
@@ -1119,32 +892,6 @@
       <div class="item">El saldo actual de cada cuenta es el saldo inicial menos todos sus egresos cargados</div>
       <div class="item">Al marcar una orden de pago como Pagada se elige la cuenta y se genera el egreso automáticamente — esos movimientos no se pueden editar ni borrar desde acá, solo cambiando la orden de pago</div>
       <div class="item">Los movimientos cargados a mano (no ligados a una orden de pago) sí se pueden editar o borrar</div>
-    </div>
-  </div>
-
-  <div id="view-simulador" hidden>
-    <div class="toolbar" id="toolbar-simulador">
-      <div style="font-size:12.5px; color:var(--ink-2);">Simulá qué facturas pagar con el disponible, priorizando por vencimiento</div>
-    </div>
-    <div class="compras-section-head">
-      <h3>Simulación de pagos</h3>
-      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <label style="font-size:12px;color:var(--ink-2);">Disponible</label>
-        <input type="text" id="sim-disponible" inputmode="decimal" class="scope-select" style="max-width:160px;" placeholder="(saldo de cuentas)">
-        <button class="btn primary" id="sim-auto-btn">Auto por vencimiento</button>
-        <button class="btn" id="sim-limpiar-btn">Limpiar</button>
-      </div>
-    </div>
-    <div id="sim-resumen" style="display:flex; gap:18px; flex-wrap:wrap; margin:6px 0 12px; font-size:13px;"></div>
-    <div class="day-wrap">
-      <table class="day-table" id="sim-table">
-        <thead><tr><th style="width:34px;">✓</th><th>Vencimiento</th><th>Estado</th><th>Proveedor</th><th>Factura</th><th>Monto</th></tr></thead>
-        <tbody id="sim-body"></tbody>
-      </table>
-    </div>
-    <div class="legend">
-      <div class="item">Tildá las facturas para armar el pago. "Auto por vencimiento" selecciona las más urgentes hasta agotar el disponible.</div>
-      <div class="item">El disponible arranca en el saldo total de tus cuentas; podés escribir otro monto a mano.</div>
     </div>
   </div>
 </div>
@@ -1331,7 +1078,7 @@
 </div>
 
 <div class="overlay" id="proveedor-overlay">
-  <div class="modal" id="proveedor-modal" style="max-width:600px; max-height:88vh; overflow-y:auto;">
+  <div class="modal" id="proveedor-modal" style="max-width:460px;">
     <h3 id="pm-title">Nuevo proveedor</h3>
     <div class="sub">Datos del proveedor</div>
     <div class="field">
@@ -1339,8 +1086,42 @@
       <input type="text" id="pm-nombre" maxlength="80" placeholder="Ej: Repuestos del Sur S.A.">
     </div>
     <div class="crew-fields">
+      <div class="field"><label for="pm-codigo">Código</label><input type="text" id="pm-codigo" maxlength="20" placeholder="N° de cuenta"></div>
+      <div class="field"><label for="pm-fantasia">Nombre de fantasía</label><input type="text" id="pm-fantasia" maxlength="80"></div>
+    </div>
+    <div class="crew-fields">
       <div class="field"><label for="pm-cuit">CUIT</label><input type="text" id="pm-cuit" maxlength="20" placeholder="20-12345678-9"></div>
-      <div class="field"><label for="pm-rubro">Rubro</label><input type="text" id="pm-rubro" maxlength="40" placeholder="Ej: Repuestos"></div>
+      <div class="field"><label for="pm-rubro">Rubro</label><input type="text" id="pm-rubro" maxlength="40" placeholder="Ej: Bienes, Honorarios"></div>
+    </div>
+    <div class="crew-fields">
+      <div class="field">
+        <label for="pm-condicion-iva">Condición de IVA</label>
+        <select id="pm-condicion-iva">
+          <option value="">—</option>
+          <option value="Responsable inscripto">Responsable inscripto</option>
+          <option value="Monotributo">Monotributo</option>
+          <option value="Exento">Exento</option>
+          <option value="Consumidor final">Consumidor final</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="pm-condicion-pago">Condición de pago</label>
+        <select id="pm-condicion-pago">
+          <option value="">—</option>
+          <option value="Cuenta corriente">Cuenta corriente</option>
+          <option value="Efectivo">Efectivo</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Imputaciones contables</label>
+      <div class="imput-help">Combinaciones de centro de costo + concepto que usa este proveedor. Al cargar una factura se propone la más usada (si todavía no tiene facturas, la marcada ★).</div>
+      <div class="imput-list" id="pm-imputaciones-list"></div>
+      <div class="imput-add">
+        <select id="pm-imput-cc"></select>
+        <select id="pm-imput-concepto"></select>
+        <button class="btn" type="button" id="pm-imput-add">+ Agregar</button>
+      </div>
     </div>
     <div class="crew-fields">
       <div class="field"><label for="pm-contacto">Contacto</label><input type="text" id="pm-contacto" maxlength="60" placeholder="Persona de contacto"></div>
@@ -1351,45 +1132,12 @@
       <div class="field"><label for="pm-direccion">Dirección</label><input type="text" id="pm-direccion" maxlength="100"></div>
     </div>
     <div class="crew-fields">
+      <div class="field"><label for="pm-localidad">Localidad</label><input type="text" id="pm-localidad" maxlength="60"></div>
+      <div class="field"><label for="pm-provincia">Provincia</label><input type="text" id="pm-provincia" maxlength="60"></div>
+    </div>
+    <div class="crew-fields">
       <div class="field"><label for="pm-banco">Banco</label><input type="text" id="pm-banco" maxlength="60"></div>
       <div class="field"><label for="pm-cbu">CBU / Alias</label><input type="text" id="pm-cbu" maxlength="60"></div>
-    </div>
-    <div class="crew-fields">
-      <div class="field"><label for="pm-condicion-iva">Condición IVA</label>
-        <select id="pm-condicion-iva">
-          <option value="">—</option>
-          <option>Responsable Inscripto</option>
-          <option>Monotributo</option>
-          <option>Exento</option>
-          <option>Consumidor Final</option>
-          <option>No Alcanzado</option>
-        </select></div>
-      <div class="field"><label for="pm-condicion-pago">Condición de pago</label>
-        <select id="pm-condicion-pago">
-          <option value="">—</option>
-          <option>Cuenta Corriente</option>
-          <option>Contado</option>
-          <option>7 días</option>
-          <option>15 días</option>
-          <option>30 días</option>
-          <option>60 días</option>
-        </select></div>
-    </div>
-    <div class="crew-fields">
-      <div class="field"><label for="pm-localidad">Localidad</label><input type="text" id="pm-localidad" maxlength="60"></div>
-      <div class="field"><label for="pm-provincia">Provincia</label><input type="text" id="pm-provincia" maxlength="40"></div>
-    </div>
-    <div class="crew-fields">
-      <div class="field"><label for="pm-zona">Zona</label><input type="text" id="pm-zona" maxlength="40" placeholder="Ej: Logística"></div>
-      <div class="field"><label for="pm-categoria">Categoría</label><input type="text" id="pm-categoria" maxlength="40" placeholder="Ej: Bienes"></div>
-    </div>
-    <div class="crew-fields">
-      <div class="field"><label for="pm-imputacion">Imputación</label><input type="text" id="pm-imputacion" maxlength="60" placeholder="Ej: Repuestos y reparación"></div>
-      <div class="field"><label for="pm-fax">Fax</label><input type="text" id="pm-fax" maxlength="30"></div>
-    </div>
-    <div class="crew-fields">
-      <div class="field"><label for="pm-orden-cheque">Orden de cheque (a nombre de)</label><input type="text" id="pm-orden-cheque" maxlength="80"></div>
-      <div class="field"><label for="pm-responsable">Responsable</label><input type="text" id="pm-responsable" maxlength="60"></div>
     </div>
     <div class="field">
       <label for="pm-notas">Notas (opcional)</label>
@@ -1424,36 +1172,6 @@
         <button class="btn" id="ccm-delete" style="display:none; color:var(--danger);">Eliminar</button>
       </div>
       <button class="btn primary" id="ccm-save">Guardar</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="tipo-retencion-overlay">
-  <div class="modal" id="tipo-retencion-modal" style="max-width:380px;">
-    <h3 id="trm-title">Nuevo tipo de retención</h3>
-    <div class="field"><label for="trm-codigo">Código</label><input type="text" id="trm-codigo" maxlength="10" placeholder="Ej: GA"></div>
-    <div class="field"><label for="trm-descripcion">Descripción</label><input type="text" id="trm-descripcion" maxlength="80" placeholder="Ej: Ganancias"></div>
-    <div class="modal-actions">
-      <div class="left">
-        <button class="btn" id="trm-cancel">Cancelar</button>
-        <button class="btn" id="trm-delete" style="display:none; color:var(--danger);">Eliminar</button>
-      </div>
-      <button class="btn primary" id="trm-save">Guardar</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="concepto-retencion-overlay">
-  <div class="modal" id="concepto-retencion-modal" style="max-width:380px;">
-    <h3 id="crm-title">Nuevo concepto de retención</h3>
-    <div class="field"><label for="crm-codigo">Código</label><input type="text" id="crm-codigo" maxlength="10" placeholder="Ej: AL"></div>
-    <div class="field"><label for="crm-descripcion">Descripción</label><input type="text" id="crm-descripcion" maxlength="80" placeholder="Ej: Alquileres"></div>
-    <div class="modal-actions">
-      <div class="left">
-        <button class="btn" id="crm-cancel">Cancelar</button>
-        <button class="btn" id="crm-delete" style="display:none; color:var(--danger);">Eliminar</button>
-      </div>
-      <button class="btn primary" id="crm-save">Guardar</button>
     </div>
   </div>
 </div>
@@ -1519,14 +1237,12 @@
   <div class="modal wide" id="factura-modal" style="max-width:660px;">
     <h3 id="fm-title">Nueva factura</h3>
     <div class="sub">Datos de la factura — cargalos a mano o subí el archivo para completarlos automáticamente</div>
-    <div class="factura-layout">
     <div class="modal-scroll-body">
     <div class="factura-read-row" id="fm-read-row" hidden>
       <div class="sub2">Subí el PDF o la foto de la factura y complete los campos por vos. Revisá los datos antes de guardar.</div>
       <label class="btn" for="fm-read-input" id="fm-read-label" style="cursor:pointer;">📄 Leer desde archivo</label>
       <input type="file" id="fm-read-input" accept="application/pdf,image/*" style="display:none;">
     </div>
-    <div class="factura-read-status" id="fm-read-status" role="status" hidden></div>
     <div class="crew-fields">
       <div class="field">
         <label for="fm-proveedor-input">Proveedor</label>
@@ -1551,13 +1267,10 @@
         <select id="fm-concepto"></select>
       </div>
     </div>
+    <div class="imput-chips" id="fm-imputaciones" hidden></div>
     <div class="crew-fields">
       <div class="field"><label for="fm-numero">N° de factura</label><input type="text" id="fm-numero" maxlength="40" placeholder="Ej: A-0001-00012345"></div>
       <div class="field"><label for="fm-fecha">Fecha</label><input type="date" id="fm-fecha"></div>
-    </div>
-    <div class="crew-fields">
-      <div class="field"><label for="fm-vencimiento">Vencimiento</label><input type="date" id="fm-vencimiento"></div>
-      <div class="field"></div>
     </div>
     <div class="crew-fields">
       <div class="field">
@@ -1576,15 +1289,6 @@
       <label for="fm-notas">Notas (opcional)</label>
       <textarea id="fm-notas" placeholder="Observaciones..."></textarea>
     </div>
-    </div>
-    <aside class="factura-preview" id="fm-preview" hidden>
-      <div class="fm-preview-head">
-        <span class="fm-preview-name" id="fm-preview-name"></span>
-        <button type="button" class="fm-pv-btn" id="fm-preview-open" title="Abrir en una pestaña nueva">↗ Abrir</button>
-        <button type="button" class="fm-pv-btn" id="fm-preview-close" title="Ocultar la vista previa">✕</button>
-      </div>
-      <div class="fm-preview-body" id="fm-preview-body"></div>
-    </aside>
     </div>
     <div class="modal-actions">
       <div class="left">
@@ -1750,8 +1454,6 @@
         <div class="settings-tabs settings-subtabs" id="settings-subtabs-compras" hidden>
           <button class="stabbtn" id="stabbtn-centros-costo">Centros de costo</button>
           <button class="stabbtn" id="stabbtn-conceptos">Conceptos</button>
-          <button class="stabbtn" id="stabbtn-tipos-retencion">Tipos de retención</button>
-          <button class="stabbtn" id="stabbtn-conceptos-retencion">Conceptos de retención</button>
         </div>
         <div class="settings-tabs settings-subtabs" id="settings-subtabs-acceso" hidden>
           <button class="stabbtn" id="stabbtn-auth">Perfiles y permisos</button>
@@ -1811,39 +1513,11 @@
           </div>
           <div class="addrow"><button class="btn primary" id="new-concepto-btn">+ Nuevo concepto</button></div>
         </div>
-        <div id="stab-tipos-retencion" hidden>
-          <div class="sub" style="margin-bottom:10px;">Tipos de retención (ej: GA = Ganancias, IB = Ingresos Brutos, SU = SUSS).</div>
-          <div class="day-wrap">
-            <table class="day-table" id="tipos-retencion-table">
-              <thead><tr><th>Código</th><th>Descripción</th></tr></thead>
-              <tbody id="tipos-retencion-body"></tbody>
-            </table>
-          </div>
-          <div class="addrow"><button class="btn primary" id="new-tipo-retencion-btn">+ Nuevo tipo de retención</button></div>
-        </div>
-        <div id="stab-conceptos-retencion" hidden>
-          <div class="sub" style="margin-bottom:10px;">Conceptos de retención (ej: AL = Alquileres, HO = Honorarios, LO = Locación de servicios).</div>
-          <div class="day-wrap">
-            <table class="day-table" id="conceptos-retencion-table">
-              <thead><tr><th>Código</th><th>Descripción</th></tr></thead>
-              <tbody id="conceptos-retencion-body"></tbody>
-            </table>
-          </div>
-          <div class="addrow"><button class="btn primary" id="new-concepto-retencion-btn">+ Nuevo concepto de retención</button></div>
-        </div>
         <div id="stab-auth" hidden>
-          <div class="sub" style="margin-bottom:14px;">Cada perfil tiene sus propios permisos por pestaña. "Ver" deja mirar esa pestaña sin poder crear, editar ni borrar nada ahí; "Editar" da acceso completo; "Oculta" la esconde. Estos permisos los controla también la base de datos, no solo la pantalla.</div>
+          <div class="sub" style="margin-bottom:14px;">Cada perfil tiene su propia contraseña y sus propios permisos por pestaña. "Ver" deja mirar esa pestaña sin poder crear, editar ni borrar nada ahí; "Editar" da acceso completo. Los cambios se guardan recién al tocar "Guardar perfiles" — a quien uses una contraseña que cambiaste hay que avisarle la nueva.</div>
           <div id="roles-list"></div>
           <div class="addrow"><button class="btn" id="add-role-btn">+ Nuevo perfil</button></div>
           <div class="modal-actions"><div></div><button class="btn primary" id="auth-save-btn">Guardar perfiles</button></div>
-          <h4 class="acceso-h">Personas con acceso</h4>
-          <div class="sub" style="margin-bottom:8px;">Cada persona entra con su email y su propia contraseña. Para dar acceso a alguien nuevo hacen falta dos pasos: agregarla acá con su perfil, y crearle la cuenta en Supabase (Authentication &gt; Users).</div>
-          <div id="usuarios-list"></div>
-          <div class="addrow">
-            <input type="text" id="new-usuario-email" placeholder="email@anafer-ivess.com.ar" autocomplete="off">
-            <select id="new-usuario-perfil" class="scope-select"></select>
-            <button class="btn" id="add-usuario-btn">+ Agregar</button>
-          </div>
         </div>
         </div>
       </div>
@@ -1854,69 +1528,16 @@
 </div>
 
 <div class="overlay" id="login-overlay">
-  <div class="modal" id="login-modal" style="max-width:340px;">
+  <div class="modal" id="login-modal" style="max-width:320px;">
     <img class="brand-logo" style="height:44px; margin-bottom:10px;" src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI2LjMuMSwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgeD0iMHB4IiB5PSIwcHgiCgkgdmlld0JveD0iMCAwIDU5NS4zIDI3OS44IiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA1OTUuMyAyNzkuODsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMyMjNDN0U7fQoJLnN0MXtmaWxsOiMwMDlGRTM7fQoJLnN0MntmaWxsOiNFMzA2MTM7fQo8L3N0eWxlPgo8ZyBpZD0iTGF5ZXJfMiI+CjwvZz4KPGcgaWQ9IkxheWVyXzEiPgoJPGc+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTE3My42LDE2NS4ydi0xMC43Yy0yLDEtNC44LDEuOS04LjYsMi43bC05LjksMi4xYy00LjIsMC45LTcuMSwxLjktOC44LDMuMWMtMi41LDEuNi0zLjcsNC0zLjcsNy4zCgkJCWMwLDIuOCwxLjEsNSwzLjQsNi43YzIuMiwxLjcsNSwyLjYsOC40LDIuNmM0LjksMCw5LjEtMS4xLDEyLjgtMy4zQzE3MS40LDE3My4xLDE3My42LDE2OS42LDE3My42LDE2NS4yIE0xOTEuNywxMzkuOHYzOS42CgkJCWMwLDUuNSwwLjksOS43LDIuOCwxMi42aC0xOS4xYy0xLjItMS44LTEuOC00LTEuOC02LjhjLTcuMSw1LjgtMTUuMyw4LjYtMjQuNSw4LjZjLTcuMywwLTEzLjQtMi4yLTE4LjMtNi41CgkJCWMtNC44LTQuMy03LjMtMTAtNy4zLTE3LjFjMC0xMi43LDcuNi0yMC41LDIyLjktMjMuNWw3LjYtMS41YzUuMS0xLDExLjYtMi41LDE5LjYtNC40di0yLjJjMC02LjMtNC43LTkuNS0xNC4zLTkuNQoJCQljLTUuMiwwLTguOSwwLjgtMTAuOSwyLjVjLTIsMS43LTMsNC42LTMsOC44bC0xOC4xLTAuN2MwLTguMiwzLjMtMTQuNSw5LjgtMTguOWM1LjctMy44LDEzLjItNS42LDIyLjMtNS42CgkJCWM5LjgsMCwxNy4yLDEuNCwyMi4zLDQuM0MxODguMywxMjMuMywxOTEuNywxMzAuMSwxOTEuNywxMzkuOCIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0yMDIuNCwxOTMuNHYtNzUuMWgxOC4xdjcuNGgwLjNjNS02LjEsMTEuOS05LjIsMjAuNS05LjJjMTcuMiwwLDI1LjgsOC41LDI1LjgsMjUuNXY1MS40SDI0OXYtNDUuOQoJCQljMC05LTQuMi0xMy41LTEyLjUtMTMuNWMtNC43LDAtOC40LDEuNi0xMS4zLDQuN2MtMy4yLDMuNS00LjgsOC41LTQuOCwxNXYzOS42SDIwMi40eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0zMjMuNywxNjUuMnYtMTAuN2MtMiwxLTQuOSwxLjktOC42LDIuN2wtMTAsMi4xYy00LjEsMC45LTcuMSwxLjktOC44LDMuMWMtMi41LDEuNi0zLjcsNC0zLjcsNy4zCgkJCWMwLDIuOCwxLjEsNSwzLjMsNi43YzIuMiwxLjcsNSwyLjYsOC40LDIuNmM0LjksMCw5LjEtMS4xLDEyLjgtMy4zQzMyMS41LDE3My4xLDMyMy43LDE2OS42LDMyMy43LDE2NS4yIE0zNDEuOCwxMzkuOHYzOS42CgkJCWMwLDUuNSwwLjksOS43LDIuOCwxMi42aC0xOS4yYy0xLjItMS44LTEuOC00LTEuOC02LjhjLTcuMSw1LjgtMTUuMyw4LjYtMjQuNSw4LjZjLTcuMywwLTEzLjQtMi4yLTE4LjMtNi41CgkJCWMtNC45LTQuMy03LjMtMTAtNy4zLTE3LjFjMC0xMi43LDcuNi0yMC41LDIyLjktMjMuNWw3LjYtMS41YzUuMS0xLDExLjYtMi41LDE5LjYtNC40di0yLjJjMC02LjMtNC44LTkuNS0xNC4zLTkuNQoJCQljLTUuMiwwLTguOSwwLjgtMTAuOSwyLjVjLTIsMS43LTMsNC42LTMsOC44bC0xOC4xLTAuN2MwLTguMiwzLjMtMTQuNSw5LjgtMTguOWM1LjctMy44LDEzLjItNS42LDIyLjMtNS42CgkJCWM5LjgsMCwxNy4yLDEuNCwyMi4zLDQuM0MzMzguNCwxMjMuMywzNDEuOCwxMzAuMSwzNDEuOCwxMzkuOCIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0zNTUuMiwxOTMuOXYtNjJoLTExdi0xMy4xaDExdi0xMS45YzAtMTIuNSw3LjQtMTguNywyMi4xLTE4LjdjNC4yLDAsOC4yLDAuMiwxMi4yLDAuNXYxNS43CgkJCWMtMS45LTAuMy0zLjgtMC40LTUuOS0wLjRjLTYuOCwwLTEwLjIsMy4yLTEwLjIsOS41djUuM2gxNi4ydjEzLjFoLTE2LjJ2NjJIMzU1LjJ6Ii8+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTQwNy4zLDE0NC44aDM2LjVjMC0yLjktMS4zLTUuOC00LTguOWMtMy40LTMuOS03LjctNS45LTEzLjEtNS45Yy01LDAtOS4zLDEuNC0xMi44LDQuMgoJCQlDNDEwLjUsMTM3LjEsNDA4LjMsMTQwLjYsNDA3LjMsMTQ0LjggTTQ2Mi44LDE1OC44aC01NS41YzAuMSw1LjMsMi4yLDkuOCw2LjIsMTMuNGMzLjcsMy40LDguMSw1LjEsMTMuMiw1LjEKCQkJYzkuNCwwLDE2LjYtMy42LDIxLjctMTAuN2wxNS4zLDguOWMtOCwxMi4zLTIwLjQsMTguNC0zNywxOC40Yy0xMS45LDAtMjEuMy0zLjctMjguMy0xMS4zYy02LjgtNy4yLTEwLjEtMTYuNi0xMC4xLTI4LjEKCQkJYzAtMTEuNSwzLjQtMjAuOSwxMC4zLTI4LjNjNi45LTcuNCwxNi4zLTExLjEsMjguMS0xMS4xQzQ1MC44LDExNS4yLDQ2Mi44LDEyOS43LDQ2Mi44LDE1OC44Ii8+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTQ2OS41LDE5My40di03NS4xaDE4LjF2MTAuNGgwLjNjNC4xLTguMSwxMS44LTEyLjIsMjMuMi0xMi4ydjE4LjRjLTYuOCwwLTEyLjMsMS42LTE2LjMsNC45CgkJCWMtNC44LDMuOC03LjEsOS42LTcuMSwxNy4ydjM2LjRINDY5LjV6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTE1OC4yLDQyYy00Ny4zLTAuMy04NS45LDM3LjktODYuMSw4NS4yYy0wLjEsMjAuNCw3LDM5LjIsMTguOCw1NGwxNy41LTEyYy05LjUtMTEuMy0xNS4yLTI1LjktMTUuMS00MS44CgkJCWMwLjItMzUuNiwyOS4yLTY0LjMsNjQuOC02NC4xYzMuNywwLDcuMywwLjQsMTAuOCwxVjQyLjdDMTY1LjQsNDIuMiwxNjEuOCw0MiwxNTguMiw0MiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yMTEuOSw5OS40Yy0xNi45LTI5LjEtNTQuMy0zOS04My40LTIyLjFjLTEyLjYsNy4zLTIxLjUsMTguNS0yNi4zLDMxLjFsMTMuNyw2LjQKCQkJYzMuNS05LjksMTAuNC0xOC43LDIwLjItMjQuNGMyMS45LTEyLjcsNTAtNS4zLDYyLjcsMTYuNmMxLjMsMi4zLDIuNCw0LjYsMy4zLDdsMTMuMi03LjhDMjE0LjMsMTAzLjksMjEzLjIsMTAxLjYsMjExLjksOTkuNCIvPgoJCTxwYXRoIGNsYXNzPSJzdDIiIGQ9Ik0yMjEsMjIxLjVsLTY4LjIsMGMtNDkuMS0zLjItODcuOS00NC04Ny45LTkzLjljMC0xOS4zLDUuOC0zNy4yLDE1LjctNTIuMUw1NS40LDU3LjYKCQkJYy0xMy41LDIwLTIxLjQsNDQuMS0yMS40LDcwYzAsNjcsNTIuNywxMjEuNywxMTguOCwxMjQuOWw2OC4yLTAuMVYyMjEuNXoiLz4KCQk8cGF0aCBkPSJNMjMzLjgsMjQ1LjhoNC4yYzMuMywwLDQuNC0yLjIsNC40LTQuNmMwLTMuNC0yLjItNC44LTQuOS00LjhoLTMuN1YyNDUuOHogTTIzMy44LDIzNC4xaDMuNWMxLjMsMCw0LjMtMC4zLDQuMy00LjIKCQkJYzAtMi42LTEuMy00LjEtNC4zLTQuMWgtMy41VjIzNC4xeiBNMjMwLjcsMjIzLjNoNy43YzMuMywwLDYuNCwxLjUsNi40LDYuNGMwLDIuMy0xLjQsNC42LTMuNyw1LjJ2MC4xYzMuMSwwLjcsNC41LDMuMSw0LjUsNi4yCgkJCWMwLDUuMS0yLjksNy4yLTguMSw3LjJoLTYuOFYyMjMuM3oiLz4KCQk8cGF0aCBkPSJNMjUzLjUsMjM5aDYuN2wtMy4yLTEyLjFoLTAuMUwyNTMuNSwyMzl6IE0yNTUsMjIzLjNoNC4ybDYuOCwyNS4xaC0zLjJsLTEuOC02LjloLThsLTEuOSw2LjloLTMuMkwyNTUsMjIzLjN6Ii8+CgkJPHBhdGggZD0iTTI3OS42LDI0MS4yYzAsNC40LTEuMSw3LjctNi4zLDcuN2MtNC4yLDAtNS45LTIuNy01LjktNS43di0yLjFoM3YxLjhjMCwyLDAuOCwzLjQsMi45LDMuNGMyLjgsMCwzLjItMS44LDMuMi01LjN2LTE3LjgKCQkJaDMuMVYyNDEuMnoiLz4KCQk8cGF0aCBkPSJNMjg3LjYsMjM1LjhjMCw1LjgsMC42LDEwLjUsNC45LDEwLjVjNC4zLDAsNC45LTQuNyw0LjktMTAuNWMwLTUuOC0wLjYtMTAuNS00LjktMTAuNUMyODguMiwyMjUuMywyODcuNiwyMzAsMjg3LjYsMjM1LjgKCQkJIE0zMDAuNSwyMzUuOGMwLDYuMy0xLjIsMTMuMS04LjEsMTMuMWMtNi45LDAtOC4xLTYuNy04LjEtMTMuMWMwLTYuMywxLjItMTMsOC4xLTEzQzI5OS40LDIyMi44LDMwMC41LDIyOS41LDMwMC41LDIzNS44Ii8+CgkJPHBvbHlnb24gcG9pbnRzPSIzMTQuOCwyMjMuMyAzMTguOCwyMjMuMyAzMjcuMSwyNDQuMiAzMjcuMiwyNDQuMiAzMjcuMiwyMjMuMyAzMzAuMywyMjMuMyAzMzAuMywyNDguNCAzMjYsMjQ4LjQgMzE4LDIyOC4xCgkJCTMxNy45LDIyOC4xIDMxNy45LDI0OC40IDMxNC44LDI0OC40IAkJIi8+CgkJPHBhdGggZD0iTTMzOC4zLDIzNS44YzAsNS44LDAuNiwxMC41LDQuOCwxMC41YzQuMywwLDQuOS00LjcsNC45LTEwLjVjMC01LjgtMC42LTEwLjUtNC45LTEwLjVDMzM4LjgsMjI1LjMsMzM4LjMsMjMwLDMzOC4zLDIzNS44CgkJCSBNMzUxLjIsMjM1LjhjMCw2LjMtMS4yLDEzLjEtOC4xLDEzLjFjLTYuOSwwLTguMS02LjctOC4xLTEzLjFjMC02LjMsMS4xLTEzLDguMS0xM0MzNTAuMSwyMjIuOCwzNTEuMiwyMjkuNSwzNTEuMiwyMzUuOCIvPgoJCTxwYXRoIGQ9Ik0zNTkuMSwyMzQuN2gzLjFjMS44LDAsNS4yLDAsNS4yLTQuOWMwLTIuNS0xLjctNC00LjUtNGgtMy43VjIzNC43eiBNMzU2LDIyMy4zaDguMWMzLjksMCw2LjQsMi4zLDYuNCw2LjMKCQkJYzAsMi43LTEsNS42LTMuOSw2LjN2MC4xYzIuMiwwLjIsMy40LDIsMy42LDQuMmwwLjIsNC4zYzAuMSwyLjgsMC42LDMuNSwxLjMsNGgtMy43Yy0wLjUtMC41LTAuOC0yLjQtMC44LTMuNmwtMC4yLTMuOQoJCQljLTAuMi0zLjQtMi4xLTMuNi0zLjctMy42aC00LjJ2MTEuMkgzNTZWMjIzLjN6Ii8+CgkJPHBvbHlnb24gcG9pbnRzPSIzNzUuNCwyMjMuMyAzODAuNiwyMjMuMyAzODUuNiwyNDMuMiAzODUuNywyNDMuMiAzOTAuNywyMjMuMyAzOTUuOSwyMjMuMyAzOTUuOSwyNDguNCAzOTIuOCwyNDguNCAzOTIuOCwyMjYuNAoJCQkzOTIuOCwyMjYuNCAzODcuMiwyNDguNCAzODQuMSwyNDguNCAzNzguNiwyMjYuNCAzNzguNSwyMjYuNCAzNzguNSwyNDguNCAzNzUuNCwyNDguNCAJCSIvPgoJCTxwYXRoIGQ9Ik00MDQuNSwyMzloNi44bC0zLjItMTIuMUg0MDhMNDA0LjUsMjM5eiBNNDA2LjEsMjIzLjNoNC4xbDYuNywyNS4xaC0zLjJsLTEuOC02LjloLThsLTEuOSw2LjloLTMuM0w0MDYuMSwyMjMuM3oiLz4KCQk8cGF0aCBkPSJNNDMwLjQsMjI5LjhjMC0yLjYtMS00LjUtMy45LTQuNWMtMi42LDAtNC4xLDEuNC00LjEsNC4xYzAsNy4xLDExLjgsMi45LDExLjgsMTJjMCw1LjgtNC4yLDcuNS03LjgsNy41CgkJCWMtNS45LDAtNy42LTMtNy42LTguNGgzLjFjMCwyLjgsMC4xLDUuOCw0LjcsNS44YzIuNSwwLDQuNC0xLjgsNC40LTQuNGMwLTcuMS0xMS45LTMtMTEuOS0xMi4yYzAtMi4zLDEtNi45LDcuMy02LjkKCQkJYzQuOCwwLDcsMi40LDcsN0g0MzAuNHoiLz4KCQk8cmVjdCB4PSI0NDcuMiIgeT0iMjIwLjUiIHdpZHRoPSI2LjEiIGhlaWdodD0iMjcuOSIvPgoJCTxwb2x5Z29uIHBvaW50cz0iNDcyLjUsMjQ4LjQgNDY1LjUsMjQ4LjQgNDU2LjUsMjIwLjUgNDYyLjgsMjIwLjUgNDY5LDI0MC4xIDQ2OS4xLDI0MC4xIDQ3NS40LDIyMC41IDQ4MS43LDIyMC41IAkJIi8+CgkJPHBvbHlnb24gcG9pbnRzPSI0ODQuOSwyMjAuNSA1MDUuOCwyMjAuNSA1MDUuOCwyMjUuNiA0OTEsMjI1LjYgNDkxLDIzMS42IDUwNC41LDIzMS42IDUwNC41LDIzNi40IDQ5MSwyMzYuNCA0OTEsMjQzLjIKCQkJNTA2LjEsMjQzLjIgNTA2LjEsMjQ4LjQgNDg0LjksMjQ4LjQgCQkiLz4KCQk8cGF0aCBkPSJNNTE1LjIsMjM5LjFjMCwzLjcsMi45LDUuMiw2LjIsNS4yYzIuMiwwLDUuNC0wLjYsNS40LTMuNWMwLTMtNC4yLTMuNS04LjMtNC42Yy00LjEtMS4xLTguMy0yLjctOC4zLTcuOQoJCQljMC01LjcsNS40LTguNCwxMC40LTguNGM1LjgsMCwxMS4yLDIuNSwxMS4yLDloLTUuOWMtMC4yLTMuMy0yLjYtNC4yLTUuNS00LjJjLTEuOSwwLTQuMiwwLjgtNC4yLDMuMmMwLDIuMSwxLjMsMi40LDguMyw0LjIKCQkJYzIsMC41LDguMywxLjgsOC4zLDguMWMwLDUuMS00LDktMTEuNiw5Yy02LjIsMC0xMi0zLjEtMTEuOS05LjlINTE1LjJ6Ii8+CgkJPHBhdGggZD0iTTU0MS4zLDIzOS4xYzAsMy43LDIuOSw1LjIsNi4yLDUuMmMyLjIsMCw1LjQtMC42LDUuNC0zLjVjMC0zLTQuMi0zLjUtOC4zLTQuNmMtNC4xLTEuMS04LjMtMi43LTguMy03LjkKCQkJYzAtNS43LDUuNC04LjQsMTAuNC04LjRjNS44LDAsMTEuMiwyLjUsMTEuMiw5SDU1MmMtMC4yLTMuMy0yLjYtNC4yLTUuNS00LjJjLTIsMC00LjIsMC44LTQuMiwzLjJjMCwyLjEsMS4zLDIuNCw4LjMsNC4yCgkJCWMyLDAuNSw4LjMsMS44LDguMyw4LjFjMCw1LjEtNCw5LTExLjYsOWMtNi4yLDAtMTItMy4xLTExLjktOS45SDU0MS4zeiIvPgoJCTxwYXRoIGQ9Ik01MjEuMiwxNzQuNGMwLTIuNy0xLTQuNS00LTQuNWMtMi42LDAtNC4yLDEuNC00LjIsNC4xYzAsNy4yLDEyLDIuOSwxMiwxMi4yYzAsNS45LTQuMyw3LjYtNy45LDcuNmMtNiwwLTcuNy0zLjEtNy43LTguNQoJCQloMy4xYzAsMi45LDAuMiw1LjksNC44LDUuOWMyLjUsMCw0LjQtMS44LDQuNC00LjVjMC03LjItMTItMy0xMi0xMi40YzAtMi4zLDEtNyw3LjUtN2M0LjksMCw3LjEsMi40LDcuMSw3LjFINTIxLjJ6Ii8+CgkJPHJlY3QgeD0iNTI4LjgiIHk9IjE4OS41IiB3aWR0aD0iMy4zIiBoZWlnaHQ9IjMuOCIvPgoJCTxwYXRoIGQ9Ik01NDAuMiwxODMuOGg2LjlsLTMuMy0xMi4zaC0wLjFMNTQwLjIsMTgzLjh6IE01NDEuOCwxNjcuOWg0LjJsNi44LDI1LjVoLTMuM2wtMS44LTdoLTguMWwtMS45LDdoLTMuM0w1NDEuOCwxNjcuOXoiLz4KCQk8cmVjdCB4PSI1NTUuMiIgeT0iMTg5LjUiIHdpZHRoPSIzLjMiIGhlaWdodD0iMy44Ii8+Cgk8L2c+CjwvZz4KPC9zdmc+Cg==" alt="Anafer S.A.">
     <h3>Gestión Anafer</h3>
-    <div class="sub">Ingresá con tu email y tu contraseña</div>
-    <div class="field">
-      <label for="login-email">Email</label>
-      <input type="text" id="login-email" placeholder="nombre@anafer-ivess.com.ar" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false">
-    </div>
+    <div class="sub">Ingresá la contraseña de acceso</div>
     <div class="field">
       <label for="login-password">Contraseña</label>
       <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
     </div>
-    <div id="login-error" style="display:none; color:var(--danger); font-size:12.5px; margin:-6px 0 12px;"></div>
-    <div id="login-info" style="display:none; color:var(--ink-2); font-size:12.5px; margin:-6px 0 12px;"></div>
-    <div class="modal-actions"><button class="btn ghost" id="login-forgot" type="button">Olvidé mi contraseña</button><button class="btn primary" id="login-btn">Ingresar</button></div>
-  </div>
-</div>
-
-<div class="overlay" id="password-overlay">
-  <div class="modal" style="max-width:340px;">
-    <h3 id="password-title">Cambiar mi contraseña</h3>
-    <div class="sub">Elegí una contraseña nueva. Tiene que tener al menos 8 caracteres.</div>
-    <div class="field">
-      <label for="password-new">Contraseña nueva</label>
-      <input type="password" id="password-new" autocomplete="new-password">
-    </div>
-    <div class="field">
-      <label for="password-new2">Repetila</label>
-      <input type="password" id="password-new2" autocomplete="new-password">
-    </div>
-    <div id="password-error" style="display:none; color:var(--danger); font-size:12.5px; margin:-6px 0 12px;"></div>
-    <div class="modal-actions"><button class="btn ghost" id="password-cancel" type="button">Cancelar</button><button class="btn primary" id="password-save">Guardar</button></div>
-  </div>
-</div>
-
-
-<div class="overlay" id="help-overlay">
-  <div class="modal" id="help-modal">
-    <div class="help-head">
-      <h3>Ayuda</h3>
-      <div class="help-modes">
-        <button type="button" class="help-mode active" id="help-mode-guides">Guías</button>
-        <button type="button" class="help-mode" id="help-mode-chat">Preguntar</button>
-      </div>
-      <input type="search" id="help-search" placeholder="Buscar… (ej: proveedor, viaje)" autocomplete="off">
-      <button class="btn ghost" id="help-close" type="button" title="Cerrar">✕</button>
-    </div>
-    <div id="help-body-guides">
-      <div id="help-body">
-        <nav id="help-nav"></nav>
-        <div id="help-content">
-          <div id="help-empty">Elegí un tema a la izquierda o buscá arriba.</div>
-        </div>
-      </div>
-    </div>
-    <div id="help-body-chat" style="display:none;flex-direction:column;flex:1;min-height:0;">
-      <div id="help-chat-log"></div>
-      <div class="help-chat-input-row">
-        <input type="text" id="help-chat-input" placeholder="Ej: ¿cómo doy de alta un cliente / proveedor?" autocomplete="off">
-        <button class="btn primary" id="help-chat-send" type="button">Enviar</button>
-      </div>
-      <div class="help-chat-hint">Respondé con lenguaje natural. Si hay clave de Anthropic en config.js usa IA; si no, busca en las guías.</div>
-    </div>
+    <div id="login-error" style="display:none; color:var(--danger); font-size:12.5px; margin:-6px 0 12px;">Contraseña incorrecta.</div>
+    <div class="modal-actions"><div></div><button class="btn primary" id="login-btn">Ingresar</button></div>
   </div>
 </div>
 
