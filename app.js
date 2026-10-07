@@ -2971,7 +2971,8 @@
   }
   function proveedorNombre(id){
     var p = state.proveedores.find(function(x){ return x.id===id; });
-    return p ? p.nombre : '(proveedor eliminado)';
+    if(p) return p.nombre;
+    return state.proveedoresCargados ? '(proveedor eliminado)' : 'Cargando…';
   }
   function generateProveedorId(nombre){
     var base = slug(nombre);
@@ -3804,7 +3805,13 @@
     fetchAllRows('proveedores').then(function(res){
       if(res.error){ showToast('Error cargando proveedores: '+res.error.message); return; }
       state.proveedores = (res.data||[]).map(mapProveedorRow);
+      state.proveedoresCargados = true;
       renderCompras();
+      // Facturas y órdenes de pago muestran el nombre del proveedor: con
+      // 1000+ proveedores esta lista llega después que las facturas, así que
+      // hay que volver a dibujarlas (si no, quedaban como "proveedor eliminado").
+      renderPagos();
+      if(state.view==='dashboard') renderDashboard();
     });
     fetchAllRows('ordenes_compra').then(function(res){
       if(res.error){ showToast('Error cargando órdenes de compra: '+res.error.message); return; }
