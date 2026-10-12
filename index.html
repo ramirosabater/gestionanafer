@@ -247,7 +247,38 @@
   .overlay{position:fixed; inset:0; background:rgba(10,9,6,0.45); display:none; align-items:center; justify-content:center; z-index:50; padding:16px;}
   .overlay.show{display:flex;}
   /* Modales que se abren desde ⚙ (Configuración): van por encima de esa ventana */
-  #centro-costo-overlay, #concepto-overlay, #rubro-overlay{z-index:60;}
+  #centro-costo-overlay, #concepto-overlay, #rubro-overlay, #medio-overlay{z-index:60;}
+  /* Tesorería: entradas/salidas, conceptos de caja y cheques */
+  .tipo-toggle{display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:14px;}
+  .tipo-toggle button{border:none; background:var(--bg); color:var(--ink-2); padding:9px; font-family:inherit; font-size:13.5px; font-weight:600; cursor:pointer;}
+  .tipo-toggle button.on[data-tipo="ingreso"]{background:color-mix(in srgb, #1f9d55 16%, var(--surface)); color:#1a7f47;}
+  .tipo-toggle button.on[data-tipo="egreso"]{background:color-mix(in srgb, var(--danger) 12%, var(--surface)); color:var(--danger);}
+  .tipo-toggle button:disabled{cursor:default;}
+  .medio-nombre{font-weight:700; color:var(--danger); font-size:14px; padding:8px 0; text-transform:uppercase; letter-spacing:0.02em;}
+  .cheque-fields{border:1px dashed var(--border-strong); border-radius:10px; padding:10px 10px 0; margin-bottom:12px;}
+  .cheque-fields[hidden]{display:none;}
+  .chq-pick{padding:6px 8px; max-height:220px;}
+  .chq-pick label{display:flex; gap:8px; align-items:center; font-size:13px; padding:4px 0; text-transform:none; letter-spacing:0; color:var(--ink); cursor:pointer;}
+  .chq-pick label .imp{margin-left:auto; font-family:"IBM Plex Mono",monospace;}
+  .chq-pick .empty{font-size:12.5px; color:var(--muted); padding:4px 0;}
+  .pom-chq-total{text-transform:none; letter-spacing:0; font-weight:600; margin-left:6px;}
+  .pom-chq-total.bad{color:var(--danger);}
+  .mov-tipo{display:inline-flex; padding:2px 8px; border-radius:999px; font-size:10.5px; font-weight:700; white-space:nowrap;}
+  .mov-tipo.ingreso{background:color-mix(in srgb, #1f9d55 16%, var(--surface)); color:#1a7f47;}
+  .mov-tipo.egreso{background:color-mix(in srgb, var(--danger) 12%, var(--surface)); color:var(--danger);}
+  .monto-ingreso{color:#1a7f47;}
+  .chq-estado{display:inline-flex; padding:2px 8px; border-radius:999px; font-size:10.5px; font-weight:700; white-space:nowrap; background:var(--surface-2); color:var(--ink-2);}
+  .chq-estado.cartera{background:color-mix(in srgb, var(--accent) 14%, var(--surface)); color:var(--accent);}
+  .chq-estado.depositado, .chq-estado.recibido{background:color-mix(in srgb, #1f9d55 16%, var(--surface)); color:#1a7f47;}
+  .chq-estado.rechazado{background:color-mix(in srgb, var(--danger) 12%, var(--surface)); color:var(--danger);}
+  .chq-alcobro{font-size:10.5px; font-weight:700; color:#b7791f; margin-left:6px;}
+  .chq-detail{display:grid; grid-template-columns:auto 1fr; gap:4px 14px; font-size:13px; margin-bottom:12px;}
+  .chq-detail .k{color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; padding-top:2px;}
+  .chq-action{border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:12px;}
+  .chq-action[hidden]{display:none;}
+  .chq-action .lbl{font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); margin-bottom:8px;}
+  .chq-buttons{display:flex; gap:6px; flex-wrap:wrap;}
+  .chq-buttons button[hidden]{display:none;}
   #login-overlay{z-index:100; background:var(--bg);}
   .modal{background:var(--surface); border-radius:14px; box-shadow:var(--shadow); width:100%; max-width:380px; padding:20px; border:1px solid var(--border);}
   #cell-modal, #visit-modal{max-width:420px;}
@@ -895,23 +926,46 @@
     </div>
 
     <div class="compras-section-head">
-      <h3>Movimientos</h3>
+      <h3>Cartera de cheques <span class="prov-count" id="cheques-resumen"></span></h3>
       <div style="display:flex; gap:8px; align-items:center;">
+        <select id="cheque-filter-estado" class="scope-select" style="max-width:190px;">
+          <option value="cartera">En cartera</option>
+          <option value="">Todos</option>
+          <option value="depositado">Depositados</option>
+          <option value="entregado">Entregados</option>
+          <option value="rechazado">Rechazados</option>
+          <option value="recibido">Recibidos (sin cartera)</option>
+          <option value="emitido">Emitidos (propios)</option>
+        </select>
+      </div>
+    </div>
+    <div class="day-wrap">
+      <table class="day-table" id="cheques-table">
+        <thead><tr><th>Fecha cobro</th><th>Banco</th><th>N° cheque</th><th>Titular</th><th>Importe</th><th>Estado</th><th>Destino</th></tr></thead>
+        <tbody id="cheques-body"></tbody>
+      </table>
+    </div>
+
+    <div class="compras-section-head">
+      <h3>Movimientos</h3>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <select id="mov-filter-cuenta" class="scope-select" style="max-width:200px;">
           <option value="">Todas las cuentas</option>
         </select>
-        <button class="btn primary edit-action" id="new-movimiento-btn">+ Nuevo movimiento</button>
+        <button class="btn primary edit-action" id="new-entrada-btn">+ Entrada</button>
+        <button class="btn primary edit-action" id="new-movimiento-btn">+ Salida</button>
       </div>
     </div>
     <div class="day-wrap">
       <table class="day-table" id="movimientos-table">
-        <thead><tr><th>Fecha</th><th>Cuenta</th><th>Concepto</th><th>Origen</th><th>Monto</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Cuenta</th><th>Detalle</th><th>Origen</th><th>Importe</th></tr></thead>
         <tbody id="movimientos-body"></tbody>
       </table>
     </div>
 
     <div class="legend">
-      <div class="item">El saldo actual de cada cuenta es el saldo inicial menos todos sus egresos cargados</div>
+      <div class="item">El saldo actual de cada cuenta es el saldo inicial más sus entradas y menos sus salidas</div>
+      <div class="item">Los cheques de terceros que entran (concepto CHE) quedan en la cartera hasta que se depositan, se entregan a un proveedor en una orden de pago o se marcan como rechazados</div>
       <div class="item">Al marcar una orden de pago como Pagada se elige la cuenta y se genera el egreso automáticamente — esos movimientos no se pueden editar ni borrar desde acá, solo cambiando la orden de pago</div>
       <div class="item">Los movimientos cargados a mano (no ligados a una orden de pago) sí se pueden editar o borrar</div>
     </div>
@@ -1232,6 +1286,63 @@
   </div>
 </div>
 
+<div class="overlay" id="medio-overlay">
+  <div class="modal" id="medio-modal" style="max-width:420px;">
+    <h3 id="mcm-title">Nuevo concepto de caja</h3>
+    <div class="sub">Se usa en las entradas y salidas de Tesorería y en las órdenes de pago</div>
+    <div class="crew-fields">
+      <div class="field"><label for="mcm-codigo">Código</label><input type="text" id="mcm-codigo" maxlength="6" placeholder="Ej: TR4" style="text-transform:uppercase;"></div>
+      <div class="field"><label for="mcm-nombre">Concepto</label><input type="text" id="mcm-nombre" maxlength="40" placeholder="Ej: Transf. Bco Nación"></div>
+    </div>
+    <div class="field">
+      <label for="mcm-cuenta">Cuenta</label>
+      <select id="mcm-cuenta"></select>
+    </div>
+    <div class="field">
+      <label for="mcm-cheque">Cheques</label>
+      <select id="mcm-cheque">
+        <option value="no">No lleva datos de cheque</option>
+        <option value="cartera">Cheque de terceros (va a la cartera)</option>
+        <option value="datos">Pide datos del cheque / echeq (no va a cartera)</option>
+      </select>
+    </div>
+    <div class="field"><label style="display:flex; gap:8px; align-items:center; text-transform:none; letter-spacing:0; font-size:13px; color:var(--ink);"><input type="checkbox" id="mcm-activo" checked> Activo (aparece para elegir)</label></div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="mcm-cancel">Cancelar</button>
+        <button class="btn" id="mcm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="mcm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="cheque-overlay">
+  <div class="modal" id="cheque-modal" style="max-width:460px;">
+    <h3 id="chq-title">Cheque</h3>
+    <div class="sub" id="chq-sub">—</div>
+    <div class="chq-detail" id="chq-detail"></div>
+    <div class="chq-action" id="chq-deposito-box" hidden>
+      <div class="lbl">Depositar</div>
+      <div class="crew-fields">
+        <div class="field"><label for="chq-dep-cuenta">Cuenta donde se deposita</label><select id="chq-dep-cuenta"></select></div>
+        <div class="field"><label for="chq-dep-fecha">Fecha</label><input type="date" id="chq-dep-fecha"></div>
+      </div>
+      <button class="btn primary" type="button" id="chq-dep-confirm">Confirmar depósito</button>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="chq-cancel">Cerrar</button>
+      </div>
+      <div class="chq-buttons edit-action">
+        <button class="btn" id="chq-btn-rechazar" style="color:var(--danger);">Rechazado</button>
+        <button class="btn" id="chq-btn-deshacer">Deshacer</button>
+        <button class="btn primary" id="chq-btn-depositar">Depositar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="oc-overlay">
   <div class="modal" id="oc-modal" style="max-width:420px;">
     <h3 id="ocm-title">Nueva orden de compra</h3>
@@ -1379,13 +1490,8 @@
     <div class="crew-fields">
       <div class="field"><label for="pom-fecha">Fecha</label><input type="date" id="pom-fecha"></div>
       <div class="field">
-        <label for="pom-medio">Medio de pago</label>
-        <select id="pom-medio">
-          <option value="transferencia">Transferencia</option>
-          <option value="efectivo">Efectivo</option>
-          <option value="cheque">Cheque</option>
-          <option value="otro">Otro</option>
-        </select>
+        <label for="pom-medio">Concepto de pago</label>
+        <select id="pom-medio"></select>
       </div>
     </div>
     <div class="crew-fields">
@@ -1399,6 +1505,16 @@
       <div class="field" id="pom-cuenta-field" style="display:none;">
         <label for="pom-cuenta">Cuenta de pago</label>
         <select id="pom-cuenta"></select>
+      </div>
+    </div>
+    <div class="field" id="pom-cartera-field" hidden>
+      <label>Cheques de la cartera que se entregan <span class="pom-chq-total" id="pom-cartera-total"></span></label>
+      <div class="cargo-table-wrap chq-pick" id="pom-cartera-list"></div>
+    </div>
+    <div id="pom-chqdatos-field" hidden>
+      <div class="crew-fields">
+        <div class="field"><label for="pom-chq-numero">N° cheque / echeq</label><input type="text" id="pom-chq-numero" maxlength="20"></div>
+        <div class="field"><label for="pom-chq-fecha">Fecha de cobro</label><input type="date" id="pom-chq-fecha"></div>
       </div>
     </div>
     <div class="field">
@@ -1430,6 +1546,7 @@
         <select id="ctam-tipo">
           <option value="caja">Caja</option>
           <option value="banco">Banco</option>
+          <option value="cartera">Cartera de cheques</option>
         </select>
       </div>
       <div class="field"><label for="ctam-saldo-inicial">Saldo inicial</label><input type="text" id="ctam-saldo-inicial" inputmode="decimal" placeholder="0,00"></div>
@@ -1449,24 +1566,62 @@
 </div>
 
 <div class="overlay" id="movimiento-overlay">
-  <div class="modal" id="movimiento-modal" style="max-width:420px;">
+  <div class="modal wide" id="movimiento-modal" style="max-width:520px;">
     <h3 id="movm-title">Nuevo movimiento</h3>
-    <div class="sub">Egreso manual (no ligado a una orden de pago)</div>
+    <div class="sub" id="movm-sub">Movimiento de caja/banco</div>
+    <div class="modal-scroll-body">
+    <div class="tipo-toggle" id="movm-tipo-toggle">
+      <button type="button" data-tipo="ingreso">Entrada (DEBE)</button>
+      <button type="button" data-tipo="egreso">Salida (HABER)</button>
+    </div>
+    <div class="crew-fields">
+      <div class="field">
+        <label for="movm-medio">Concepto</label>
+        <select id="movm-medio"></select>
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <div class="medio-nombre" id="movm-medio-nombre"></div>
+      </div>
+    </div>
     <div class="field">
       <label for="movm-cuenta">Cuenta</label>
       <select id="movm-cuenta"></select>
     </div>
+
+    <div class="cheque-fields" id="movm-cheque-fields" hidden>
+      <div class="crew-fields">
+        <div class="field"><label for="movm-chq-banco">Banco</label><input type="text" id="movm-chq-banco" maxlength="40"></div>
+        <div class="field"><label for="movm-chq-numero">N° cheque</label><input type="text" id="movm-chq-numero" maxlength="20"></div>
+      </div>
+      <div class="crew-fields">
+        <div class="field"><label for="movm-chq-sucursal">Sucursal</label><input type="text" id="movm-chq-sucursal" maxlength="20"></div>
+        <div class="field"><label for="movm-chq-localidad">Localidad</label><input type="text" id="movm-chq-localidad" maxlength="40"></div>
+      </div>
+      <div class="crew-fields">
+        <div class="field"><label for="movm-chq-cuenta">N° cuenta</label><input type="text" id="movm-chq-cuenta" maxlength="30"></div>
+        <div class="field"><label for="movm-chq-fecha">Fecha del cheque (cobro)</label><input type="date" id="movm-chq-fecha"></div>
+      </div>
+      <div class="field"><label for="movm-chq-titular">Titular</label><input type="text" id="movm-chq-titular" maxlength="80"></div>
+    </div>
+
+    <div class="field" id="movm-cartera-field" hidden>
+      <label>Cheques de la cartera que salen</label>
+      <div class="cargo-table-wrap chq-pick" id="movm-cartera-list"></div>
+    </div>
+
     <div class="crew-fields">
       <div class="field"><label for="movm-fecha">Fecha</label><input type="date" id="movm-fecha"></div>
-      <div class="field"><label for="movm-monto">Monto</label><input type="text" id="movm-monto" inputmode="decimal" placeholder="0,00"></div>
+      <div class="field"><label for="movm-monto">Importe</label><input type="text" id="movm-monto" inputmode="decimal" placeholder="0,00"></div>
     </div>
     <div class="field">
-      <label for="movm-concepto">Concepto</label>
-      <input type="text" id="movm-concepto" maxlength="80" placeholder="Ej: Sueldos, Impuestos, Combustible">
+      <label for="movm-concepto">Detalle (opcional)</label>
+      <input type="text" id="movm-concepto" maxlength="80" placeholder="Ej: Cobranza cliente X, Sueldos, Impuestos">
     </div>
     <div class="field">
       <label for="movm-notas">Notas (opcional)</label>
       <textarea id="movm-notas" placeholder="Observaciones..."></textarea>
+    </div>
     </div>
     <div class="modal-actions">
       <div class="left">
@@ -1488,6 +1643,7 @@
         <button class="scatbtn active" id="scatbtn-flota"><span class="scat-icon">🚛</span> Flota y viajes</button>
         <button class="scatbtn" id="scatbtn-sucursales"><span class="scat-icon">🏢</span> Sucursales y empresas</button>
         <button class="scatbtn" id="scatbtn-compras"><span class="scat-icon">🧾</span> Compras</button>
+        <button class="scatbtn" id="scatbtn-tesoreria"><span class="scat-icon">💰</span> Tesorería</button>
         <button class="scatbtn" id="scatbtn-acceso"><span class="scat-icon">🔐</span> Acceso</button>
       </div>
 
@@ -1508,6 +1664,9 @@
           <button class="stabbtn" id="stabbtn-centros-costo">Centros de costo</button>
           <button class="stabbtn" id="stabbtn-conceptos">Conceptos</button>
           <button class="stabbtn" id="stabbtn-rubros">Rubros</button>
+        </div>
+        <div class="settings-tabs settings-subtabs" id="settings-subtabs-tesoreria" hidden>
+          <button class="stabbtn" id="stabbtn-medios-caja">Conceptos de caja</button>
         </div>
         <div class="settings-tabs settings-subtabs" id="settings-subtabs-acceso" hidden>
           <button class="stabbtn" id="stabbtn-auth">Perfiles y permisos</button>
@@ -1576,6 +1735,16 @@
             </table>
           </div>
           <div class="addrow"><button class="btn primary" id="new-rubro-btn">+ Nuevo rubro</button></div>
+        </div>
+        <div id="stab-medios-caja" hidden>
+          <div class="sub" style="margin-bottom:10px;">Conceptos para las entradas y salidas de caja (los códigos del sistema anterior). Cada uno va a su cuenta: al elegirlo en un movimiento o en una orden de pago, la cuenta se completa sola.</div>
+          <div class="day-wrap">
+            <table class="day-table" id="medios-caja-table">
+              <thead><tr><th>Código</th><th>Concepto</th><th>Cuenta</th><th>Cheque</th></tr></thead>
+              <tbody id="medios-caja-body"></tbody>
+            </table>
+          </div>
+          <div class="addrow"><button class="btn primary" id="new-medio-btn">+ Nuevo concepto de caja</button></div>
         </div>
         <div id="stab-auth" hidden>
           <div class="sub" style="margin-bottom:14px;">Cada perfil tiene su propia contraseña y sus propios permisos por pestaña. "Ver" deja mirar esa pestaña sin poder crear, editar ni borrar nada ahí; "Editar" da acceso completo. Los cambios se guardan recién al tocar "Guardar perfiles" — a quien uses una contraseña que cambiaste hay que avisarle la nueva.</div>

@@ -248,7 +248,8 @@
   var SETTINGS_TAB_PERMISOS = {
     routes:'grid', trucks:'grid', drivers:'grid', helpers:'grid', cargo:'grid',
     branches:'branches', companies:'company', occasionals:'occasional',
-    'centros-costo':'compras', conceptos:'compras', rubros:'compras'
+    'centros-costo':'compras', conceptos:'compras', rubros:'compras',
+    'medios-caja':'tesoreria'
   };
   function settingsTabVisible(t){
     if(t==='auth') return canManageAccess();
@@ -263,6 +264,7 @@
     {id:'flota',       label:'Flota y viajes',            tabs:['routes','trucks','drivers','helpers','cargo']},
     {id:'sucursales',  label:'Sucursales y empresas',     tabs:['branches','companies','occasionals']},
     {id:'compras',     label:'Compras',                   tabs:['centros-costo','conceptos','rubros']},
+    {id:'tesoreria',   label:'Tesorería',                 tabs:['medios-caja']},
     {id:'acceso',      label:'Acceso',                     tabs:['auth']}
   ];
   function settingsCategoryVisible(catId){
@@ -294,7 +296,7 @@
     });
   }
   function firstVisibleSettingsTab(){
-    var order = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','auth'];
+    var order = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','medios-caja','auth'];
     for(var i=0;i<order.length;i++){ if(settingsTabVisible(order[i])) return order[i]; }
     return 'auth';
   }
@@ -423,7 +425,15 @@
     movimientos: [],
     editingCuentaId: null,
     editingMovimientoId: null,
-    movFilterCuenta: ''
+    movFilterCuenta: '',
+    medios: [],               // conceptos de caja [{id, codigo, nombre, cuentaId, cheque:'no'|'cartera'|'datos', activo}]
+    cheques: [],
+    editingMedioId: null,
+    editingMovTipo: 'egreso', // 'ingreso' (DEBE) | 'egreso' (HABER)
+    editingMovCheques: [],    // cheques de cartera elegidos en una salida
+    editingChequeId: null,
+    chequeFilterEstado: 'cartera',
+    editingPagoCheques: []    // cheques de cartera elegidos en una orden de pago
   };
 
   try {
@@ -2237,7 +2247,7 @@
   }
 
   // ---------- Settings (ABM: rutas, camiones, choferes, ayudantes, etc.) ----------
-  var SETTINGS_ALL_TABS = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','auth'];
+  var SETTINGS_ALL_TABS = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','medios-caja','auth'];
   function switchSettingsTab(tab){
     refreshSettingsTabsVisibility();
     if(!settingsTabVisible(tab)) tab = firstVisibleSettingsTab();
@@ -4233,6 +4243,7 @@
     state.sb.from('ordenes_pago').upsert({
       id:p.id, numero:p.numero, proveedor_id:p.proveedorId||'', factura_ids:p.facturaIds||[],
       fecha:p.fecha||'', monto:p.monto||0, medio_pago:p.medioPago||'transferencia',
+      medio_id:p.medioId||null, cheque_ids:p.chequeIds||[],
       estado:p.estado||'pendiente', cuenta_id:p.cuentaId||null, notas:p.notas||'', who:p.who||''
     }).then(function(res){
       if(res.error) showToast('No se pudo guardar la orden de pago: '+res.error.message);
@@ -4243,6 +4254,7 @@
     return Array.prototype.slice.call(document.querySelectorAll('#pom-facturas-list input[type=checkbox]:checked')).map(function(c){ return c.value; });
   }
   function updatePagoMontoTotal(){
+    updatePomCarteraTotal();
     var ids = selectedPagoFacturaIds();
     var total = ids.reduce(function(s,id){ var f=facturaById(id); return s+(f?Number(f.monto||0):0); },0);
     document.getElementById('pom-monto-total').textContent = '$'+total.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -4284,7 +4296,52 @@
   function updatePomCuentaVisibility(){
     var show = document.getElementById('pom-estado').value === 'pagada';
     document.getElementById('pom-cuenta-field').style.display = show ? '' : 'none';
+    var md = medioById(document.getElementById('pom-medio').value);
+    var modo = md ? md.cheque : 'no';
+    document.getElementById('pom-cartera-field').hidden = !(show && modo==='cartera');
+    document.getElementById('pom-chqdatos-field').hidden = !(show && modo==='datos');
+    if(show && modo==='cartera') renderPomCarteraPick();
   }
+  // Cheques de cartera para entregar en la orden de pago: los que están en
+  // cartera + los que ya estaban entregados en esta misma orden.
+  function renderPomCarteraPick(){
+    var box = document.getElementById('pom-cartera-list');
+    var opId = state.editingPagoId;
+    var sel = state.editingPagoCheques || [];
+    var list = state.cheques.filter(function(c){ return c.estado==='cartera' || (opId && c.pagoId===opId && c.estado==='entregado'); })
+      .sort(function(a,b){ return (a.fechaCobro||'').localeCompare(b.fechaCobro||''); });
+    box.innerHTML = '';
+    if(!list.length) box.innerHTML = '<div class="empty">No hay cheques en cartera.</div>';
+    list.forEach(function(c){
+      var lab = document.createElement('label');
+      lab.innerHTML = '<input type="checkbox" value="'+esc(c.id)+'"'+(sel.indexOf(c.id)!==-1?' checked':'')+'> '
+        +esc(chequeResumen(c))+' · '+esc(c.titular||'')+' · cobro '+esc(c.fechaCobro||'—')+'<span class="imp">'+fmtMoney(c.importe)+'</span>';
+      lab.querySelector('input').addEventListener('change', function(){
+        state.editingPagoCheques = Array.prototype.map.call(box.querySelectorAll('input:checked'), function(i){ return i.value; });
+        updatePomCarteraTotal();
+      });
+      box.appendChild(lab);
+    });
+    updatePomCarteraTotal();
+  }
+  function pomTotalFacturas(){
+    return selectedPagoFacturaIds().reduce(function(s,id){ var f=facturaById(id); return s+(f?Number(f.monto||0):0); },0);
+  }
+  function pomTotalCheques(){
+    return (state.editingPagoCheques||[]).reduce(function(s,id){ var c=chequeById(id); return s+(c?Number(c.importe||0):0); },0);
+  }
+  function updatePomCarteraTotal(){
+    var el = document.getElementById('pom-cartera-total');
+    if(!el) return;
+    var tc = pomTotalCheques(), tf = pomTotalFacturas();
+    el.textContent = '— '+fmtMoney(tc)+' de '+fmtMoney(tf);
+    el.className = 'pom-chq-total'+(Math.abs(tc-tf)>=0.005 ? ' bad' : '');
+  }
+  document.getElementById('pom-medio').addEventListener('change', function(){
+    var md = medioById(this.value);
+    if(md && md.cuentaId && cuentaById(md.cuentaId)) document.getElementById('pom-cuenta').value = md.cuentaId;
+    updatePomCuentaVisibility();
+  });
   document.getElementById('pom-estado').addEventListener('change', updatePomCuentaVisibility);
 
   function openPagoModal(id){
@@ -4296,7 +4353,11 @@
     setProveedorComboValue('pom-proveedor', p ? p.proveedorId : '');
     renderPagoFacturasChecklist(p ? p.proveedorId : '', p ? (p.facturaIds||[]) : []);
     document.getElementById('pom-fecha').value = p ? (p.fecha||todayStr()) : todayStr();
-    document.getElementById('pom-medio').value = p ? (p.medioPago||'transferencia') : 'transferencia';
+    fillMedioSelect(document.getElementById('pom-medio'), p ? (p.medioId||'') : '', 'Elegir concepto de pago');
+    state.editingPagoCheques = p ? (p.chequeIds||[]).slice() : [];
+    var chqPropio = p ? chequeById(chequeIdOP(p.id)) : null;
+    document.getElementById('pom-chq-numero').value = chqPropio ? (chqPropio.numero||'') : '';
+    document.getElementById('pom-chq-fecha').value = chqPropio ? (chqPropio.fechaCobro||'') : '';
     document.getElementById('pom-estado').value = p ? (p.estado||'pendiente') : 'pendiente';
     document.getElementById('pom-cuenta').value = p ? (p.cuentaId||'') : '';
     updatePomCuentaVisibility();
@@ -4324,6 +4385,19 @@
     var cuentaId = document.getElementById('pom-cuenta').value || '';
     if(estado==='pagada' && !cuentaId){ showToast('Elegí de qué cuenta sale el pago.'); return; }
     var monto = facturaIds.reduce(function(s,id){ var f=facturaById(id); return s+(f?Number(f.monto||0):0); },0);
+    var medioId = document.getElementById('pom-medio').value || '';
+    var medioSel = medioById(medioId);
+    var modoPago = medioSel ? medioSel.cheque : 'no';
+    if(estado==='pagada' && !medioId){ showToast('Elegí el concepto de pago (TR1, CHE, ECS...).'); return; }
+    var chequeIdsPago = [];
+    if(estado==='pagada' && modoPago==='cartera'){
+      chequeIdsPago = (state.editingPagoCheques||[]).filter(function(id){ return !!chequeById(id); });
+      if(!chequeIdsPago.length){ showToast('Elegí los cheques de la cartera que se entregan.'); return; }
+      var totChq = chequeIdsPago.reduce(function(s,id){ return s+Number(chequeById(id).importe||0); },0);
+      if(Math.abs(totChq-monto)>=0.005){ showToast('Los cheques suman '+fmtMoney(totChq)+' y la orden '+fmtMoney(monto)+': tienen que coincidir.'); return; }
+    }
+    var chqNumero = document.getElementById('pom-chq-numero').value.trim();
+    if(estado==='pagada' && modoPago==='datos' && !chqNumero){ showToast('Ingresá el número de cheque / echeq.'); return; }
     var id = state.editingPagoId;
     var isNew = !id;
     var existing = id ? state.ordenesPago.find(function(x){ return x.id===id; }) : null;
@@ -4333,7 +4407,11 @@
       id:id, numero:numero, proveedorId:proveedorId, facturaIds:facturaIds,
       fecha: document.getElementById('pom-fecha').value || todayStr(),
       monto: monto,
-      medioPago: document.getElementById('pom-medio').value || 'transferencia',
+      medioPago: medioSel ? medioSel.codigo : (existing ? existing.medioPago : 'transferencia'),
+      medioId: medioId,
+      chequeIds: chequeIdsPago,
+      chequeNumero: chqNumero,
+      chequeFecha: document.getElementById('pom-chq-fecha').value || '',
       estado: estado,
       cuentaId: estado==='pagada' ? cuentaId : '',
       notas: document.getElementById('pom-notas').value.trim(),
@@ -4358,6 +4436,8 @@
     if(!id) return;
     var p = state.ordenesPago.find(function(x){ return x.id===id; });
     if(p) (p.facturaIds||[]).forEach(function(fid){ setFacturaEstado(fid, 'pendiente'); });
+    // Libera los cheques (vuelven a cartera / se borra el propio) y borra el egreso.
+    if(p) syncPagoMovimiento(Object.assign({}, p, {estado:'pendiente'}));
     if(movimientoById(movimientoIdForPago(id))) deleteMovimiento(movimientoIdForPago(id));
     state.ordenesPago = state.ordenesPago.filter(function(x){ return x.id!==id; });
     if(state.sb) state.sb.from('ordenes_pago').delete().eq('id', id).then(function(res){
@@ -4387,6 +4467,7 @@
       id:row.id, numero:row.numero||0, proveedorId:row.proveedor_id||'', facturaIds:row.factura_ids||[],
       fecha:row.fecha||'', monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0,
       medioPago:row.medio_pago||'transferencia', estado:row.estado||'pendiente', cuentaId:row.cuenta_id||'',
+      medioId:row.medio_id||'', chequeIds:Array.isArray(row.cheque_ids)?row.cheque_ids:[],
       notas:row.notas||'', who:row.who||''
     };
   }
@@ -4431,18 +4512,45 @@
   // usan un id determinístico ligado a esa OP, así siempre se puede
   // encontrar/actualizar/borrar el movimiento correspondiente a una OP dada.
   function movimientoIdForPago(pagoId){ return 'mov_op_'+pagoId; }
+  function cuentaTipoLabelFull(t){ return t==='banco' ? 'Banco' : (t==='cartera' ? 'Cartera de cheques' : 'Caja'); }
+  // Saldo: saldo inicial + entradas − salidas.
   function cuentaSaldoActual(cuentaId){
     var c = cuentaById(cuentaId);
     if(!c) return 0;
-    var egresos = state.movimientos.filter(function(m){ return m.cuentaId===cuentaId; })
-      .reduce(function(s,m){ return s+Number(m.monto||0); }, 0);
-    return Number(c.saldoInicial||0) - egresos;
+    var neto = state.movimientos.filter(function(m){ return m.cuentaId===cuentaId; })
+      .reduce(function(s,m){ return s + (m.tipo==='ingreso' ? 1 : -1)*Number(m.monto||0); }, 0);
+    return Number(c.saldoInicial||0) + neto;
   }
+
+  // ---------- Conceptos de caja (CHE, TR1, EF2...) ----------
+  function medioById(id){ return state.medios.find(function(x){ return x.id===id; }) || null; }
+  function medioLabel(id){ var m = medioById(id); return m ? (m.codigo+' — '+m.nombre) : ''; }
+  function medioCodigo(id){ var m = medioById(id); return m ? m.codigo : ''; }
+  function mediosOrdenados(incluirId){
+    return state.medios.filter(function(m){ return m.activo || m.id===incluirId; })
+      .sort(function(a,b){ return (a.codigo||'').localeCompare(b.codigo||''); });
+  }
+  function fillMedioSelect(sel, valor, placeholder){
+    sel.innerHTML = '<option value="">'+(placeholder||'Elegir concepto')+'</option>';
+    mediosOrdenados(valor).forEach(function(m){
+      var o = document.createElement('option'); o.value = m.id; o.textContent = m.codigo+' — '+m.nombre; sel.appendChild(o);
+    });
+    sel.value = valor || '';
+  }
+
+  // ---------- Cheques ----------
+  var CHEQUE_ESTADOS = {cartera:'En cartera', depositado:'Depositado', entregado:'Entregado', rechazado:'Rechazado', recibido:'Recibido', emitido:'Emitido'};
+  function chequeById(id){ return state.cheques.find(function(x){ return x.id===id; }) || null; }
+  function chequesEnCartera(){ return state.cheques.filter(function(c){ return c.estado==='cartera'; }); }
+  function newId(prefix){ return prefix+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6); }
+  function chequeResumen(c){ return (c.banco||'Cheque')+' N° '+(c.numero||'s/n'); }
 
   function renderTesoreria(){
     renderCuentasList();
     fillMovFilterCuentaSelect();
+    renderChequesList();
     renderMovimientosList();
+    renderMediosList();
   }
 
   function renderCuentasList(){
@@ -4460,7 +4568,7 @@
       var actual = cuentaSaldoActual(c.id);
       var actualStr = actual.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
       tr.innerHTML = '<td class="day-route">'+esc(c.nombre)+'</td>'
-        +'<td>'+cuentaTipoLabel(c.tipo)+'</td>'
+        +'<td>'+cuentaTipoLabelFull(c.tipo)+'</td>'
         +'<td class="num">$'+inicialStr+'</td>'
         +'<td class="num'+(actual<0?' cuenta-saldo-neg':'')+'">$'+actualStr+'</td>'
         +'<td class="day-note">'+esc(c.notas||'—')+'</td>';
@@ -4486,31 +4594,78 @@
     renderMovimientosList();
   });
 
+  function movimientoOrigen(m){
+    if(m.pagoId) return {label:'Orden de pago', auto:true};
+    if(m.id.indexOf('mov_chq_')===0) return {label:'Cheque', auto:true};
+    return {label:'Manual', auto:false};
+  }
   function renderMovimientosList(){
     var body = document.getElementById('movimientos-body');
     if(!body) return;
     body.innerHTML = '';
     var list = state.movimientos.slice();
     if(state.movFilterCuenta) list = list.filter(function(m){ return m.cuentaId===state.movFilterCuenta; });
-    list.sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
+    list.sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||'') || (b.id||'').localeCompare(a.id||''); });
     if(list.length===0){
-      body.innerHTML = '<tr class="day-row empty"><td colspan="5">No hay movimientos'+(state.movFilterCuenta?' en esta cuenta':' cargados')+'.</td></tr>';
+      body.innerHTML = '<tr class="day-row empty"><td colspan="7">No hay movimientos'+(state.movFilterCuenta?' en esta cuenta':' cargados')+'.</td></tr>';
       return;
     }
     list.forEach(function(m){
       var tr = document.createElement('tr');
       tr.className = 'day-row';
+      var ing = m.tipo==='ingreso';
       var montoStr = Number(m.monto||0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
-      var isAuto = !!m.pagoId;
+      var org = movimientoOrigen(m);
       tr.innerHTML = '<td class="num">'+esc(m.fecha||'—')+'</td>'
+        +'<td><span class="mov-tipo '+(ing?'ingreso':'egreso')+'">'+(ing?'Entrada':'Salida')+'</span></td>'
+        +'<td class="num" title="'+esc(medioLabel(m.medioId))+'">'+esc(medioCodigo(m.medioId)||'—')+'</td>'
         +'<td>'+esc(cuentaNombre(m.cuentaId))+'</td>'
         +'<td class="day-note">'+esc(m.concepto||'—')+'</td>'
-        +'<td><span class="mov-origen-badge'+(isAuto?' auto':'')+'">'+(isAuto?'Orden de pago':'Manual')+'</span></td>'
-        +'<td class="num">$'+montoStr+'</td>';
-      if(!isAuto) tr.addEventListener('click', function(){ openMovimientoModal(m.id); });
+        +'<td><span class="mov-origen-badge'+(org.auto?' auto':'')+'">'+org.label+'</span></td>'
+        +'<td class="num'+(ing?' monto-ingreso':'')+'">'+(ing?'+':'−')+'$'+montoStr+'</td>';
+      tr.addEventListener('click', function(){
+        if(m.pagoId){ showToast('Este movimiento viene de una orden de pago: se cambia desde Pagos.'); return; }
+        if(org.auto){ if((m.chequeIds||[])[0]) openChequeModal(m.chequeIds[0]); return; }
+        openMovimientoModal(m.id);
+      });
       body.appendChild(tr);
     });
   }
+
+  function renderChequesList(){
+    var body = document.getElementById('cheques-body');
+    if(!body) return;
+    body.innerHTML = '';
+    var cartera = chequesEnCartera();
+    var totalCartera = cartera.reduce(function(s,c){ return s+Number(c.importe||0); }, 0);
+    document.getElementById('cheques-resumen').textContent = cartera.length ? '('+cartera.length+' en cartera · '+fmtMoney(totalCartera)+')' : '';
+    var f = state.chequeFilterEstado;
+    var list = state.cheques.filter(function(c){ return !f || c.estado===f; });
+    list.sort(function(a,b){ return (a.fechaCobro||'9999').localeCompare(b.fechaCobro||'9999'); });
+    if(list.length===0){
+      body.innerHTML = '<tr class="day-row empty"><td colspan="7">'+(f==='cartera' ? 'No hay cheques en cartera.' : 'No hay cheques'+(f?' en ese estado':'')+'.')+'</td></tr>';
+      return;
+    }
+    var hoy = todayStr();
+    list.forEach(function(c){
+      var tr = document.createElement('tr');
+      tr.className = 'day-row';
+      var alCobro = c.estado==='cartera' && c.fechaCobro && c.fechaCobro<=hoy;
+      tr.innerHTML = '<td class="num">'+esc(c.fechaCobro||'—')+(alCobro?'<span class="chq-alcobro">AL COBRO</span>':'')+'</td>'
+        +'<td>'+esc(c.banco||'—')+'</td>'
+        +'<td class="num">'+esc(c.numero||'—')+'</td>'
+        +'<td>'+esc(c.titular||'—')+'</td>'
+        +'<td class="num">'+fmtMoney(c.importe)+'</td>'
+        +'<td><span class="chq-estado '+esc(c.estado)+'">'+(CHEQUE_ESTADOS[c.estado]||c.estado)+'</span></td>'
+        +'<td class="day-note">'+esc(c.destino||'—')+'</td>';
+      tr.addEventListener('click', function(){ openChequeModal(c.id); });
+      body.appendChild(tr);
+    });
+  }
+  document.getElementById('cheque-filter-estado').addEventListener('change', function(){
+    state.chequeFilterEstado = this.value;
+    renderChequesList();
+  });
 
   function writeCuenta(c){
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
@@ -4578,11 +4733,16 @@
   function writeMovimiento(m){
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
     state.sb.from('movimientos').upsert({
-      id:m.id, cuenta_id:m.cuentaId||'', fecha:m.fecha||'', concepto:m.concepto||'', monto:m.monto||0,
-      pago_id:m.pagoId||null, notas:m.notas||''
+      id:m.id, cuenta_id:m.cuentaId||null, fecha:m.fecha||null, concepto:m.concepto||'', monto:m.monto||0,
+      pago_id:m.pagoId||null, notas:m.notas||'', tipo:m.tipo||'egreso', medio_id:m.medioId||null, cheque_ids:m.chequeIds||[]
     }).then(function(res){
       if(res.error) showToast('No se pudo guardar el movimiento: '+res.error.message);
     });
+  }
+  function upsertMovimientoLocal(m){
+    var idx = state.movimientos.findIndex(function(x){ return x.id===m.id; });
+    if(idx>=0) state.movimientos[idx]=m; else state.movimientos.push(m);
+    writeMovimiento(m);
   }
   function deleteMovimiento(id){
     state.movimientos = state.movimientos.filter(function(x){ return x.id!==id; });
@@ -4590,20 +4750,68 @@
       if(res.error) showToast('No se pudo eliminar el movimiento: '+res.error.message);
     });
   }
-  // Mantiene sincronizado el egreso automático de una orden de pago: lo
-  // crea/actualiza si la OP queda Pagada (con una cuenta elegida) y lo
-  // elimina si deja de estar pagada o se borra la OP.
+  function writeCheque(c){
+    var idx = state.cheques.findIndex(function(x){ return x.id===c.id; });
+    if(idx>=0) state.cheques[idx]=c; else state.cheques.push(c);
+    if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
+    state.sb.from('cheques').upsert({
+      id:c.id, medio_id:c.medioId||null, banco:c.banco||'', sucursal:c.sucursal||'', localidad:c.localidad||'',
+      numero:c.numero||'', nro_cuenta:c.nroCuenta||'', titular:c.titular||'', fecha_cobro:c.fechaCobro||null,
+      importe:c.importe||0, estado:c.estado||'cartera', fecha_ingreso:c.fechaIngreso||null, cuenta_id:c.cuentaId||null,
+      mov_ingreso_id:c.movIngresoId||null, fecha_salida:c.fechaSalida||null, destino:c.destino||'',
+      pago_id:c.pagoId||null, proveedor_id:c.proveedorId||null, mov_salida_id:c.movSalidaId||null, notas:c.notas||''
+    }).then(function(res){
+      if(res.error) showToast('No se pudo guardar el cheque: '+res.error.message);
+    });
+  }
+  function deleteCheque(id){
+    state.cheques = state.cheques.filter(function(x){ return x.id!==id; });
+    if(state.sb) state.sb.from('cheques').delete().eq('id', id).then(function(res){
+      if(res.error) showToast('No se pudo eliminar el cheque: '+res.error.message);
+    });
+  }
+  // Un cheque de cartera vuelve a la cartera (se deshace una entrega).
+  function chequeVolverACartera(c){
+    var ing = c.movIngresoId ? movimientoById(c.movIngresoId) : null;
+    writeCheque(Object.assign({}, c, {estado:'cartera', fechaSalida:'', destino:'', pagoId:'', proveedorId:'', movSalidaId:'',
+      cuentaId: ing ? ing.cuentaId : (c.cuentaId||'')}));
+  }
+
+  // ---------- Orden de pago -> egreso automático + cheques ----------
+  function chequeIdOP(pagoId){ return 'chq_op_'+pagoId; }
   function syncPagoMovimiento(pago){
     var movId = movimientoIdForPago(pago.id);
-    if(pago.estado==='pagada' && pago.cuentaId){
-      var m = {
-        id:movId, cuentaId:pago.cuentaId, fecha:pago.fecha||todayStr(),
+    var medio = medioById(pago.medioId);
+    var modo = medio ? medio.cheque : 'no';
+    var pagada = pago.estado==='pagada' && pago.cuentaId;
+    // Cheques de cartera: los de esta OP quedan entregados; los que estaban
+    // en esta OP y ya no, vuelven a la cartera.
+    var quedan = pagada && modo==='cartera' ? (pago.chequeIds||[]) : [];
+    state.cheques.filter(function(c){ return c.pagoId===pago.id && c.estado==='entregado' && quedan.indexOf(c.id)===-1; })
+      .forEach(chequeVolverACartera);
+    quedan.forEach(function(cid){
+      var c = chequeById(cid);
+      if(!c) return;
+      writeCheque(Object.assign({}, c, {estado:'entregado', pagoId:pago.id, proveedorId:pago.proveedorId,
+        fechaSalida:pago.fecha||todayStr(), destino:'Entregado a '+proveedorNombre(pago.proveedorId)+' ('+pagoNumeroLabel(pago.numero)+')'}));
+    });
+    // Cheque/echeq propio emitido para pagar (modo "datos").
+    var chqPropioId = chequeIdOP(pago.id);
+    if(pagada && modo==='datos'){
+      var prev = chequeById(chqPropioId) || {};
+      writeCheque(Object.assign({}, prev, {id:chqPropioId, medioId:pago.medioId, banco:medio.nombre, numero:pago.chequeNumero||prev.numero||'',
+        fechaCobro:pago.chequeFecha||prev.fechaCobro||'', importe:pago.monto||0, estado:'emitido', titular:'Anafer',
+        fechaSalida:pago.fecha||todayStr(), pagoId:pago.id, proveedorId:pago.proveedorId,
+        destino:'Emitido a '+proveedorNombre(pago.proveedorId)+' ('+pagoNumeroLabel(pago.numero)+')', cuentaId:pago.cuentaId}));
+    } else if(chequeById(chqPropioId)) deleteCheque(chqPropioId);
+
+    if(pagada){
+      upsertMovimientoLocal({
+        id:movId, cuentaId:pago.cuentaId, fecha:pago.fecha||todayStr(), tipo:'egreso', medioId:pago.medioId||'',
         concepto:'Pago '+pagoNumeroLabel(pago.numero)+' — '+proveedorNombre(pago.proveedorId),
-        monto:pago.monto||0, pagoId:pago.id, notas:''
-      };
-      var idx = state.movimientos.findIndex(function(x){ return x.id===movId; });
-      if(idx>=0) state.movimientos[idx]=m; else state.movimientos.push(m);
-      writeMovimiento(m);
+        monto:pago.monto||0, pagoId:pago.id, notas:'',
+        chequeIds: modo==='cartera' ? quedan.slice() : (modo==='datos' ? [chqPropioId] : [])
+      });
     } else {
       if(movimientoById(movId)) deleteMovimiento(movId);
     }
@@ -4613,63 +4821,324 @@
     fillSelect(sel, state.cuentas.slice().sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); }), 'id', 'nombre', 'Elegir cuenta');
   }
 
-  function openMovimientoModal(id){
+  // ---------- Movimiento manual: entrada (DEBE) / salida (HABER) ----------
+  function movTipoActual(){ return state.editingMovTipo || 'egreso'; }
+  function movMedioModo(){ var md = medioById(document.getElementById('movm-medio').value); return md ? md.cheque : 'no'; }
+  function setMovTipo(tipo){
+    state.editingMovTipo = tipo;
+    Array.prototype.forEach.call(document.querySelectorAll('#movm-tipo-toggle button'), function(b){ b.classList.toggle('on', b.dataset.tipo===tipo); });
+    refreshMovModalFields();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#movm-tipo-toggle button'), function(b){
+    b.addEventListener('click', function(){ if(!this.disabled) setMovTipo(this.dataset.tipo); });
+  });
+  function refreshMovModalFields(){
+    var md = medioById(document.getElementById('movm-medio').value);
+    document.getElementById('movm-medio-nombre').textContent = md ? md.nombre : '';
+    var modo = md ? md.cheque : 'no';
+    var tipo = movTipoActual();
+    // Datos del cheque: entrada con cheque (cartera o datos) o salida con
+    // cheque/echeq propio. Salida con cheques de cartera: se eligen de la lista.
+    var conDatos = (modo==='cartera' && tipo==='ingreso') || modo==='datos';
+    var deCartera = modo==='cartera' && tipo==='egreso';
+    document.getElementById('movm-cheque-fields').hidden = !conDatos;
+    document.getElementById('movm-cartera-field').hidden = !deCartera;
+    var montoInp = document.getElementById('movm-monto');
+    montoInp.readOnly = deCartera;
+    if(deCartera) renderMovCarteraPick();
+  }
+  function renderMovCarteraPick(){
+    var box = document.getElementById('movm-cartera-list');
+    var movId = state.editingMovimientoId;
+    var sel = state.editingMovCheques || [];
+    var list = state.cheques.filter(function(c){ return c.estado==='cartera' || (movId && c.movSalidaId===movId); })
+      .sort(function(a,b){ return (a.fechaCobro||'').localeCompare(b.fechaCobro||''); });
+    box.innerHTML = '';
+    if(!list.length){ box.innerHTML = '<div class="empty">No hay cheques en cartera.</div>'; }
+    list.forEach(function(c){
+      var lab = document.createElement('label');
+      lab.innerHTML = '<input type="checkbox" value="'+esc(c.id)+'"'+(sel.indexOf(c.id)!==-1?' checked':'')+'> '
+        +esc(chequeResumen(c))+' · '+esc(c.titular||'')+' · cobro '+esc(c.fechaCobro||'—')+'<span class="imp">'+fmtMoney(c.importe)+'</span>';
+      lab.querySelector('input').addEventListener('change', function(){
+        var ids = Array.prototype.map.call(box.querySelectorAll('input:checked'), function(i){ return i.value; });
+        state.editingMovCheques = ids;
+        var total = ids.reduce(function(s,id){ var ch = chequeById(id); return s+(ch?Number(ch.importe||0):0); }, 0);
+        document.getElementById('movm-monto').value = total ? fmtMontoInput(total) : '';
+      });
+      box.appendChild(lab);
+    });
+  }
+  document.getElementById('movm-medio').addEventListener('change', function(){
+    var md = medioById(this.value);
+    if(md && md.cuentaId && cuentaById(md.cuentaId)) document.getElementById('movm-cuenta').value = md.cuentaId;
+    refreshMovModalFields();
+  });
+  var MOV_CHQ_FIELDS = {banco:'movm-chq-banco', numero:'movm-chq-numero', sucursal:'movm-chq-sucursal', localidad:'movm-chq-localidad', nroCuenta:'movm-chq-cuenta', fechaCobro:'movm-chq-fecha', titular:'movm-chq-titular'};
+  function openMovimientoModal(id, tipoNuevo){
     fillMovimientoCuentaSelect(document.getElementById('movm-cuenta'));
     state.editingMovimientoId = id || null;
     var m = id ? movimientoById(id) : null;
-    document.getElementById('movm-title').textContent = m ? 'Editar movimiento' : 'Nuevo movimiento';
+    var tipo = m ? (m.tipo||'egreso') : (tipoNuevo||'egreso');
+    fillMedioSelect(document.getElementById('movm-medio'), m ? m.medioId : '');
+    document.getElementById('movm-title').textContent = m ? 'Editar movimiento' : (tipo==='ingreso' ? 'Nueva entrada' : 'Nueva salida');
+    document.getElementById('movm-sub').textContent = tipo==='ingreso' ? 'Entrada de caja (DEBE)' : 'Salida de caja (HABER)';
     document.getElementById('movm-cuenta').value = m ? m.cuentaId : '';
     document.getElementById('movm-fecha').value = m ? (m.fecha||todayStr()) : todayStr();
-    document.getElementById('movm-monto').value = m ? String(m.monto||0).replace('.',',') : '';
+    document.getElementById('movm-monto').value = m ? fmtMontoInput(m.monto||0) : '';
     document.getElementById('movm-concepto').value = m ? (m.concepto||'') : '';
     document.getElementById('movm-notas').value = m ? (m.notas||'') : '';
+    // Datos del cheque ligado (si hay uno solo con datos: entrada o propio)
+    var chq = null;
+    if(m && (m.chequeIds||[]).length){
+      var c0 = chequeById(m.chequeIds[0]);
+      if(c0 && (c0.movIngresoId===m.id || c0.estado==='emitido')) chq = c0;
+    }
+    Object.keys(MOV_CHQ_FIELDS).forEach(function(k){ document.getElementById(MOV_CHQ_FIELDS[k]).value = chq ? (chq[k]||'') : ''; });
+    state.editingMovCheques = m ? (m.chequeIds||[]).slice() : [];
+    // Un movimiento con cheques ya cargados no cambia de tipo ni de concepto
+    // (se borra y se carga de nuevo); el resto de los datos sí se edita.
+    var bloquear = !!(m && (m.chequeIds||[]).length);
+    Array.prototype.forEach.call(document.querySelectorAll('#movm-tipo-toggle button'), function(b){ b.disabled = !!m; });
+    document.getElementById('movm-medio').disabled = bloquear;
+    // Si el cheque de una entrada ya salió de la cartera, sus datos e importe quedan fijos.
+    var chqFijo = !!(chq && chq.movIngresoId===m.id && ['cartera','recibido'].indexOf(chq.estado)===-1);
+    Object.keys(MOV_CHQ_FIELDS).forEach(function(k){ document.getElementById(MOV_CHQ_FIELDS[k]).disabled = chqFijo; });
+    document.getElementById('movm-monto').disabled = chqFijo;
     document.getElementById('movm-delete').style.display = m ? '' : 'none';
+    setMovTipo(tipo);
     document.getElementById('movimiento-overlay').classList.add('show');
   }
   function closeMovimientoModal(){
     document.getElementById('movimiento-overlay').classList.remove('show');
   }
 
-  document.getElementById('new-movimiento-btn').addEventListener('click', function(){ openMovimientoModal(null); });
+  document.getElementById('new-movimiento-btn').addEventListener('click', function(){ openMovimientoModal(null, 'egreso'); });
+  document.getElementById('new-entrada-btn').addEventListener('click', function(){ openMovimientoModal(null, 'ingreso'); });
   document.getElementById('movm-cancel').addEventListener('click', closeMovimientoModal);
   document.getElementById('movimiento-overlay').addEventListener('click', function(e){ if(e.target===this) closeMovimientoModal(); });
   document.getElementById('movm-save').addEventListener('click', function(){
+    var tipo = movTipoActual();
+    var medioId = document.getElementById('movm-medio').value;
+    if(!medioId){ showToast('Elegí el concepto (CHE, TR1, EF2...).'); return; }
+    var medio = medioById(medioId);
+    var modo = medio ? medio.cheque : 'no';
     var cuentaId = document.getElementById('movm-cuenta').value;
     if(!cuentaId){ showToast('Elegí una cuenta.'); return; }
-    var montoRaw = document.getElementById('movm-monto').value.replace(',','.').trim();
-    var monto = parseFloat(montoRaw);
-    if(isNaN(monto) || monto<=0){ showToast('Ingresá un monto válido.'); return; }
-    var concepto = document.getElementById('movm-concepto').value.trim();
-    if(!concepto){ showToast('Ingresá un concepto.'); return; }
+    var monto = parseMontoInput(document.getElementById('movm-monto').value);
     var id = state.editingMovimientoId;
     var isNew = !id;
     var existing = id ? movimientoById(id) : null;
     if(existing && existing.pagoId){ showToast('Este movimiento viene de una orden de pago y no se puede editar acá.'); return; }
-    if(isNew) id = 'mov_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6);
+    if(isNew) id = newId('mov_');
+    var fecha = document.getElementById('movm-fecha').value || todayStr();
+    var detalle = document.getElementById('movm-concepto').value.trim();
+    var chequeIds = [];
+    var conDatos = (modo==='cartera' && tipo==='ingreso') || modo==='datos';
+    var deCartera = modo==='cartera' && tipo==='egreso';
+    if(deCartera){
+      chequeIds = (state.editingMovCheques||[]).filter(function(cid){ return !!chequeById(cid); });
+      if(!chequeIds.length){ showToast('Elegí los cheques de la cartera que salen.'); return; }
+      monto = chequeIds.reduce(function(s,cid){ return s+Number(chequeById(cid).importe||0); }, 0);
+    }
+    if(isNaN(monto) || monto<=0){ showToast('Ingresá un importe válido.'); return; }
+    var datos = {};
+    if(conDatos){
+      Object.keys(MOV_CHQ_FIELDS).forEach(function(k){ datos[k] = document.getElementById(MOV_CHQ_FIELDS[k]).value.trim(); });
+      if(!datos.numero){ showToast('Ingresá el número de cheque.'); return; }
+      if(!datos.banco){ showToast('Ingresá el banco del cheque.'); return; }
+    }
+    // Cheque con datos (entrada a cartera / recibido / propio emitido)
+    if(conDatos){
+      var prevId = existing && (existing.chequeIds||[])[0];
+      var prev = prevId ? chequeById(prevId) : null;
+      var chqId = prev ? prev.id : newId('chq_');
+      var fijo = prev && prev.movIngresoId===id && ['cartera','recibido'].indexOf(prev.estado)===-1;
+      if(fijo){ monto = Number(prev.importe||0); }
+      else {
+        var c = Object.assign({}, prev||{}, datos, {id:chqId, medioId:medioId, importe:monto});
+        if(tipo==='ingreso'){
+          Object.assign(c, {estado: modo==='cartera' ? 'cartera' : 'recibido', fechaIngreso:fecha, cuentaId:cuentaId, movIngresoId:id,
+            destino: modo==='cartera' ? '' : 'Acreditado en '+cuentaNombre(cuentaId)});
+        } else {
+          Object.assign(c, {estado:'emitido', fechaSalida:fecha, cuentaId:cuentaId, movSalidaId:id, destino: detalle ? 'Emitido: '+detalle : 'Emitido'});
+          if(!c.titular) c.titular = 'Anafer';
+        }
+        writeCheque(c);
+      }
+      chequeIds = [chqId];
+    }
+    if(!detalle){
+      detalle = conDatos ? (medio.nombre+' — '+(datos.banco||'')+' N° '+(datos.numero||'')) : (medio ? medio.nombre : '');
+    }
+    // Salida con cheques de cartera: los elegidos quedan entregados, los que se destildaron vuelven.
+    if(deCartera){
+      state.cheques.filter(function(c){ return c.movSalidaId===id && chequeIds.indexOf(c.id)===-1; }).forEach(chequeVolverACartera);
+      chequeIds.forEach(function(cid){
+        var c = chequeById(cid);
+        writeCheque(Object.assign({}, c, {estado:'entregado', fechaSalida:fecha, movSalidaId:id, destino:'Salida: '+detalle}));
+      });
+    }
     var m = {
-      id:id, cuentaId:cuentaId,
-      fecha: document.getElementById('movm-fecha').value || todayStr(),
-      concepto: concepto,
-      monto: monto,
-      pagoId: '',
-      notas: document.getElementById('movm-notas').value.trim()
+      id:id, cuentaId:cuentaId, fecha:fecha, concepto:detalle, monto:monto, pagoId:'',
+      notas: document.getElementById('movm-notas').value.trim(), tipo:tipo, medioId:medioId, chequeIds:chequeIds
     };
-    if(isNew) state.movimientos.push(m);
-    else { var idx = state.movimientos.findIndex(function(x){ return x.id===id; }); if(idx>=0) state.movimientos[idx]=m; }
-    writeMovimiento(m);
+    upsertMovimientoLocal(m);
     closeMovimientoModal();
     renderTesoreria();
-    showToast('Movimiento guardado.');
+    showToast(tipo==='ingreso' ? 'Entrada guardada.' : 'Salida guardada.');
   });
   document.getElementById('movm-delete').addEventListener('click', function(){
     var id = state.editingMovimientoId;
     if(!id) return;
-    var existing = movimientoById(id);
-    if(existing && existing.pagoId){ showToast('Este movimiento viene de una orden de pago y no se puede borrar acá.'); return; }
+    var m = movimientoById(id);
+    if(!m) return;
+    if(m.pagoId){ showToast('Este movimiento viene de una orden de pago y no se puede borrar acá.'); return; }
+    var chqs = (m.chequeIds||[]).map(chequeById).filter(Boolean);
+    // Entrada con cheque: solo si el cheque sigue en cartera (o era solo registro).
+    var trabado = chqs.find(function(c){ return c.movIngresoId===id && ['cartera','recibido'].indexOf(c.estado)===-1; });
+    if(trabado){ showToast('No se puede borrar: el cheque ya está '+(CHEQUE_ESTADOS[trabado.estado]||trabado.estado).toLowerCase()+'. Deshacé eso primero.'); return; }
+    chqs.forEach(function(c){
+      if(c.movIngresoId===id || c.estado==='emitido') deleteCheque(c.id);
+      else if(c.movSalidaId===id) chequeVolverACartera(c);
+    });
     deleteMovimiento(id);
     closeMovimientoModal();
     renderTesoreria();
     showToast('Movimiento eliminado.');
+  });
+
+  // ---------- Detalle de cheque: depositar / rechazar / deshacer ----------
+  function openChequeModal(id){
+    var c = chequeById(id);
+    if(!c) return;
+    state.editingChequeId = id;
+    document.getElementById('chq-title').textContent = chequeResumen(c);
+    document.getElementById('chq-sub').innerHTML = '<span class="chq-estado '+esc(c.estado)+'">'+(CHEQUE_ESTADOS[c.estado]||c.estado)+'</span> '+esc(c.destino||'');
+    var rows = [['Importe', fmtMoney(c.importe)], ['Fecha de cobro', c.fechaCobro||'—'], ['Titular', c.titular||'—'],
+      ['Banco', c.banco||'—'], ['Sucursal', c.sucursal||'—'], ['Localidad', c.localidad||'—'], ['N° cuenta', c.nroCuenta||'—'],
+      ['Concepto', medioLabel(c.medioId)||'—'], ['Ingresó', c.fechaIngreso||'—'], ['Está en', c.cuentaId ? cuentaNombre(c.cuentaId) : '—']];
+    document.getElementById('chq-detail').innerHTML = rows.map(function(r){ return '<div class="k">'+r[0]+'</div><div>'+esc(r[1])+'</div>'; }).join('');
+    document.getElementById('chq-deposito-box').hidden = true;
+    var e = c.estado;
+    document.getElementById('chq-btn-depositar').hidden = e!=='cartera';
+    document.getElementById('chq-btn-rechazar').hidden = !(e==='cartera' || e==='depositado');
+    document.getElementById('chq-btn-deshacer').hidden = !(e==='depositado' || e==='rechazado');
+    document.getElementById('chq-btn-deshacer').textContent = e==='depositado' ? 'Deshacer depósito' : 'Deshacer rechazo';
+    document.getElementById('cheque-overlay').classList.add('show');
+  }
+  function closeChequeModal(){ document.getElementById('cheque-overlay').classList.remove('show'); }
+  document.getElementById('chq-cancel').addEventListener('click', closeChequeModal);
+  document.getElementById('cheque-overlay').addEventListener('click', function(e){ if(e.target===this) closeChequeModal(); });
+  document.getElementById('chq-btn-depositar').addEventListener('click', function(){
+    var sel = document.getElementById('chq-dep-cuenta');
+    fillSelect(sel, state.cuentas.filter(function(c){ return c.tipo==='banco'; }).sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); }), 'id', 'nombre', 'Elegir banco');
+    if(!sel.options.length || sel.options.length===1) fillMovimientoCuentaSelect(sel);
+    document.getElementById('chq-dep-fecha').value = todayStr();
+    document.getElementById('chq-deposito-box').hidden = false;
+  });
+  document.getElementById('chq-dep-confirm').addEventListener('click', function(){
+    var c = chequeById(state.editingChequeId);
+    if(!c || c.estado!=='cartera') return;
+    var dest = document.getElementById('chq-dep-cuenta').value;
+    if(!dest){ showToast('Elegí la cuenta donde se deposita.'); return; }
+    var fecha = document.getElementById('chq-dep-fecha').value || todayStr();
+    var desc = 'Depósito '+chequeResumen(c);
+    upsertMovimientoLocal({id:'mov_chq_dep_out_'+c.id, cuentaId:c.cuentaId, fecha:fecha, tipo:'egreso', medioId:c.medioId, concepto:desc, monto:c.importe, pagoId:'', notas:'', chequeIds:[c.id]});
+    upsertMovimientoLocal({id:'mov_chq_dep_in_'+c.id, cuentaId:dest, fecha:fecha, tipo:'ingreso', medioId:c.medioId, concepto:desc, monto:c.importe, pagoId:'', notas:'', chequeIds:[c.id]});
+    writeCheque(Object.assign({}, c, {estado:'depositado', cuentaId:dest, fechaSalida:fecha, destino:'Depositado en '+cuentaNombre(dest)}));
+    closeChequeModal(); renderTesoreria(); showToast('Cheque depositado.');
+  });
+  document.getElementById('chq-btn-rechazar').addEventListener('click', function(){
+    var c = chequeById(state.editingChequeId);
+    if(!c || (c.estado!=='cartera' && c.estado!=='depositado')) return;
+    // El rechazo saca el importe de donde esté el cheque (la cartera o el banco donde se depositó).
+    upsertMovimientoLocal({id:'mov_chq_rech_'+c.id, cuentaId:c.cuentaId, fecha:todayStr(), tipo:'egreso', medioId:c.medioId,
+      concepto:'Cheque rechazado — '+chequeResumen(c), monto:c.importe, pagoId:'', notas:'', chequeIds:[c.id]});
+    writeCheque(Object.assign({}, c, {estado:'rechazado', destino:'Rechazado'+(c.estado==='depositado' ? ' (estaba depositado en '+cuentaNombre(c.cuentaId)+')' : '')}));
+    closeChequeModal(); renderTesoreria(); showToast('Cheque marcado como rechazado.');
+  });
+  document.getElementById('chq-btn-deshacer').addEventListener('click', function(){
+    var c = chequeById(state.editingChequeId);
+    if(!c) return;
+    if(c.estado==='rechazado'){
+      deleteMovimiento('mov_chq_rech_'+c.id);
+      var depIn = movimientoById('mov_chq_dep_in_'+c.id);
+      writeCheque(Object.assign({}, c, depIn ? {estado:'depositado', destino:'Depositado en '+cuentaNombre(depIn.cuentaId)} : {estado:'cartera', destino:''}));
+      showToast('Rechazo deshecho.');
+    } else if(c.estado==='depositado'){
+      var out = movimientoById('mov_chq_dep_out_'+c.id);
+      deleteMovimiento('mov_chq_dep_out_'+c.id);
+      deleteMovimiento('mov_chq_dep_in_'+c.id);
+      writeCheque(Object.assign({}, c, {estado:'cartera', cuentaId: out ? out.cuentaId : c.cuentaId, fechaSalida:'', destino:''}));
+      showToast('Depósito deshecho: el cheque volvió a la cartera.');
+    }
+    closeChequeModal(); renderTesoreria();
+  });
+
+  // ---------- ABM conceptos de caja (⚙ → Tesorería) ----------
+  function renderMediosList(){
+    var body = document.getElementById('medios-caja-body');
+    if(!body) return;
+    body.innerHTML = '';
+    if(!state.medios.length){
+      body.innerHTML = '<tr class="day-row empty"><td colspan="4">Todavía no hay conceptos de caja (¿corriste el schema.sql nuevo?).</td></tr>';
+      return;
+    }
+    var modoLbl = {no:'—', cartera:'Terceros → cartera', datos:'Pide datos'};
+    state.medios.slice().sort(function(a,b){ return (a.codigo||'').localeCompare(b.codigo||''); }).forEach(function(m){
+      var tr = document.createElement('tr');
+      tr.className = 'day-row';
+      tr.style.opacity = m.activo ? '' : '0.5';
+      tr.innerHTML = '<td class="day-route num">'+esc(m.codigo)+'</td><td>'+esc(m.nombre)+(m.activo?'':' (inactivo)')+'</td>'
+        +'<td>'+(m.cuentaId ? esc(cuentaNombre(m.cuentaId)) : '<span style="color:var(--danger);">Sin cuenta</span>')+'</td>'
+        +'<td>'+(modoLbl[m.cheque]||'—')+'</td>';
+      tr.addEventListener('click', function(){ openMedioModal(m.id); });
+      body.appendChild(tr);
+    });
+  }
+  function writeMedio(m){
+    if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
+    state.sb.from('medios_caja').upsert({id:m.id, codigo:m.codigo, nombre:m.nombre, cuenta_id:m.cuentaId||null, cheque:m.cheque||'no', activo:!!m.activo})
+      .then(function(res){ if(res.error) showToast('No se pudo guardar el concepto de caja: '+res.error.message); });
+  }
+  function openMedioModal(id){
+    state.editingMedioId = id || null;
+    var m = id ? medioById(id) : null;
+    document.getElementById('mcm-title').textContent = m ? 'Editar concepto de caja' : 'Nuevo concepto de caja';
+    document.getElementById('mcm-codigo').value = m ? m.codigo : '';
+    document.getElementById('mcm-nombre').value = m ? m.nombre : '';
+    fillMovimientoCuentaSelect(document.getElementById('mcm-cuenta'));
+    document.getElementById('mcm-cuenta').value = m ? (m.cuentaId||'') : '';
+    document.getElementById('mcm-cheque').value = m ? (m.cheque||'no') : 'no';
+    document.getElementById('mcm-activo').checked = m ? !!m.activo : true;
+    document.getElementById('mcm-delete').style.display = m ? '' : 'none';
+    document.getElementById('medio-overlay').classList.add('show');
+  }
+  function closeMedioModal(){ document.getElementById('medio-overlay').classList.remove('show'); }
+  document.getElementById('new-medio-btn').addEventListener('click', function(){ openMedioModal(null); });
+  document.getElementById('mcm-cancel').addEventListener('click', closeMedioModal);
+  document.getElementById('medio-overlay').addEventListener('click', function(e){ if(e.target===this) closeMedioModal(); });
+  document.getElementById('mcm-save').addEventListener('click', function(){
+    var codigo = document.getElementById('mcm-codigo').value.trim().toUpperCase();
+    var nombre = document.getElementById('mcm-nombre').value.trim();
+    if(!codigo || !nombre){ showToast('Completá código y concepto.'); return; }
+    var id = state.editingMedioId;
+    if(state.medios.some(function(x){ return x.id!==id && (x.codigo||'').toUpperCase()===codigo; })){ showToast('Ya existe un concepto con ese código.'); return; }
+    if(!id){ id = slug(codigo); var n = 2; while(medioById(id)) id = slug(codigo)+'_'+(n++); }
+    var m = {id:id, codigo:codigo, nombre:nombre, cuentaId:document.getElementById('mcm-cuenta').value, cheque:document.getElementById('mcm-cheque').value, activo:document.getElementById('mcm-activo').checked};
+    var idx = state.medios.findIndex(function(x){ return x.id===id; });
+    if(idx>=0) state.medios[idx]=m; else state.medios.push(m);
+    writeMedio(m);
+    closeMedioModal(); renderMediosList(); showToast('Concepto de caja guardado.');
+  });
+  document.getElementById('mcm-delete').addEventListener('click', function(){
+    var id = state.editingMedioId;
+    if(!id) return;
+    var usado = state.movimientos.some(function(m){ return m.medioId===id; }) || state.ordenesPago.some(function(p){ return p.medioId===id; });
+    if(usado){ showToast('No se puede eliminar: tiene movimientos u órdenes de pago. Podés desactivarlo.'); return; }
+    state.medios = state.medios.filter(function(x){ return x.id!==id; });
+    if(state.sb) state.sb.from('medios_caja').delete().eq('id', id).then(function(res){ if(res.error) showToast('No se pudo eliminar: '+res.error.message); });
+    closeMedioModal(); renderMediosList(); showToast('Concepto de caja eliminado.');
   });
 
   function mapCuentaRow(row){
@@ -4682,7 +5151,17 @@
   function mapMovimientoRow(row){
     return {
       id:row.id, cuentaId:row.cuenta_id||'', fecha:row.fecha||'', concepto:row.concepto||'',
-      monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0, pagoId:row.pago_id||'', notas:row.notas||''
+      monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0, pagoId:row.pago_id||'', notas:row.notas||'',
+      tipo:row.tipo||'egreso', medioId:row.medio_id||'', chequeIds:Array.isArray(row.cheque_ids)?row.cheque_ids:[]
+    };
+  }
+  function mapChequeRow(r){
+    return {
+      id:r.id, medioId:r.medio_id||'', banco:r.banco||'', sucursal:r.sucursal||'', localidad:r.localidad||'', numero:r.numero||'',
+      nroCuenta:r.nro_cuenta||'', titular:r.titular||'', fechaCobro:r.fecha_cobro||'',
+      importe:typeof r.importe==='number'?r.importe:parseFloat(r.importe)||0, estado:r.estado||'cartera',
+      fechaIngreso:r.fecha_ingreso||'', cuentaId:r.cuenta_id||'', movIngresoId:r.mov_ingreso_id||'', fechaSalida:r.fecha_salida||'',
+      destino:r.destino||'', pagoId:r.pago_id||'', proveedorId:r.proveedor_id||'', movSalidaId:r.mov_salida_id||'', notas:r.notas||''
     };
   }
   function fetchTesoreria(){
@@ -4690,11 +5169,21 @@
     state.sb.from('cuentas').select('*').then(function(res){
       if(res.error){ showToast('Error cargando cuentas: '+res.error.message); return; }
       state.cuentas = (res.data||[]).map(mapCuentaRow);
-      renderTesoreria();
+      renderTesoreria(); renderMediosList();
     });
     fetchAllRows('movimientos').then(function(res){
       if(res.error){ showToast('Error cargando movimientos: '+res.error.message); return; }
       state.movimientos = (res.data||[]).map(mapMovimientoRow);
+      renderTesoreria();
+    });
+    state.sb.from('medios_caja').select('*').then(function(res){
+      if(res.error){ showToast('Error cargando conceptos de caja (¿corriste el schema.sql nuevo?): '+res.error.message); return; }
+      state.medios = (res.data||[]).map(function(r){ return {id:r.id, codigo:r.codigo||'', nombre:r.nombre||'', cuentaId:r.cuenta_id||'', cheque:r.cheque||'no', activo:r.activo!==false}; });
+      renderTesoreria(); renderMediosList();
+    });
+    fetchAllRows('cheques').then(function(res){
+      if(res.error){ showToast('Error cargando cheques: '+res.error.message); return; }
+      state.cheques = (res.data||[]).map(mapChequeRow);
       renderTesoreria();
     });
   }
@@ -4999,6 +5488,12 @@
       .subscribe();
     state.sb.channel('cuentas-changes')
       .on('postgres_changes', {event:'*', schema:'public', table:'cuentas'}, function(){ debounced('fetchTesoreria', fetchTesoreria); })
+      .subscribe();
+    state.sb.channel('medios-caja-changes')
+      .on('postgres_changes', {event:'*', schema:'public', table:'medios_caja'}, function(){ debounced('fetchTesoreria', fetchTesoreria); })
+      .subscribe();
+    state.sb.channel('cheques-changes')
+      .on('postgres_changes', {event:'*', schema:'public', table:'cheques'}, function(){ debounced('fetchTesoreria', fetchTesoreria); })
       .subscribe();
     state.sb.channel('movimientos-changes')
       .on('postgres_changes', {event:'*', schema:'public', table:'movimientos'}, function(){ debounced('fetchTesoreria', fetchTesoreria); })
