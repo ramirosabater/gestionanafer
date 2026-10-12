@@ -1,0 +1,26 @@
+# Un solo sitio para todo ANAFER.
+#   /                 → Gestión Anafer (inicio con áreas: Logística, Administración, Comercial, RR.HH.)
+#   /fichaje/         → Fichaje de empleados (legajo + PIN, se instala en el celular)
+#   /fichaje/admin.html → Panel de RR.HH.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Atajos cortos
+[[redirects]]
+  from = "/rrhh"
+  to = "/fichaje/admin.html"
+  status = 301
+
+[[redirects]]
+  from = "/fichar"
+  to = "/fichaje/"
+  status = 301
+
+[[redirects]]
+  from = "/comercial"
+  to = "/comercial-dashboard.html"
+  status = 301

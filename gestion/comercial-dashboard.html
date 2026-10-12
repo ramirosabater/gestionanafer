@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Comercial · Tablero de gestión</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,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" />
+<style>
+  *{box-sizing:border-box}:root{color-scheme:light;
+    --navy:#223c7e;--blue:#3456a8;--sky:#2ba9e0;--red:#e1251b;--green:#16a34a;--amber:#d48f00;--violet:#8b5cf6;
+    --ink:#1f2d38;--ink2:#5c6b78;--muted:#94a1ab;--line:#e3e8ed;--soft:#f1f4f7;--bg:#eef1f4;--track:#eef1f4}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  body::before{content:"";position:fixed;top:0;left:0;right:0;height:4px;z-index:100;background:linear-gradient(90deg,#223c7e 0%,#223c7e 42%,#2ba9e0 42%,#2ba9e0 68%,#e1251b 68%,#e1251b 100%)}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 18px 60px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 6px 20px rgba(31,45,56,.06)}
+  .muted{color:var(--muted);font-size:12px}
+  .scrollx{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+  /* ---- Encabezado con degradé ---- */
+  .hero{background:linear-gradient(115deg,#1e3a7b 0%,#2c4f9e 55%,#2c7fcf 100%);color:#fff;border-radius:18px;padding:20px 22px 18px;box-shadow:0 10px 28px rgba(34,60,126,.28);margin-bottom:14px}
+  .hero-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .logo-chip{background:#fff;border-radius:12px;padding:6px 10px;display:flex;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+  .logo-chip img{height:36px;display:block}
+  .hero-title{flex:1;min-width:200px}
+  .hero h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-.01em}
+  .hero-title p{margin:3px 0 0;font-size:13px;color:rgba(255,255,255,.78)}
+  .toggle{display:inline-flex;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:11px;padding:3px}
+  .toggle button{border:none;background:transparent;padding:7px 14px;border-radius:8px;font:inherit;font-weight:700;cursor:pointer;color:rgba(255,255,255,.85);font-size:13px}
+  .toggle button.on{background:#fff;color:var(--navy)}
+  .hero-filters{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:16px}
+  .hf label{display:block;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.72);margin-bottom:5px}
+  .hf select{font:inherit;font-size:13.5px;color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);border-radius:10px;padding:8px 30px 8px 12px;outline:none;min-width:120px;appearance:none;-webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='white' stroke-width='1.6' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center}
+  .hf select option{color:var(--ink)}
+  .chip{font:inherit;font-size:12px;font-weight:700;color:#fff;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);border-radius:9px;padding:8px 11px;cursor:pointer}
+  .chip:hover{background:rgba(255,255,255,.28)}
+  .hero-actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .hero-nav{display:flex;gap:6px}
+  a.chip{text-decoration:none;display:inline-block}
+  body.solo-ver #factImport,body.solo-ver #presuImport,body.solo-ver #abImport,body.solo-ver #cliImport,body.solo-ver label[for=cliMes],body.solo-ver #cliMes{display:none}
+  .hbtn{font:inherit;font-size:12.5px;font-weight:700;border-radius:10px;padding:8px 13px;cursor:pointer;background:#fff;color:var(--navy);border:1px solid #fff}
+  .hbtn.ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.6)}
+  .hbtn:disabled{opacity:.6;cursor:default}
+  .msg{font-size:12.5px;padding:0 4px 6px}
+  .msg:empty{display:none}
+  .estado{padding:0 4px 10px}
+
+  /* ---- KPIs ---- */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:4px 0 10px}
+  .kpi{position:relative;padding:16px 18px 15px;border-left:4px solid var(--c,var(--navy));overflow:hidden}
+  .kpi .top{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+  .kpi .ico{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;background:color-mix(in srgb,var(--c,var(--navy)) 13%,#fff);flex-shrink:0}
+  .kpi .lab{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);line-height:1.25}
+  .kpi .val{font-size:27px;font-weight:800;letter-spacing:-.01em;line-height:1.1}
+  .kpi .sub{font-size:12px;color:var(--ink2);margin-top:5px}
+  .kpi .tag{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;margin-top:6px}
+  .nota{color:var(--muted);font-size:11px;padding:0 6px 14px}
+
+  /* ---- Paneles ---- */
+  .grid{display:grid;gap:16px;margin-bottom:16px}
+  .g-32{grid-template-columns:3fr 2fr}.g-11{grid-template-columns:1fr 1fr}
+  .panel{padding:18px 20px 18px;min-width:0}
+  .panel.full{margin-bottom:16px}
+  .ph{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .ph h2{margin:0;font-size:15px;font-weight:800;padding-left:11px;border-left:4px solid var(--a,var(--navy));line-height:1.25}
+  .ph p{margin:3px 0 0 15px;font-size:12px;color:var(--muted)}
+  .ph .acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .ph .acts label{font-size:11.5px;color:var(--muted)}
+  .ph .acts select{font:inherit;font-size:12px;background:var(--soft);border:1px solid #cfd6dd;border-radius:8px;padding:6px 8px}
+  .pbtn{font:inherit;font-size:12px;font-weight:700;background:var(--navy);color:#fff;border:none;border-radius:9px;padding:7px 12px;cursor:pointer}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink2);align-items:center}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  .legend i.line{width:16px;height:0;border-top:2px dashed var(--ink);border-radius:0;vertical-align:3px}
+
+  /* Barras verticales (evolución) */
+  .vchart{position:relative;padding-top:6px}
+  .vgrid{position:absolute;left:0;right:0;border-top:1px solid #edf0f3}
+  .vcols{position:relative;display:flex;gap:8px;align-items:flex-end}
+  .vcol{flex:1;min-width:34px;text-align:center}
+  .vplot{position:relative;display:flex;align-items:flex-end;justify-content:center}
+  .vbar{width:56%;max-width:46px;border-radius:5px 5px 0 0;transition:filter .15s}
+  .vcol:hover .vbar{filter:brightness(1.08)}
+  .vlab{position:absolute;left:0;right:0;font-size:11px;font-weight:800;color:var(--ink)}
+  .vobj{position:absolute;left:8%;right:8%;border-top:2px dashed var(--ink)}
+  .vx{font-size:11.5px;color:var(--muted);margin-top:6px;border-top:1px solid #dfe4e9;padding-top:6px}
+
+  /* Dona */
+  .donut-wrap{display:flex;flex-direction:column;align-items:center;gap:14px}
+  .donut{position:relative;width:180px;height:180px}
+  .donut svg{transform:rotate(-90deg)}
+  .donut .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .donut .center b{font-size:22px;font-weight:800}
+  .donut .center span{font-size:11px;color:var(--muted)}
+  .dleg{width:100%;max-width:360px}
+  .dleg .r{display:grid;grid-template-columns:14px 1fr auto 46px;gap:8px;align-items:center;font-size:13px;padding:4px 0}
+  .dleg .r i{width:11px;height:11px;border-radius:3px}
+  .dleg .r b{font-variant-numeric:tabular-nums}
+  .dleg .r span{text-align:right;color:var(--muted);font-size:11.5px;font-variant-numeric:tabular-nums}
+
+  /* Barras horizontales (rankings) */
+  .hrow{display:grid;grid-template-columns:minmax(90px,150px) 1fr auto;gap:10px;align-items:center;margin:9px 0}
+  .hrow .hl{font-size:12px;color:var(--ink2);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hrow .hv{font-size:12.5px;font-weight:800;min-width:64px;text-align:right;font-variant-numeric:tabular-nums}
+  .htrack{position:relative;height:18px;background:var(--track);border-radius:5px;overflow:hidden}
+  .htrack .b{position:absolute;top:0;bottom:0;left:0;border-radius:5px}
+  .hsub{grid-column:2 / 4;font-size:10.5px;color:var(--muted);margin-top:-6px}
+  .rank .hrow{grid-template-columns:minmax(120px,210px) 1fr auto}
+  .rank .hl{text-align:left}
+  .rank .hl em{font-style:normal;color:var(--muted);font-size:10.5px;margin-left:4px}
+
+  /* Mini tiles altas/bajas */
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .tile{background:var(--soft);border-radius:12px;padding:10px 12px}
+  .tile .l{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+  .tile .v{font-size:24px;font-weight:800;margin-top:2px}
+  .ab2{display:grid;grid-template-columns:minmax(80px,120px) 1fr 52px;gap:10px;align-items:center;margin:8px 0;font-size:12px}
+  .ab2 .bars{display:flex;flex-direction:column;gap:3px}
+  .ab2 .bars div{height:8px;border-radius:4px}
+  .ab2 .n{text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+
+  /* Tablas */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:9px 10px;border-bottom:1px solid #f0f2f5}
+  th{color:var(--muted);font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;text-align:left;border-bottom:1px solid var(--line)}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tbody tr:hover td{background:#f8fafc}
+  td.prod{font-weight:700}
+  .cbar{display:flex;align-items:center;gap:8px;justify-content:flex-end}
+  .cbar .t{width:70px;height:6px;border-radius:3px;background:var(--track);overflow:hidden}
+  .cbar .t div{height:100%;border-radius:3px}
+  .empty{color:var(--muted);font-size:12.5px;padding:14px 4px}
+
+  /* Login */
+  .overlay{position:fixed;inset:0;background:linear-gradient(115deg,#1e3a7b 0%,#2c4f9e 55%,#2c7fcf 100%);display:none;align-items:center;justify-content:center;z-index:200;padding:16px}
+  .overlay.show{display:flex}
+  .modal{background:#fff;border-radius:18px;padding:26px;width:100%;max-width:350px;box-shadow:0 24px 60px rgba(10,20,50,.35)}
+  .modal h3{margin:0 0 4px;font-size:19px;color:var(--navy);font-weight:800}
+  .modal .sub{font-size:13px;color:var(--muted);margin-bottom:16px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:12px;color:var(--ink2);margin-bottom:4px;font-weight:600}
+  .field input{width:100%;font:inherit;padding:10px 12px;border:1px solid #cfd6dd;border-radius:10px;outline:none}
+  .field input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(52,86,168,.15)}
+  .btn{font:inherit;font-weight:700;border-radius:10px;padding:9px 16px;border:1px solid #cfd6dd;background:#fff;cursor:pointer;color:var(--ink)}
+  .btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}
+  .btn:disabled{opacity:.6;cursor:default}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+
+  @media(max-width:980px){ .kpis{grid-template-columns:repeat(2,1fr)} .g-32,.g-11{grid-template-columns:1fr} }
+  @media(max-width:640px){
+    .wrap{padding:14px 12px 50px}
+    .hero{padding:16px}
+    .hero h1{font-size:20px}
+    .logo-chip img{height:30px}
+    .hero-filters .hf{flex:1 1 45%}
+    .hf select{width:100%;min-width:0}
+    .hero-actions{margin-left:0;width:100%}
+    .hero-actions .hbtn{flex:1}
+    #medida{width:100%}#medida button{flex:1}
+    .kpis{gap:10px}.kpi{padding:12px 13px}.kpi .val{font-size:20px}
+    .panel{padding:14px}
+    table{font-size:12px}th,td{padding:7px 6px}
+    .hrow,.rank .hrow{grid-template-columns:minmax(70px,110px) 1fr auto}
+  }
+</style>
+</head>
+<body>
+<div class="overlay" id="login-overlay">
+  <div class="modal">
+    <h3>Anafer · Comercial</h3>
+    <div class="sub">Ingresá con tu email y tu contraseña</div>
+    <div class="field">
+      <label for="login-email">Email</label>
+      <input type="text" id="login-email" placeholder="nombre@anafer-ivess.com.ar" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false">
+    </div>
+    <div class="field">
+      <label for="login-password">Contraseña</label>
+      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <div id="login-error" style="display:none;color:#e1251b;font-size:12.5px;margin:-6px 0 12px"></div>
+    <div class="modal-actions"><button class="btn primary" id="login-btn">Ingresar</button></div>
+  </div>
+</div>
+<div class="wrap" id="wrap" hidden>
+  <header class="hero">
+    <div class="hero-top">
+      <div class="logo-chip"><img src="data:image/png;base64,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" alt="ANAFER" /></div>
+      <div class="hero-title"><h1>Tablero Comercial</h1><p id="heroSub">Cumplimiento presupuestario · ANAFER S.A.</p></div>
+      <div class="hero-nav"><a class="chip" href="index.html" title="Volver al inicio de Gestión Anafer">⌂ Inicio</a><button class="chip" id="salir-btn" type="button">Salir</button></div>
+      <div class="toggle" id="medida"><button data-m="monto" class="on">$ Facturación</button><button data-m="qty">Unidades</button></div>
+    </div>
+    <div class="hero-filters">
+      <div class="hf"><label for="unidad">Unidad de negocio</label><select id="unidad"></select></div>
+      <div class="hf"><label for="anio">Año</label><select id="anio"></select></div>
+      <div class="hf"><label for="mesDesde">Desde</label><select id="mesDesde"></select></div>
+      <div class="hf"><label for="mesHasta">Hasta</label><select id="mesHasta"></select></div>
+      <button id="filtroReset" class="chip">Todo el año</button>
+      <div class="hero-actions">
+        <button id="factImport" class="hbtn" title="Subí el archivo Facturación_&lt;Mes&gt;_&lt;Año&gt; del sistema: carga facturación y unidades de ese mes">📄 Cargar facturación del mes</button>
+        <input type="file" id="factFile" accept=".xls,.csv,.txt" hidden />
+        <button id="presuImport" class="hbtn ghost" title="Subí la planilla de cumplimiento (.xlsx) con las filas PRESUPUESTADO del año: reemplaza el presupuesto de ese año">📊 Cargar presupuesto</button>
+        <input type="file" id="presuFile" accept=".xlsx,.xls" hidden />
+      </div>
+    </div>
+  </header>
+  <div id="factMsg" class="msg"></div>
+  <div id="estado" class="muted estado">Cargando datos…</div>
+
+  <div class="kpis" id="kpis"></div>
+  <div id="nota" class="nota"></div>
+
+  <div class="grid g-32">
+    <section class="card panel">
+      <div class="ph">
+        <div><h2 style="--a:var(--blue)">Evolución mensual</h2><p>Real de cada mes contra el objetivo (presupuesto)</p></div>
+        <div class="legend"><span><i style="background:var(--green)"></i>Cumple</span><span><i style="background:var(--red)"></i>No cumple</span><span><i class="line"></i>Objetivo</span></div>
+      </div>
+      <div class="scrollx"><div id="evol"></div></div>
+    </section>
+    <section class="card panel">
+      <div class="ph"><div><h2 style="--a:var(--sky)">Participación por unidad</h2><p>Sobre el real acumulado del período</p></div></div>
+      <div id="pie"></div>
+    </section>
+  </div>
+
+  <div class="grid g-11">
+    <section class="card panel">
+      <div class="ph">
+        <div><h2 style="--a:var(--green)">Cumplimiento por unidad de negocio</h2><p>Real acumulado sobre presupuesto del período</p></div>
+        <div class="legend"><span><i style="background:#cfd6dd"></i>Presupuesto</span><span><i style="background:var(--green)"></i>Real</span></div>
+      </div>
+      <div id="cumpUni"></div>
+    </section>
+    <section class="card panel">
+      <div class="ph">
+        <div><h2 style="--a:var(--red)">Altas vs bajas de clientes</h2><p>Del período y la unidad elegidos</p></div>
+        <div class="acts"><button id="abImport" class="pbtn">📄 Importar archivo</button><input type="file" id="abFile" accept=".xls,.csv,.txt" hidden /></div>
+      </div>
+      <div id="abMsg" class="msg"></div>
+      <div id="altasbajas"></div>
+    </section>
+  </div>
+
+  <section class="card panel full">
+    <div class="ph"><div><h2 style="--a:var(--navy)">Top productos</h2><p>Ordenados por real del período · cumplimiento y precio promedio</p></div></div>
+    <div class="scrollx"><table id="top"></table></div>
+  </section>
+
+  <div class="grid g-11">
+    <section class="card panel">
+      <div class="ph"><div><h2 style="--a:var(--amber)" id="difTitulo">Diferencia vs año anterior · Top 10 productos</h2><p>Mismo período del año anterior</p></div></div>
+      <div id="dif"></div>
+    </section>
+    <section class="card panel">
+      <div class="ph">
+        <div><h2 style="--a:var(--blue)">Principales clientes · Top 20</h2><p>Facturación del período</p></div>
+        <div class="acts">
+          <label for="cliMes" title="Solo se usa si el archivo no trae el mes ni lo dice en el nombre">Mes (si el archivo no lo trae)</label>
+          <select id="cliMes"></select>
+          <button id="cliImport" class="pbtn">📄 Importar archivo</button>
+          <input type="file" id="cliFile" accept=".xls,.csv,.txt" hidden />
+        </div>
+      </div>
+      <div id="cliMsg" class="msg"></div>
+      <div id="clientes" class="rank"></div>
+    </section>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const SUPABASE_URL="https://sjhonbjphfacajftptgg.supabase.co";
+const SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaG9uYmpwaGZhY2FqZnRwdGdnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzOTMyNjUsImV4cCI6MjEwMzk2OTI2NX0.KdKps-zzoT0IRJGzuAGZg_EFJ6lXCzRsqf2pm81x_ew";
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let ACCESS_TOKEN=SUPABASE_KEY; // se reemplaza por el token del usuario al loguearse
+const H=()=>({apikey:SUPABASE_KEY,Authorization:"Bearer "+ACCESS_TOKEN});
+
+function showLoginError(msg){ const el=document.getElementById('login-error'); el.textContent=msg; el.style.display=''; }
+function setLoginBusy(busy){ const b=document.getElementById('login-btn'); b.disabled=busy; b.textContent=busy?'Ingresando…':'Ingresar'; }
+
+function tryLogin(){
+  const email=document.getElementById('login-email').value.trim().toLowerCase();
+  const pw=document.getElementById('login-password').value;
+  if(!email||!pw){ showLoginError('Ingresá tu email y tu contraseña.'); return; }
+  document.getElementById('login-error').style.display='none';
+  setLoginBusy(true);
+  sb.auth.signInWithPassword({email,password:pw}).then(function(res){
+    setLoginBusy(false);
+    if(res.error||!res.data||!res.data.session){ showLoginError('Email o contraseña incorrectos.'); return; }
+    onSession(res.data.session);
+  }, function(){ setLoginBusy(false); showLoginError('No se pudo conectar. Probá de nuevo.'); });
+}
+function onSession(session){
+  ACCESS_TOKEN=session.access_token;
+  const email=(session.user.email||'').toLowerCase();
+  sb.from('usuarios').select('*').eq('email', email).then(async function(res){
+    const row=(res.data||[])[0];
+    // Permiso del perfil (⚙ → Acceso de Gestión Anafer). Sin perfil = "Solo
+    // Comercial" (como funcionaba antes): acceso completo a este tablero.
+    let permiso='editar';
+    if(row && row.perfil){
+      try{
+        const cfg=await sb.from('app_config').select('roles').eq('id','auth');
+        const roles=((cfg.data||[])[0]||{}).roles||[];
+        const r=roles.find(x=>x.id===row.perfil);
+        permiso = !r ? 'oculta' : ((r.permisos&&r.permisos.comercial) || (r.manageAccess?'editar':'oculta'));
+      }catch(e){ permiso='oculta'; }
+    }
+    if(row && row.activo!==false && permiso==='oculta'){
+      const done2=function(){
+        document.getElementById('login-password').value='';
+        document.getElementById('login-overlay').classList.add('show');
+        showLoginError('Tu perfil no tiene acceso al tablero Comercial.');
+      };
+      sb.auth.signOut({scope:'local'}).then(done2, done2);
+      return;
+    }
+    // "Ver": se ocultan las cargas de archivos.
+    document.body.classList.toggle('solo-ver', permiso==='ver');
+    if(res.error || !row || row.activo===false){
+      const done=function(){
+        document.getElementById('login-password').value='';
+        document.getElementById('login-overlay').classList.add('show');
+        showLoginError('Tu cuenta todavía no tiene acceso a este dashboard. Pedile acceso al administrador.');
+      };
+      sb.auth.signOut({scope:'local'}).then(done, done);
+      return;
+    }
+    document.getElementById('login-overlay').classList.remove('show');
+    document.getElementById('wrap').hidden=false;
+    cargar();
+  }, function(){
+    document.getElementById('login-overlay').classList.add('show');
+    showLoginError('No se pudo verificar tu acceso. Probá de nuevo en un momento.');
+    sb.auth.signOut({scope:'local'});
+  });
+}
+sb.auth.getSession().then(function(res){
+  const s=res&&res.data&&res.data.session;
+  if(s){ onSession(s); } else { document.getElementById('login-overlay').classList.add('show'); }
+}, function(){ document.getElementById('login-overlay').classList.add('show'); });
+document.getElementById('login-btn').addEventListener('click', tryLogin);
+document.getElementById('login-password').addEventListener('keydown', function(e){ if(e.key==='Enter') tryLogin(); });
+document.getElementById('login-email').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('login-password').focus(); });
+const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const $=(id)=>document.getElementById(id);
+// Modelo multi-año: MENSUAL = comercial_mensual (todos los años, es chico).
+// REF y PROD son "vistas" del año elegido (ANIO) con la forma que usa el resto
+// del tablero: real2026_* = real del año elegido, real2025_* = real del año
+// anterior (los nombres quedaron de la versión de un solo año).
+let REF=[], REAL=[], PROD=[], AB=[], MENSUAL=[], ANIO=null, medida="monto", mesDesde=0, mesHasta=11;
+const enRango=(i)=> i>=mesDesde && i<=mesHasta;
+function normU(s){ s=String(s||'').trim().toUpperCase();
+  const m={'FAMILIA':'Familia','NEGOCIO':'Negocios','NEGOCIOS':'Negocios','EMPRESA':'Empresas','EMPRESAS':'Empresas','DISTRIBUIDOR':'Distribuidores','DISTRIBUIDORES':'Distribuidores','DISTRICUIDORES':'Distribuidores','PERSONAL':'Personal','OTROS':'Otros','COMERCIO':'Comercio','REVENTA':'Reventa','SUCURSALES':'Sucursales','COMPAÑIA':'Compañía','COMPAÑÍA':'Compañía','COMPANIA':'Compañía'};
+  return m[s]||s; }
+function productosDe(unidad){
+  const med = medida==='monto'?'monto':'qty';
+  const rows = PROD.filter(p=> (unidad==='Compañía' || normU(p.unidad)===normU(unidad)) && enRango((p.mes||1)-1));
+  const agg={};
+  rows.forEach(p=>{ const e=agg[p.producto]=agg[p.producto]||{real:0,presu:0,r2025:0};
+    e.real+=Number(p['real2026_'+med])||0; e.presu+=Number(p['presu_'+med])||0; e.r2025+=Number(p['real2025_'+med])||0; });
+  return Object.entries(agg).map(([producto,v])=>({producto,...v})).filter(x=>x.real||x.presu||x.r2025);
+}
+function productosDetalle(unidad){
+  const rows = PROD.filter(p=> (unidad==='Compañía' || normU(p.unidad)===normU(unidad)) && enRango((p.mes||1)-1));
+  const agg={};
+  rows.forEach(p=>{ const e=agg[p.producto]=agg[p.producto]||{realM:0,realQ:0,presuM:0,presuQ:0,r2025M:0,r2025Q:0};
+    e.realM+=Number(p.real2026_monto)||0; e.realQ+=Number(p.real2026_qty)||0;
+    e.presuM+=Number(p.presu_monto)||0; e.presuQ+=Number(p.presu_qty)||0;
+    e.r2025M+=Number(p.real2025_monto)||0; e.r2025Q+=Number(p.real2025_qty)||0; });
+  return Object.entries(agg).map(([producto,v])=>({producto,...v}));
+}
+
+const fmtMonto=(n)=>'$'+(n/1e6).toFixed(1)+'M';
+const fmtQty=(n)=> n>=1000 ? (n/1000).toFixed(1).replace('.',',')+' mil unidades' : Math.round(n)+' unidades';
+const fmt=(n)=> medida==='monto'? fmtMonto(n) : fmtQty(n);
+
+async function fetchAll(path){
+  let all=[], from=0, size=1000;
+  for(;;){ const r=await fetch(SUPABASE_URL+'/rest/v1/'+path+'&limit='+size+'&offset='+from,{headers:H()});
+    const c=await r.json(); if(!Array.isArray(c)||!c.length) break; all=all.concat(c); if(c.length<size) break; from+=size; }
+  return all;
+}
+async function cargar(preferAnio){
+  try{
+    const [m, ab]=await Promise.all([
+      fetchAll('comercial_mensual?select=anio,mes,unidad,presu_qty,presu_monto,real_qty,real_monto&order=anio,mes'),
+      fetch(SUPABASE_URL+'/rest/v1/comercial_altas_bajas?select=*&limit=50000',{headers:H()}).then(r=>r.json()).catch(()=>[]),
+    ]);
+    MENSUAL=Array.isArray(m)?m:[]; AB=Array.isArray(ab)?ab:[];
+    if(!MENSUAL.length){ $("estado").textContent="No hay datos. ¿Corriste supabase/migracion_multianio.sql?"; return; }
+    const anios=[...new Set(MENSUAL.map(r=>r.anio))].sort((a,b)=>a-b);
+    const conReal=anios.filter(a=>MENSUAL.some(r=>r.anio===a && r.unidad==='Compañía' && Number(r.real_monto)>0));
+    const def=(preferAnio && anios.includes(+preferAnio))? +preferAnio
+            : (ANIO && anios.includes(ANIO))? ANIO
+            : (conReal.length? conReal[conReal.length-1] : anios[anios.length-1]);
+    $("anio").innerHTML=anios.slice().reverse().map(a=>'<option value="'+a+'"'+(a===def?' selected':'')+'>'+a+'</option>').join('');
+    await setAnio(def);
+  }catch(e){ console.error(e); $("estado").textContent="No se pudo conectar con la base. Probá recargar la página."; }
+}
+// Arma REF/PROD del año elegido (+ año anterior para las comparaciones).
+async function setAnio(anio){
+  ANIO=+anio; const prev=ANIO-1;
+  $("estado").textContent="Cargando "+ANIO+"…";
+  const prods=await fetchAll('comercial_producto_mensual?select=anio,mes,unidad,producto,producto_clave,presu_qty,presu_monto,real_qty,real_monto&anio=in.('+prev+','+ANIO+')&order=anio,mes,unidad');
+  const n=(v)=>Number(v)||0;
+  // Totales por unidad y mes
+  const ref={};
+  MENSUAL.filter(r=>r.anio===ANIO||r.anio===prev).forEach(r=>{
+    const k=r.unidad+'|'+r.mes;
+    const e=ref[k]||(ref[k]={unidad:r.unidad,mes:r.mes,presu_qty:0,presu_monto:0,real2026_qty:0,real2026_monto:0,real2025_qty:0,real2025_monto:0});
+    if(r.anio===ANIO){ e.presu_qty=n(r.presu_qty); e.presu_monto=n(r.presu_monto); e.real2026_qty=n(r.real_qty); e.real2026_monto=n(r.real_monto); }
+    else { e.real2025_qty=n(r.real_qty); e.real2025_monto=n(r.real_monto); }
+  });
+  REF=Object.values(ref);
+  // Detalle por producto
+  const pr={};
+  (Array.isArray(prods)?prods:[]).forEach(r=>{
+    const k=r.unidad+'|'+r.mes+'|'+r.producto_clave;
+    const e=pr[k]||(pr[k]={unidad:r.unidad,mes:r.mes,producto:r.producto,presu_qty:0,presu_monto:0,real2026_qty:0,real2026_monto:0,real2025_qty:0,real2025_monto:0});
+    if(r.anio===ANIO){ e.producto=r.producto; e.presu_qty=n(r.presu_qty); e.presu_monto=n(r.presu_monto); e.real2026_qty=n(r.real_qty); e.real2026_monto=n(r.real_monto); }
+    else { e.real2025_qty=n(r.real_qty); e.real2025_monto=n(r.real_monto); }
+  });
+  PROD=Object.values(pr); REAL=[];
+  // Unidades del año (Compañía primero); se mantiene la elegida si existe
+  const actual=$("unidad").value;
+  const unidades=[...new Set(REF.filter(r=>MENSUAL.some(m=>m.anio===ANIO && m.unidad===r.unidad)).map(r=>r.unidad))]
+    .sort((a,b)=> a==='Compañía'?-1 : b==='Compañía'?1 : a.localeCompare(b,'es'));
+  $("unidad").innerHTML=unidades.map(u=>'<option'+(u===actual?' selected':'')+'>'+u+'</option>').join('');
+  // Meses: Ene → último mes con real del año (o todo el año si no hay real)
+  let ultimo=-1; REF.filter(r=>r.unidad==='Compañía').forEach(r=>{ if(r.real2026_monto>0 && r.mes-1>ultimo) ultimo=r.mes-1; });
+  mesDesde=0; mesHasta=ultimo>=0? ultimo : 11;
+  const opts=(sel)=>MESES.map((m,i)=>'<option value="'+i+'"'+(i===sel?' selected':'')+'>'+m+'</option>').join('');
+  $("mesDesde").innerHTML=opts(mesDesde); $("mesHasta").innerHTML=opts(mesHasta);
+  $("cliMes").innerHTML=MESES.map((m,i)=>'<option value="'+i+'"'+(i===mesHasta?' selected':'')+'>'+m+'</option>').join('');
+  $("estado").textContent= ultimo>=0 ? "Año "+ANIO+" · real cargado hasta "+MESES[ultimo]+" · compara contra "+prev : "Año "+ANIO+" · todavía sin ventas cargadas";
+  $("difTitulo").textContent="Diferencia "+ANIO+" vs "+prev+" · Top 10 productos";
+  render();
+}
+$("anio").onchange=(e)=>{ setAnio(+e.target.value).catch(err=>{ console.error(err); $("estado").textContent="No se pudo cargar "+e.target.value+"."; }); };
+$("unidad").onchange=render;
+$("mesDesde").onchange=(e)=>{ mesDesde=+e.target.value; if(mesDesde>mesHasta){ mesHasta=mesDesde; $("mesHasta").value=mesHasta; } render(); };
+$("mesHasta").onchange=(e)=>{ mesHasta=+e.target.value; if(mesHasta<mesDesde){ mesDesde=mesHasta; $("mesDesde").value=mesDesde; } render(); };
+$("filtroReset").onclick=()=>{ mesDesde=0; mesHasta=11; $("mesDesde").value=0; $("mesHasta").value=11; render(); };
+async function importarAB(file){
+  const msg=$("abMsg"); msg.style.color="#5c6b78"; msg.textContent="Procesando archivo…";
+  try{
+    const texto=await file.text();
+    const lineas=texto.split(/\r?\n/).filter(l=>l.trim());
+    const agg={}; let fhastaRaw=null;
+    for(let i=1;i<lineas.length;i++){ const c=lineas[i].split(';'); if(c.length<7) continue;
+      const [,fhasta,,,desc,cant,tipo]=c; fhastaRaw=fhasta;
+      const uu=normU(String(desc).trim()); const nn=parseInt(cant,10)||0; const t=String(tipo).trim().toUpperCase();
+      if(!agg[uu]) agg[uu]={altas:0,bajas:0};
+      if(t==="ALTA") agg[uu].altas+=nn; else if(t==="BAJA") agg[uu].bajas+=nn;
+    }
+    if(!fhastaRaw){ msg.style.color="#e1251b"; msg.textContent="No se detectó el período en el archivo."; return; }
+    const pp=fhastaRaw.split("/"); const periodo=pp[2]+"-"+String(pp[1]).padStart(2,"0")+"-01";
+    const nom=new Date(periodo+"T00:00:00").toLocaleDateString("es-AR",{month:"long",year:"numeric"});
+    await fetch(SUPABASE_URL+"/rest/v1/comercial_altas_bajas?periodo=eq."+periodo,{method:"DELETE",headers:H()});
+    const rows=Object.entries(agg).map(([uu,v])=>({periodo,unidad:uu,altas:v.altas,bajas:v.bajas}));
+    const res=await fetch(SUPABASE_URL+"/rest/v1/comercial_altas_bajas",{method:"POST",headers:{...H(),"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify(rows)});
+    if(!res.ok) throw new Error(await res.text());
+    AB=await fetch(SUPABASE_URL+"/rest/v1/comercial_altas_bajas?select=*&limit=50000",{headers:H()}).then(r=>r.json());
+    msg.style.color="#16a34a"; msg.textContent="✓ "+nom+" cargado ("+rows.length+" unidades). Si ya existía, se reemplazó.";
+    render();
+  }catch(e){ msg.style.color="#e1251b"; msg.textContent="No se pudo importar: "+e.message; }
+}
+$("abImport").onclick=()=>$("abFile").click();
+$("abFile").onchange=(e)=>{ if(e.target.files[0]) importarAB(e.target.files[0]); e.target.value=""; };
+
+async function leerTexto(file){ const buf=await file.arrayBuffer();
+  try{ return new TextDecoder("utf-8",{fatal:true}).decode(buf); }catch{ return new TextDecoder("iso-8859-1").decode(buf); } }
+
+// Mes y año del archivo de clientes. Orden de prioridad:
+// 1) columnas MES / AÑO dentro del archivo (formato actual del sistema),
+// 2) nombre del archivo (p.ej. "Principales_Clientes_Septiembre__2026_20261001.xls"),
+// 3) selector "Mes" del tablero (año elegido arriba), solo si no se detectó nada.
+const MESES_LARGOS=['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+function mesDeTexto(t){ t=String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+  if(t==='SETIEMBRE') t='SEPTIEMBRE'; return MESES_LARGOS.indexOf(t); }
+function periodoDeNombre(nombre){
+  const n=String(nombre||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+  const m=n.match(/(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|SETIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)[^0-9A-Z]*(20\d\d)(?!\d)/);
+  return m ? {mes:mesDeTexto(m[1]), anio:+m[2]} : null;
+}
+// Lee el archivo de clientes. Soporta:
+//  - formato actual: MES <tab> AÑO <tab> "VENDEDOR;NROCTA;NOMBRE;DIRECCION;TIPO_CLIENTE;VENTA"
+//  - formato viejo: solo la parte separada por ';'
+//  - registros partidos en dos líneas (una dirección con salto de línea adentro):
+//    se juntan hasta completar las 6 columnas.
+function parseClientes(texto){
+  const lineas=texto.split(/\r?\n/).filter(l=>l.trim());
+  const agg={}; const periodos=new Set(); let acc='', filas=0, descartadas=0;
+  for(let i=1;i<lineas.length;i++){
+    let payload=lineas[i];
+    const tab=payload.split('\t');
+    if(tab.length>=3){
+      const mi=mesDeTexto(tab[0]), an=parseInt(tab[1],10);
+      if(mi>=0 && an>2000) periodos.add(an+'-'+String(mi+1).padStart(2,'0')+'-01');
+      payload=tab.slice(2).join('\t');
+    }
+    payload=payload.trim().replace(/^"/,'').replace(/"$/,'');
+    acc = acc ? acc.trimEnd()+' '+payload.trimStart() : payload;
+    const c=acc.split(';');
+    if(c.length<6){ if(acc.length>2000){ descartadas++; acc=''; } continue; }
+    acc='';
+    const nombre=String(c[2]).trim(); if(!nombre){ descartadas++; continue; }
+    const tipo=normU(String(c[c.length-2]).trim());
+    const v=parseFloat(String(c[c.length-1]).replace(',','.'))||0;
+    if(!agg[nombre]) agg[nombre]={unidad:tipo,venta:0};
+    agg[nombre].venta+=v; filas++;
+  }
+  if(acc) descartadas++;
+  return {agg, periodos:[...periodos], filas, descartadas};
+}
+
+async function importarClientes(file){
+  const msg=$("cliMsg"); msg.style.color="#5c6b78"; msg.textContent="Procesando archivo…";
+  try{
+    const texto=await leerTexto(file);
+    const {agg, periodos, filas, descartadas}=parseClientes(texto);
+    let periodo, origen;
+    if(periodos.length>1){ msg.style.color="#e1251b"; msg.textContent="El archivo trae más de un mes ("+periodos.join(", ")+"). Importá un archivo por mes."; return; }
+    if(periodos.length===1){ periodo=periodos[0]; origen="según el archivo"; }
+    else { const pn=periodoDeNombre(file.name);
+      if(pn){ periodo=pn.anio+"-"+String(pn.mes+1).padStart(2,"0")+"-01"; origen="según el nombre del archivo"; }
+      else { const mesIdx=+$("cliMes").value; periodo=ANIO+"-"+String(mesIdx+1).padStart(2,"0")+"-01"; origen="elegido en el selector"; } }
+    const mesIdx=+periodo.slice(5,7)-1, anio=periodo.slice(0,4);
+    if(+anio===ANIO) $("cliMes").value=mesIdx;
+    const nom=MESES[mesIdx]+" "+anio;
+    const rows=Object.entries(agg).map(([cliente,v])=>({periodo,unidad:v.unidad,cliente,venta:v.venta}));
+    if(!rows.length){ msg.style.color="#e1251b"; msg.textContent="El archivo no tiene datos válidos."; return; }
+    await fetch(SUPABASE_URL+"/rest/v1/comercial_clientes?periodo=eq."+periodo,{method:"DELETE",headers:H()});
+    for(let i=0;i<rows.length;i+=1000){ const chunk=rows.slice(i,i+1000);
+      const res=await fetch(SUPABASE_URL+"/rest/v1/comercial_clientes",{method:"POST",headers:{...H(),"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify(chunk)});
+      if(!res.ok) throw new Error(await res.text());
+      msg.textContent="Subiendo… "+Math.min(i+1000,rows.length)+"/"+rows.length;
+    }
+    msg.style.color="#16a34a";
+    msg.textContent="✓ "+nom+" cargado ("+origen+"): "+rows.length+" clientes de "+filas+" filas."+(descartadas?" "+descartadas+" fila(s) ilegibles quedaron afuera.":"")+" Si el mes ya existía, se reemplazó.";
+    renderClientes();
+  }catch(e){ msg.style.color="#e1251b"; msg.textContent="No se pudo importar: "+e.message; }
+}
+/* ===== Carga mensual de facturación (archivo "Facturación_<Mes>_<Año>_*.xls") =====
+   Mismo criterio que cargar_mes_cumplimiento.py: siempre es real (EJECUTADO),
+   el mes sale de FECHA_DESDE, se suma por tipo de cliente y producto (sin vendedor),
+   monto = VENTA_BRUTA. La base la actualiza la función cargar_facturacion_mes
+   (supabase/funcion_cargar_facturacion_mes.sql) en una sola transacción. */
+function parseFacturacion(texto){
+  const lineas=texto.split(/\r?\n/).filter(l=>l.trim());
+  const enc=(lineas[0]||'').toUpperCase();
+  if(!enc.includes('FECHA_DESDE') || !enc.includes('VENTA_BRUTA')) throw new Error('No parece un archivo de facturación (faltan FECHA_DESDE / VENTA_BRUTA en el encabezado).');
+  const num=(x)=>{ const v=parseFloat(String(x||'').trim().replace(',','.')); return isNaN(v)?0:v; };
+  const agg={}; const periodos=new Set(); let malas=0;
+  for(let i=1;i<lineas.length;i++){
+    const c=lineas[i].split(';'); if(c.length<11){ malas++; continue; }
+    const f=c[0].trim().split('/'); if(f.length===3) periodos.add(f[2]+'-'+f[1].padStart(2,'0')+'-01');
+    const desc=c[4].trim().toUpperCase();
+    const k=c[3].trim()+'|'+c[5].trim()+'|'+c[6].trim();
+    const e=agg[k]||(agg[k]={tipocli:c[3].trim(), tipocli_desc:desc, unidad:normU(desc), idproducto:c[5].trim(), producto:c[6].trim(), cantidad:0, venta_neta:0, venta_bruta:0});
+    e.cantidad+=num(c[7]); e.venta_neta+=num(c[10]); e.venta_bruta+=num(c[9]);
+  }
+  const filas=Object.values(agg).filter(r=>r.cantidad||r.venta_bruta||r.venta_neta)
+    .map(r=>({...r, venta_bruta:Math.round(r.venta_bruta*100)/100, venta_neta:Math.round(r.venta_neta*100)/100}));
+  const porU={}; filas.forEach(r=>{ const u=porU[r.unidad]||(porU[r.unidad]={q:0,m:0}); u.q+=r.cantidad; u.m+=r.venta_bruta; });
+  return {filas, periodos:[...periodos], porU, malas};
+}
+async function importarFacturacion(file){
+  const msg=$("factMsg"); msg.style.color="#5c6b78"; msg.textContent="Leyendo archivo…";
+  const btn=$("factImport"); btn.disabled=true;
+  try{
+    const {filas, periodos, porU, malas}=parseFacturacion(await leerTexto(file));
+    if(periodos.length!==1) throw new Error(periodos.length? "El archivo trae más de un mes ("+periodos.join(", ")+"). Subí un archivo por mes." : "No encontré la fecha (FECHA_DESDE) en el archivo.");
+    if(!filas.length) throw new Error("El archivo no tiene ventas para cargar.");
+    const periodo=periodos[0], mesIdx=+periodo.slice(5,7)-1, anio=periodo.slice(0,4), nom=MESES[mesIdx]+" "+anio;
+    const totQ=filas.reduce((s,r)=>s+r.cantidad,0), totM=filas.reduce((s,r)=>s+r.venta_bruta,0);
+    const detalle=Object.entries(porU).sort((a,b)=>b[1].m-a[1].m)
+      .map(([u,v])=>"  • "+u+": $"+Math.round(v.m).toLocaleString('es-AR')+" · "+Math.round(v.q).toLocaleString('es-AR')+" u.").join("\n");
+    const ok=confirm("Cargar facturación de "+nom+"\n\n"+detalle+"\n\nTotal: $"+Math.round(totM).toLocaleString('es-AR')+" · "+Math.round(totQ).toLocaleString('es-AR')+" unidades"+
+      (malas?"\n("+malas+" fila(s) ilegibles quedaron afuera)":"")+"\n\nSi "+nom+" ya estaba cargado, se reemplaza. ¿Continuar?");
+    if(!ok){ msg.textContent="Carga cancelada."; return; }
+    msg.textContent="Cargando "+nom+" en la base…";
+    const res=await fetch(SUPABASE_URL+"/rest/v1/rpc/cargar_facturacion_mes",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_periodo:periodo,p_filas:filas})});
+    const txt=await res.text();
+    if(!res.ok){ let m=txt; try{ m=JSON.parse(txt).message||txt; }catch{} 
+      if(/cargar_facturacion_mes/.test(m) && /not find|no existe|does not exist/i.test(m)) m="Falta crear la función en Supabase (correr supabase/funcion_cargar_facturacion_mes.sql).";
+      throw new Error(m); }
+    const r=JSON.parse(txt);
+    await cargar(+anio);
+    msg.style.color="#16a34a";
+    msg.textContent="✓ "+nom+" cargado: $"+Math.round(totM).toLocaleString('es-AR')+" · "+Math.round(totQ).toLocaleString('es-AR')+" unidades · "+
+      "Si ya existía, se reemplazó.";
+  }catch(e){ msg.style.color="#e1251b"; msg.textContent="No se pudo cargar: "+e.message; }
+  finally{ btn.disabled=false; }
+}
+/* ===== Carga del presupuesto anual (planilla CUMPLIMIENTO_PRESUPUESTARIO.xlsx) =====
+   Lee las filas con ESTADO = PRESUPUESTADO (columnas TIPO CLIENTE, TIPO, AÑO, ESTADO,
+   PRODUCTO, ENE..DIC). TIPO "CANTIDAD..." = unidades, "FACTURACION..." = monto.
+   Por cada año que encuentre llama a cargar_presupuesto, que reemplaza el
+   presupuesto completo de ese año (no toca el real). */
+function cargarLectorExcel(){
+  if(window.XLSX) return Promise.resolve();
+  return new Promise((ok,ko)=>{ const sc=document.createElement('script');
+    sc.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    sc.onload=()=>ok(); sc.onerror=()=>ko(new Error('No se pudo cargar el lector de Excel. Revisá la conexión y probá de nuevo.'));
+    document.head.appendChild(sc); });
+}
+function parsePresupuesto(wb){
+  const limpio=(t)=>String(t==null?'':t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
+  const MES_COL=['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+  for(const nombre of wb.SheetNames){
+    const filas=XLSX.utils.sheet_to_json(wb.Sheets[nombre],{header:1,defval:null,raw:true});
+    const h=filas.findIndex(f=>{ const c=(f||[]).map(limpio); return c.includes('TIPO CLIENTE') && c.includes('PRODUCTO') && c.includes('ESTADO'); });
+    if(h<0) continue;
+    const enc=filas[h].map(limpio); const col=(n)=>enc.indexOf(n);
+    const cU=col('TIPO CLIENTE'), cT=col('TIPO'), cA=col('ANO'), cE=col('ESTADO'), cP=col('PRODUCTO');
+    const cM=MES_COL.map(col);
+    if([cU,cT,cA,cE,cP].some(i=>i<0) || cM.some(i=>i<0)) throw new Error('La hoja "'+nombre+'" no tiene todas las columnas esperadas (TIPO CLIENTE, TIPO, AÑO, ESTADO, PRODUCTO, ENE…DIC).');
+    const porAnio={};
+    for(let i=h+1;i<filas.length;i++){ const f=filas[i]||[];
+      if(!limpio(f[cE]).startsWith('PRESUP')) continue;
+      const anio=parseInt(f[cA],10); if(!(anio>2000)) continue;
+      const tipo=limpio(f[cT]); const med= tipo.startsWith('CANT')?'qty' : tipo.startsWith('FACT')?'monto' : null; if(!med) continue;
+      const unidad=normU(f[cU]); const producto=String(f[cP]==null?'':f[cP]).trim(); if(!producto) continue;
+      const A=porAnio[anio]||(porAnio[anio]={});
+      cM.forEach((c,m)=>{ const v=Number(f[c])||0; if(!v) return;
+        const k=unidad+'|'+producto+'|'+(m+1);
+        const e=A[k]||(A[k]={unidad,producto,mes:m+1,qty:0,monto:0}); e[med]+=v; });
+    }
+    return Object.fromEntries(Object.entries(porAnio).map(([a,o])=>[a,Object.values(o)]));
+  }
+  throw new Error('No encontré una hoja con el formato de la planilla de cumplimiento.');
+}
+async function importarPresupuesto(file){
+  const msg=$("factMsg"); msg.style.color="#5c6b78"; msg.textContent="Leyendo planilla…";
+  const btn=$("presuImport"); btn.disabled=true;
+  try{
+    await cargarLectorExcel();
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array'});
+    const porAnio=parsePresupuesto(wb);
+    const anios=Object.keys(porAnio).map(Number).sort((a,b)=>a-b);
+    if(!anios.length) throw new Error('La planilla no tiene filas con ESTADO = PRESUPUESTADO.');
+    const hechos=[];
+    for(const a of anios){
+      const filas=porAnio[a];
+      const tq=filas.reduce((s,r)=>s+r.qty,0), tm=filas.reduce((s,r)=>s+r.monto,0);
+      const unidades=[...new Set(filas.map(r=>r.unidad))].sort().join(', ');
+      if(!confirm("Cargar PRESUPUESTO "+a+"\n\nUnidades: "+unidades+"\nTotal: $"+Math.round(tm).toLocaleString('es-AR')+" · "+Math.round(tq).toLocaleString('es-AR')+" unidades\n\nReemplaza todo el presupuesto de "+a+" (el real no se toca). ¿Continuar?")) continue;
+      msg.textContent="Cargando presupuesto "+a+"…";
+      const res=await fetch(SUPABASE_URL+"/rest/v1/rpc/cargar_presupuesto",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_anio:a,p_filas:filas})});
+      const txt=await res.text();
+      if(!res.ok){ let m=txt; try{ m=JSON.parse(txt).message||txt; }catch{}
+        if(/cargar_presupuesto/.test(m) && /not find|no existe|does not exist/i.test(m)) m="Falta crear la función en Supabase (correr supabase/migracion_multianio.sql).";
+        throw new Error(m); }
+      hechos.push(a+" ($"+Math.round(tm).toLocaleString('es-AR')+")");
+    }
+    if(!hechos.length){ msg.textContent="Carga cancelada."; return; }
+    await cargar(anios[anios.length-1]);
+    msg.style.color="#16a34a"; msg.textContent="✓ Presupuesto cargado: "+hechos.join(" · ")+". Si ya existía, se reemplazó.";
+  }catch(e){ msg.style.color="#e1251b"; msg.textContent="No se pudo cargar el presupuesto: "+e.message; }
+  finally{ btn.disabled=false; }
+}
+$("presuImport").onclick=()=>$("presuFile").click();
+$("presuFile").onchange=(e)=>{ if(e.target.files[0]) importarPresupuesto(e.target.files[0]); e.target.value=""; };
+$("factImport").onclick=()=>$("factFile").click();
+$("factFile").onchange=(e)=>{ if(e.target.files[0]) importarFacturacion(e.target.files[0]); e.target.value=""; };
+$("cliImport").onclick=()=>$("cliFile").click();
+$("salir-btn").onclick=()=>{ sb.auth.signOut().finally(()=>{ window.location.href='index.html'; }); };
+$("cliFile").onchange=(e)=>{ if(e.target.files[0]) importarClientes(e.target.files[0]); e.target.value=""; };
+document.querySelectorAll('#medida button').forEach(b=> b.onclick=()=>{ medida=b.dataset.m; document.querySelectorAll('#medida button').forEach(x=>x.classList.toggle('on',x===b)); render(); });
+
+const campoRef=(tipo)=> tipo+ (medida==='monto'?'_monto':'_qty'); // presu_monto / presu_qty ...
+function serie(unidad,tipo){ const o=Array(12).fill(0); REF.filter(r=>r.unidad===unidad).forEach(r=>o[r.mes-1]=Number(r[campoRef(tipo)])||0); return o; }
+function realPorMes(unidad){
+  const out=serie(unidad,'real2026'); // base maestro
+  const porMes={};
+  REAL.filter(x=> unidad==='Compañía' || x.unidad===unidad).forEach(x=>{
+    const m=new Date(x.periodo+'T00:00:00').getMonth();
+    porMes[m]=(porMes[m]||0)+ (medida==='monto'? (Number(x.venta_bruta)||0) : (Number(x.cantidad)||0));
+  });
+  Object.entries(porMes).forEach(([m,v])=> out[m]=v);
+  return out;
+}
+// Real acumulado en una medida específica (para precio promedio), sin depender del toggle
+function acumReal(unidad, med){
+  const base=serie(unidad, med==='monto'?'real2026':'real2026'); // se recalcula abajo
+  const b=Array(12).fill(0);
+  REF.filter(r=>r.unidad===unidad).forEach(r=> b[r.mes-1]=Number(r['real2026_'+(med==='monto'?'monto':'qty')])||0);
+  const pm={};
+  REAL.filter(x=> unidad==='Compañía'||x.unidad===unidad).forEach(x=>{ const m=new Date(x.periodo+'T00:00:00').getMonth(); pm[m]=(pm[m]||0)+(med==='monto'?(Number(x.venta_bruta)||0):(Number(x.cantidad)||0)); });
+  Object.entries(pm).forEach(([m,v])=>b[m]=v);
+  return b.reduce((s,v,i)=> s + (v>0 && enRango(i)? v : 0), 0);
+}
+
+// ===== Piezas de dibujo (estilo tablero RR.HH.) =====
+const COLORS={'Familia':'#3456a8','Empresas':'#e1251b','Distribuidores':'#2ba9e0','Negocios':'#16a34a','Reventa':'#8b5cf6','Sucursales':'#d48f00'};
+const OK='#16a34a', MAL='#e1251b', GRIS='#94a1ab';
+const escH=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function kpiCard(o){
+  return '<div class="card kpi" style="--c:'+o.c+'"><div class="top"><div class="ico">'+o.ico+'</div><div class="lab">'+o.lab+'</div></div>'+
+    '<div class="val"'+(o.vc?' style="color:'+o.vc+'"':'')+'>'+o.val+'</div>'+(o.sub?'<div class="sub">'+o.sub+'</div>':'')+(o.extra||'')+'</div>';
+}
+function donutSVG(items, size, grosor){
+  const r=(size-grosor)/2, C=2*Math.PI*r, tot=items.reduce((s,x)=>s+x.v,0)||1;
+  const gap=items.filter(x=>x.v>0).length>1 ? 2 : 0; let off=0, segs='';
+  items.forEach(x=>{ if(!(x.v>0)) return; const len=x.v/tot*C; const vis=Math.max(len-gap,0.5);
+    segs+='<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="'+x.c+'" stroke-width="'+grosor+'" stroke-dasharray="'+vis+' '+(C-vis)+'" stroke-dashoffset="'+(-off)+'"><title>'+escH(x.t||'')+'</title></circle>';
+    off+=len; });
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'"><circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="#eef1f4" stroke-width="'+grosor+'"/>'+segs+'</svg>';
+}
+
+function render(){
+  const u=$("unidad").value;
+  const real=realPorMes(u), presu=serie(u,'presu'), r2025=serie(u,'real2025');
+  const mesesReal=real.map((v,i)=> v>0? i:-1).filter(i=>i>=0 && enRango(i));
+  const n=mesesReal.length;
+  const realAcum=mesesReal.reduce((s,i)=>s+real[i],0);
+  const presuAcum=mesesReal.reduce((s,i)=>s+presu[i],0);
+  const r2025Acum=mesesReal.reduce((s,i)=>s+r2025[i],0);
+  const presuAnual=presu.reduce((a,b)=>a+b,0);
+  const cumpl= presuAcum? realAcum/presuAcum*100 : 0;
+  const crec= r2025Acum? (realAcum/r2025Acum-1)*100 : 0;
+  const proy= n? realAcum/n*12 : 0;
+  // Variación vs mes anterior: último mes con real DENTRO del filtro contra el mes
+  // calendario anterior, esté o no dentro del filtro. Enero compara contra diciembre del año anterior.
+  let variacion=null, varTexto='';
+  if(n){ const ult=mesesReal[n-1];
+    const prevVal= ult>0 ? real[ult-1] : r2025[11];
+    const prevNom= ult>0 ? MESES[ult-1] : 'Dic '+(ANIO-1);
+    varTexto=MESES[ult]+' vs '+prevNom;
+    if(prevVal>0) variacion=(real[ult]/prevVal-1)*100; else varTexto='Sin datos de '+prevNom; }
+  const okc=(v)=>v>=100;
+  const tag=(t,ok)=>'<span class="tag" style="background:'+(ok?'rgba(22,163,74,.12)':'rgba(225,37,27,.12)')+';color:'+(ok?OK:MAL)+'">'+(ok?'▲ ':'▼ ')+t+'</span>';
+  const pm=acumReal(u,'qty')? acumReal(u,'monto')/acumReal(u,'qty') : 0;
+  const abTot=(()=>{ let a=0,b=0; AB.filter(r=> String(r.periodo).startsWith(ANIO+"-") && enRango(new Date(r.periodo+"T00:00:00").getMonth()) && (u==="Compañía"||normU(r.unidad)===normU(u))).forEach(r=>{a+=Number(r.altas)||0;b+=Number(r.bajas)||0;}); return {a,b,neto:a-b}; })();
+  const periodoTxt = MESES[mesDesde]+(mesHasta!==mesDesde?' a '+MESES[mesHasta]:'')+' '+ANIO;
+  $("heroSub").textContent=(u||'Compañía')+' · '+periodoTxt+' · Cumplimiento presupuestario · ANAFER S.A.';
+
+  $("kpis").innerHTML=[
+    kpiCard({c:'var(--blue)', ico:'💰', lab:(medida==='monto'?'Facturación real':'Unidades vendidas')+' (acum.)', val:fmt(realAcum), sub:n+' mes'+(n===1?'':'es')+' con datos'}),
+    kpiCard({c:'var(--navy)', ico:'🎯', lab:'Presupuesto (acum.)', val:fmt(presuAcum), sub:'Anual: '+fmt(presuAnual)}),
+    presuAcum ? kpiCard({c:okc(cumpl)?'var(--green)':'var(--red)', ico:okc(cumpl)?'✅':'⚠️', lab:'Cumplimiento', val:cumpl.toFixed(1)+'%', vc:okc(cumpl)?OK:MAL, extra:tag(okc(cumpl)?'En/sobre presupuesto':'Por debajo',okc(cumpl))})
+              : kpiCard({c:'var(--muted)', ico:'🎯', lab:'Cumplimiento', val:'—', vc:GRIS, sub:'Sin presupuesto cargado'}),
+    r2025Acum ? kpiCard({c:'var(--sky)', ico:'📈', lab:'Crecimiento vs '+(ANIO-1), val:(crec>=0?'+':'')+crec.toFixed(1)+'%', vc:crec>=0?OK:MAL, sub:fmt(r2025Acum)+' en '+(ANIO-1)})
+              : kpiCard({c:'var(--sky)', ico:'📈', lab:'Crecimiento vs '+(ANIO-1), val:'—', vc:GRIS, sub:'Sin datos de '+(ANIO-1)}),
+    kpiCard({c:'var(--amber)', ico:'🔁', lab:'Var. vs mes anterior', val:(variacion==null?'—':(variacion>=0?'+':'')+variacion.toFixed(1)+'%'), vc:(variacion==null?GRIS:variacion>=0?OK:MAL), sub:varTexto}),
+    kpiCard({c:'var(--violet)', ico:'📅', lab:'Proyección cierre '+ANIO, val:fmt(proy), sub:(presuAnual?(proy/presuAnual*100).toFixed(0):0)+'% del presupuesto anual'}),
+    kpiCard({c:'var(--sky)', ico:'🏷️', lab:'Precio promedio', val:'$'+Math.round(pm).toLocaleString('es-AR'), sub:'facturación ÷ unidades'}),
+    kpiCard({c:'var(--green)', ico:'👥', lab:'Altas / bajas de clientes', val:'<span style="color:'+OK+'">'+abTot.a+'</span> <span style="color:#cfd6dd">/</span> <span style="color:'+MAL+'">'+abTot.b+'</span>', sub:'Neto '+(abTot.neto>=0?'+':'')+abTot.neto}),
+  ].join('');
+  $("nota").innerHTML='ⓘ Proyección al cierre = ritmo actual × 12 (acumulado ÷ meses con datos × 12). · Precio promedio = facturación ÷ unidades vendidas.';
+
+  // --- Evolución mensual: barras (real) + línea punteada de objetivo + % arriba ---
+  const mesesVis=[]; for(let i=0;i<12;i++) if(enRango(i) && (presu[i]||real[i])) mesesVis.push(i);
+  const maxV=Math.max(...mesesVis.map(i=>Math.max(real[i]||0,presu[i]||0)),1)*1.12;
+  const Hpx=200;
+  let ev='<div class="vchart" style="min-width:'+(mesesVis.length*42)+'px">';
+  [0.25,0.5,0.75,1].forEach(f=>{ ev+='<div class="vgrid" style="bottom:'+(f*Hpx+30)+'px"></div>'; });
+  ev+='<div class="vcols">';
+  mesesVis.forEach(i=>{
+    const rH=(real[i]||0)/maxV*Hpx, pH=(presu[i]||0)/maxV*Hpx;
+    const c=(real[i]>0 && presu[i])? real[i]/presu[i]*100 : null;
+    const col= real[i]<=0 ? '#dfe4e9' : (c==null? '#3456a8' : (c>=100?OK:MAL));
+    const tip=MESES[i]+' '+ANIO+'\nReal: '+fmt(real[i]||0)+'\nObjetivo: '+fmt(presu[i]||0)+(c!=null?'\nCumplimiento: '+c.toFixed(1)+'%':'');
+    ev+='<div class="vcol" title="'+escH(tip)+'"><div class="vplot" style="height:'+Hpx+'px">'+
+      (c!=null?'<div class="vlab" style="bottom:'+(Math.max(rH,pH)+6)+'px">'+c.toFixed(0)+'%</div>':(real[i]>0?'<div class="vlab" style="bottom:'+(rH+6)+'px;font-weight:600;color:var(--ink2)">'+fmt(real[i])+'</div>':''))+
+      (presu[i]?'<div class="vobj" style="bottom:'+pH+'px"></div>':'')+
+      '<div class="vbar" style="height:'+Math.max(rH,real[i]>0?3:0)+'px;background:'+col+'"></div>'+
+      '</div><div class="vx">'+MESES[i]+'</div></div>';
+  });
+  ev+='</div></div>';
+  $("evol").innerHTML= mesesVis.length? ev : '<div class="empty">Sin datos para el período.</div>';
+
+  // --- Participación por unidad: dona con total al centro + leyenda con valor y % ---
+  const uns=['Familia','Empresas','Distribuidores','Negocios','Reventa','Sucursales'];
+  const unsPie=[...uns, ...[...new Set(REF.map(r=>r.unidad))].filter(x=>x!=='Compañía' && !uns.includes(x))];
+  const vals=unsPie.map(x=>{ const rr=realPorMes(x); return {u:x, v:rr.reduce((s,v,i)=>s+(v>0 && enRango(i)?v:0),0)}; }).filter(x=>x.v>0).sort((a,b)=>b.v-a.v);
+  const totP=vals.reduce((s,x)=>s+x.v,0);
+  $("pie").innerHTML = totP ? '<div class="donut-wrap"><div class="donut">'+
+      donutSVG(vals.map(x=>({v:x.v,c:COLORS[x.u]||GRIS,t:x.u+': '+fmt(x.v)+' ('+(x.v/totP*100).toFixed(1)+'%)'})),180,28)+
+      '<div class="center"><b>'+fmt(totP)+'</b><span>total del período</span></div></div>'+
+      '<div class="dleg">'+vals.map(x=>'<div class="r"><i style="background:'+(COLORS[x.u]||GRIS)+'"></i><span style="text-align:left;color:var(--ink);font-size:13px">'+escH(x.u)+'</span><b>'+fmt(x.v)+'</b><span>'+(x.v/totP*100).toFixed(1)+'%</span></div>').join('')+'</div></div>'
+    : '<div class="empty">Sin ventas en el período.</div>';
+
+  // --- Cumplimiento por unidad: barra real sobre presupuesto + % a la derecha ---
+  const cu=uns.map(x=>{ const r=realPorMes(x), p=serie(x,'presu');
+    const mr=r.map((v,i)=>v>0?i:-1).filter(i=>i>=0 && enRango(i));
+    const ra=mr.reduce((s,i)=>s+r[i],0), pa=mr.reduce((s,i)=>s+p[i],0);
+    return {u:x,real:ra,presu:pa,cumpl:pa?ra/pa*100:0}; }).filter(x=>x.real||x.presu).sort((a,b)=>b.cumpl-a.cumpl);
+  const maxCU=Math.max(...cu.map(x=>Math.max(x.real,x.presu)),1);
+  $("cumpUni").innerHTML = cu.length ? cu.map(x=>{ const col=x.cumpl>=100?OK:MAL;
+    return '<div class="hrow" title="'+escH(x.u+'\nReal: '+fmt(x.real)+'\nPresupuesto: '+fmt(x.presu))+'"><div class="hl">'+escH(x.u)+'</div>'+
+      '<div class="htrack"><div class="b" style="width:'+(x.presu/maxCU*100)+'%;background:#cfd6dd"></div><div class="b" style="width:'+(x.real/maxCU*100)+'%;background:'+col+'"></div></div>'+
+      '<div class="hv" style="color:'+col+'">'+(x.presu?x.cumpl.toFixed(0)+'%':'—')+'</div>'+
+      '<div class="hsub">Real '+fmt(x.real)+' · Presupuesto '+fmt(x.presu)+'</div></div>'; }).join('')
+    : '<div class="empty">Sin datos para el período.</div>';
+
+  // --- Top productos (tabla con barra de cumplimiento) ---
+  const med = medida==='monto';
+  const prodsD = productosDetalle(u).map(p=>({ producto:p.producto,
+    real: med?p.realM:p.realQ, presu: med?p.presuM:p.presuQ, r2025: med?p.r2025M:p.r2025Q,
+    precio: p.realQ? p.realM/p.realQ : 0 }));
+  const top=prodsD.filter(x=>x.real||x.presu).sort((a,b)=>b.real-a.real).slice(0,12);
+  $("top").innerHTML = top.length? '<thead><tr><th>Producto</th><th class="num">Real</th><th class="num">Presupuesto</th><th class="num">Cumplimiento</th><th class="num">Precio prom.</th></tr></thead><tbody>'+
+    top.map(p=>{ const c=p.presu? p.real/p.presu*100:null; const col=c==null?GRIS:(c>=100?OK:MAL);
+      return '<tr><td class="prod">'+escH(p.producto)+'</td><td class="num">'+fmt(p.real)+'</td><td class="num" style="color:var(--ink2)">'+fmt(p.presu)+'</td>'+
+        '<td class="num"><div class="cbar"><div class="t"><div style="width:'+Math.min(c||0,100)+'%;background:'+col+'"></div></div><b style="min-width:42px;color:'+col+'">'+(c==null?'—':c.toFixed(0)+'%')+'</b></div></td>'+
+        '<td class="num">$'+Math.round(p.precio).toLocaleString('es-AR')+'</td></tr>'; }).join('')+'</tbody>'
+    : '<tbody><tr><td class="empty">Sin datos de productos.</td></tr></tbody>';
+
+  // --- Diferencia vs año anterior: ranking con barra verde (sube) / roja (baja) ---
+  const dif=prodsD.map(p=>({producto:p.producto, dif:p.real-p.r2025, real:p.real, r2025:p.r2025}))
+    .filter(x=>x.real||x.r2025).sort((a,b)=>b.dif-a.dif).slice(0,10);
+  const maxD=Math.max(...dif.map(x=>Math.abs(x.dif)),1);
+  $("dif").innerHTML = dif.length ? dif.map(x=>{ const col=x.dif>=0?OK:MAL;
+    return '<div class="hrow" title="'+escH(x.producto+'\n'+(ANIO-1)+': '+fmt(x.r2025)+'\n'+ANIO+': '+fmt(x.real))+'"><div class="hl">'+escH(x.producto)+'</div>'+
+      '<div class="htrack"><div class="b" style="width:'+(Math.abs(x.dif)/maxD*100)+'%;background:'+col+'"></div></div>'+
+      '<div class="hv" style="color:'+col+'">'+(x.dif>=0?'+':'−')+fmt(Math.abs(x.dif))+'</div>'+
+      '<div class="hsub">'+(ANIO-1)+': '+fmt(x.r2025)+' → '+ANIO+': '+fmt(x.real)+'</div></div>'; }).join('')
+    : '<div class="empty">Sin datos.</div>';
+
+  // --- Altas vs bajas (respeta unidad y filtro de meses) ---
+  const enRangoAB=(r)=> String(r.periodo).startsWith(ANIO+'-') && enRango(new Date(r.periodo+'T00:00:00').getMonth());
+  const abU = AB.filter(r=> enRangoAB(r) && (u==='Compañía' || normU(r.unidad)===normU(u)));
+  let tAlt=0,tBaj=0; abU.forEach(r=>{ tAlt+=Number(r.altas)||0; tBaj+=Number(r.bajas)||0; });
+  const neto=tAlt-tBaj;
+  const porU={};
+  AB.filter(enRangoAB).forEach(r=>{ const uu=normU(r.unidad); (porU[uu]=porU[uu]||{altas:0,bajas:0}); porU[uu].altas+=Number(r.altas)||0; porU[uu].bajas+=Number(r.bajas)||0; });
+  const filasU = Object.entries(porU).filter(([uu])=> u==='Compañía' || normU(uu)===normU(u)).sort((a,b)=>(b[1].altas+b[1].bajas)-(a[1].altas+a[1].bajas));
+  const maxAB=Math.max(...filasU.map(([,v])=>Math.max(v.altas,v.bajas)),1);
+  $("altasbajas").innerHTML = abU.length
+    ? '<div class="tiles"><div class="tile"><div class="l">Altas</div><div class="v" style="color:'+OK+'">'+tAlt+'</div></div>'+
+      '<div class="tile"><div class="l">Bajas</div><div class="v" style="color:'+MAL+'">'+tBaj+'</div></div>'+
+      '<div class="tile"><div class="l">Neto</div><div class="v" style="color:'+(neto>=0?OK:MAL)+'">'+(neto>=0?'+':'')+neto+'</div></div></div>'+
+      '<div class="legend" style="margin-bottom:4px"><span><i style="background:'+OK+'"></i>Altas</span><span><i style="background:'+MAL+'"></i>Bajas</span><span style="margin-left:auto">Neto</span></div>'+
+      filasU.map(([uu,v])=>{ const nt=v.altas-v.bajas;
+        return '<div class="ab2" title="'+escH(uu+'\nAltas: '+v.altas+'\nBajas: '+v.bajas)+'"><div style="color:var(--ink2);text-align:right">'+escH(uu)+'</div>'+
+          '<div class="bars"><div style="width:'+Math.max(v.altas/maxAB*100,v.altas?2:0)+'%;background:'+OK+'"></div><div style="width:'+Math.max(v.bajas/maxAB*100,v.bajas?2:0)+'%;background:'+MAL+'"></div></div>'+
+          '<div class="n" style="color:'+(nt>=0?OK:MAL)+'">'+(nt>=0?'+':'')+nt+'</div></div>'; }).join('')
+    : '<div class="empty">No hay datos de altas/bajas para este período. Cargá el archivo mensual.</div>';
+
+  renderClientes();
+}
+
+async function renderClientes(){
+  const u=$("unidad").value;
+  const desde=ANIO+"-"+String(mesDesde+1).padStart(2,"0")+"-01";
+  const hasta=ANIO+"-"+String(mesHasta+1).padStart(2,"0")+"-01";
+  try{
+    const res=await fetch(SUPABASE_URL+"/rest/v1/rpc/top_clientes",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_desde:desde,p_hasta:hasta,p_unidad:u,p_limit:20})});
+    const data=await res.json();
+    if(!Array.isArray(data)||!data.length){ $("clientes").innerHTML='<div class="empty">No hay datos de clientes para este período. Importá el archivo del mes.</div>'; return; }
+    const maxC=Math.max(...data.map(c=>Number(c.venta)||0),1);
+    $("clientes").innerHTML=data.map((c,i)=>{ const v=Number(c.venta)||0; const col='#3456a8';
+      return '<div class="hrow" title="'+escH((c.cliente||'')+' · '+(c.unidad||'')+'\n'+fmtMonto(v))+'"><div class="hl">'+(i+1)+'. '+escH(c.cliente||'')+'<em>'+escH(c.unidad||'')+'</em></div>'+
+        '<div class="htrack"><div class="b" style="width:'+(v/maxC*100)+'%;background:'+col+'"></div></div>'+
+        '<div class="hv">'+fmtMonto(v)+'</div></div>'; }).join('');
+  }catch(e){ $("clientes").innerHTML='<div class="empty">No se pudo cargar. ¿Corriste el SQL de clientes (tabla + función)?</div>'; }
+}
+</script>
+</body>
+</html>
