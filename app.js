@@ -198,8 +198,39 @@
     {id:'pagos',      label:'Pagos'},
     {id:'tesoreria',  label:'Tesorería'},
     {id:'day',        label:'Día'},
-    {id:'dashboard',  label:'Dashboard'}
+    {id:'dashboard',  label:'Dashboard'},
+    {id:'comercial',  label:'Tablero comercial', noTab:true},
+    {id:'rrhh',       label:'Panel RR.HH.', noTab:true}
   ];
+  // Áreas de la empresa: cada una agrupa sus pestañas. El inicio muestra una
+  // tarjeta por área a la que el perfil tenga acceso (alguna pestaña que no
+  // esté "Oculta"). Comercial es otra página (comercial-dashboard.html) que
+  // comparte el mismo ingreso con email (sesión de Supabase).
+  var AREAS = [
+    {id:'logistica', label:'Logística', icon:'🚛', color:'#223c7e', dash:'viajes',
+     desc:'FlotaPesada, sucursales, empresas, eventuales, vista del día y dashboard de viajes.',
+     tabs:['grid','branches','company','occasional','day','dashboard']},
+    {id:'administracion', label:'Administración', icon:'🧾', color:'#16a34a', dash:'gastos',
+     desc:'Proveedores, compras, facturas, órdenes de pago, tesorería y dashboard de gastos.',
+     tabs:['compras','pagos','tesoreria','dashboard']},
+    {id:'comercial', label:'Comercial', icon:'📊', color:'#2ba9e0', href:'comercial-dashboard.html',
+     desc:'Cumplimiento presupuestario, facturación por unidad de negocio, clientes y altas/bajas.',
+     tabs:['comercial']},
+    {id:'rrhh', label:'Recursos Humanos', icon:'👥', color:'#e1251b', href:'fichaje/admin.html',
+     desc:'Asistencia, presentismo, fichadas, ausencias, legajos, indicadores y reportes.',
+     tabs:['rrhh']}
+  ];
+  function areaById(id){ return AREAS.find(function(a){ return a.id===id; }) || null; }
+  // El Dashboard está en Logística y en Administración: cuenta para mostrar
+  // un área solo si el perfil no tiene ninguna otra pestaña (ej. un perfil
+  // de gerencia que solo mira dashboards ve las dos).
+  function tieneTabsPropias(a){ return a.tabs.some(function(t){ return t!=='dashboard' && tabPermiso(t)!=='oculta'; }); }
+  function areaVisible(a){
+    if(tieneTabsPropias(a)) return true;
+    if(a.tabs.indexOf('dashboard')===-1 || tabPermiso('dashboard')==='oculta') return false;
+    return !AREAS.some(function(x){ return x.tabs.indexOf('dashboard')!==-1 && tieneTabsPropias(x); });
+  }
+  function visibleAreas(){ return AREAS.filter(areaVisible); }
   function defaultPermisos(nivel){
     var p = {};
     TAB_DEFS.forEach(function(t){ p[t.id] = nivel; });
@@ -213,13 +244,20 @@
       {id:'lectura', nombre:'Lectura', password:'lectura', manageAccess:false, permisos:lecturaPermisos}
     ];
   }
+  // Quien entra con email y no tiene perfil asignado (los usuarios que ya
+  // usaban el tablero Comercial) ve solo Comercial, como hasta ahora.
+  var ROLE_SOLO_COMERCIAL = {id:'__comercial__', nombre:'Solo Comercial', password:'', manageAccess:false, permisos:{comercial:'editar'}};
   function currentRole(){
+    if(state.roleId==='__comercial__') return ROLE_SOLO_COMERCIAL;
     return (state.auth.roles||[]).find(function(r){ return r.id===state.roleId; }) || null;
   }
   function isLoggedIn(){ return !!currentRole(); }
   function tabPermiso(tabId){
     var r = currentRole();
     if(!r) return 'oculta';
+    // Perfiles creados antes de que existiera el permiso "comercial": los
+    // que administran accesos lo ven, el resto no (se ajusta en ⚙ → Acceso).
+    if((tabId==='comercial' || tabId==='rrhh') && !(r.permisos && r.permisos[tabId])) return r.manageAccess ? 'editar' : 'oculta';
     return (r.permisos && r.permisos[tabId]) || 'oculta';
   }
   function canEdit(tabId){ return tabPermiso(tabId)==='editar'; }
@@ -228,20 +266,36 @@
   function canOpenSettings(){
     return canManageAccess() || canEdit('grid') || canEdit('branches') || canEdit('company') || canEdit('occasional') || canEdit('compras');
   }
+  function areaTabs(){
+    var a = state.area ? areaById(state.area) : null;
+    return a ? a.tabs : TAB_DEFS.map(function(t){ return t.id; });
+  }
   function firstAccessibleTab(){
-    for(var i=0;i<TAB_DEFS.length;i++){ if(tabPermiso(TAB_DEFS[i].id)!=='oculta') return TAB_DEFS[i].id; }
+    var tabs = areaTabs();
+    for(var i=0;i<TAB_DEFS.length;i++){
+      var t = TAB_DEFS[i];
+      if(t.noTab || tabs.indexOf(t.id)===-1) continue;
+      if(tabPermiso(t.id)!=='oculta') return t.id;
+    }
     return null;
   }
   function refreshTabVisibility(){
     var accessibleCount = 0;
+    var tabs = areaTabs();
     TAB_DEFS.forEach(function(t){
+      if(t.noTab) return;
       var btn = document.getElementById('tab-'+t.id);
-      var oculta = tabPermiso(t.id)==='oculta';
+      var oculta = tabPermiso(t.id)==='oculta' || tabs.indexOf(t.id)===-1;
       if(btn) btn.hidden = oculta;
       if(!oculta) accessibleCount++;
     });
     var viewtabs = document.getElementById('viewtabs');
-    if(viewtabs) viewtabs.hidden = accessibleCount<=1;
+    if(viewtabs) viewtabs.hidden = !state.area || accessibleCount<=1;
+    var homeBtn = document.getElementById('home-btn');
+    if(homeBtn) homeBtn.hidden = !state.area || visibleAreas().length<=1;
+    var area = state.area ? areaById(state.area) : null;
+    var tag = document.getElementById('brand-tag');
+    if(tag) tag.textContent = area ? area.label : 'Logística, administración y comercial en un solo lugar';
     var settingsBtn = document.getElementById('settings-btn');
     if(settingsBtn) settingsBtn.hidden = !canOpenSettings();
   }
@@ -683,18 +737,23 @@
     return base+'_'+n;
   }
 
-  function showToast(msg){
+  function showToast(msg, ms){
     var t = document.getElementById('toast');
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(t._timer);
-    t._timer = setTimeout(function(){ t.classList.remove('show'); }, 2600);
+    t._timer = setTimeout(function(){ t.classList.remove('show'); }, ms || 2600);
   }
 
   // ---------- View switching ----------
   function setView(v){
-    if(!v || tabPermiso(v)==='oculta') v = firstAccessibleTab() || 'day'; // no navega a pestañas sin permiso
+    if(!v || tabPermiso(v)==='oculta' || areaTabs().indexOf(v)===-1) v = firstAccessibleTab() || 'day'; // no navega a pestañas sin permiso
     state.view = v;
+    document.getElementById('view-home').hidden = true;
+    // Dashboard: cada área ve solo su parte (Logística → Viajes, Administración → Gastos).
+    var areaD = state.area ? areaById(state.area) : null;
+    document.getElementById('dash-subtabs').hidden = !!(areaD && areaD.dash);
+    if(areaD && areaD.dash) switchDashSubTab(areaD.dash);
     document.body.classList.toggle('tab-readonly', tabPermiso(v)!=='editar');
     refreshTabVisibility();
     document.getElementById('view-grid').hidden = (v!=='grid');
@@ -2437,7 +2496,8 @@
     nombreInp.placeholder = 'Nombre del perfil'; nombreInp.value = role.nombre || '';
     var pwInp = document.createElement('input');
     pwInp.type = 'text'; pwInp.className = 'role-password'; pwInp.maxLength = 60;
-    pwInp.placeholder = 'Contraseña'; pwInp.value = role.password || '';
+    pwInp.placeholder = 'Contraseña (ingreso anterior, opcional)'; pwInp.value = role.password || '';
+    pwInp.title = 'Solo para el ingreso anterior por contraseña de perfil. Con el ingreso por email no hace falta.';
     top.appendChild(nombreInp); top.appendChild(pwInp);
     card.appendChild(top);
 
@@ -2452,15 +2512,27 @@
 
     var grid = document.createElement('div');
     grid.className = 'role-permisos-grid';
-    TAB_DEFS.forEach(function(t){
+    var tabArea = {};
+    AREAS.forEach(function(a){ a.tabs.forEach(function(t){ if(!tabArea[t]) tabArea[t] = a; }); });
+    var ordenTabs = [];
+    AREAS.forEach(function(a){ a.tabs.forEach(function(t){ if(ordenTabs.indexOf(t)===-1 && tabArea[t]===a) ordenTabs.push(t); }); });
+    var areaPrev = null;
+    ordenTabs.map(function(id){ return TAB_DEFS.find(function(t){ return t.id===id; }); }).filter(Boolean).forEach(function(t){
+      if(tabArea[t.id]!==areaPrev){
+        areaPrev = tabArea[t.id];
+        var h = document.createElement('div');
+        h.className = 'role-area-head';
+        h.textContent = areaPrev.label+(t.id==='dashboard' ? '' : '');
+        grid.appendChild(h);
+      }
       var lbl = document.createElement('div');
       lbl.className = 'role-permiso-row';
-      lbl.textContent = t.label;
+      lbl.textContent = t.id==='dashboard' ? 'Dashboard (Viajes en Logística, Gastos en Administración)' : t.label;
       var sel = document.createElement('select');
       sel.className = 'role-permiso-select';
       sel.dataset.tab = t.id;
       sel.innerHTML = '<option value="oculta">Oculta</option><option value="ver">Ver</option><option value="editar">Editar</option>';
-      sel.value = (role.permisos && role.permisos[t.id]) || 'oculta';
+      sel.value = (role.permisos && role.permisos[t.id]) || ((t.id==='comercial' || t.id==='rrhh') && role.manageAccess ? 'editar' : 'oculta');
       grid.appendChild(lbl); grid.appendChild(sel);
     });
     card.appendChild(grid);
@@ -2481,7 +2553,88 @@
     (state.auth.roles||[]).forEach(function(role){
       list.appendChild(buildRoleCard(role));
     });
+    renderUsuarios();
   }
+
+  // ---------- Usuarios (ingreso con email) ----------
+  // La tabla usuarios dice quién puede entrar (activo) y con qué perfil. Las
+  // cuentas (email + contraseña) son de Supabase Auth; acá se crean con
+  // signUp desde un cliente aparte, para no cerrar la sesión de quien la crea.
+  function perfilOptionsHtml(sel){
+    return '<option value="">Solo Comercial</option>'+(state.auth.roles||[]).map(function(r){
+      return '<option value="'+esc(r.id)+'"'+(r.id===sel?' selected':'')+'>'+esc(r.nombre||r.id)+'</option>'; }).join('');
+  }
+  function renderUsuarios(){
+    var box = document.getElementById('usuarios-list');
+    var msg = document.getElementById('usuarios-msg');
+    if(!box) return;
+    document.getElementById('nu-perfil').innerHTML = perfilOptionsHtml('');
+    var puede = !!(state.sb && state.sessionEmail);
+    document.getElementById('usuario-add').hidden = !puede;
+    if(!puede){
+      box.innerHTML = '';
+      msg.textContent = 'Para administrar usuarios tenés que haber ingresado con tu email (no con la contraseña de perfil).';
+      return;
+    }
+    msg.textContent = 'Cargando usuarios…';
+    state.sb.from('usuarios').select('*').order('email').then(function(res){
+      if(res.error){ msg.textContent = 'No se pudieron leer los usuarios: '+res.error.message+' (¿corriste el schema.sql nuevo?)'; return; }
+      msg.textContent = '';
+      box.innerHTML = '';
+      (res.data||[]).forEach(function(u){
+        var row = document.createElement('div');
+        row.className = 'usuario-row';
+        row.innerHTML = '<div class="em" title="'+esc(u.email)+'">'+esc(u.email)+'</div>'+
+          '<select>'+perfilOptionsHtml(u.perfil||'')+'</select>'+
+          '<label><input type="checkbox"'+(u.activo!==false?' checked':'')+'> Activo</label>';
+        var sel = row.querySelector('select'), chk = row.querySelector('input');
+        function guardar(){
+          if(u.email===state.sessionEmail && (!chk.checked || sel.value!==u.perfil) && !confirmarCambioPropio(sel.value, chk.checked)){ sel.value = u.perfil||''; chk.checked = u.activo!==false; return; }
+          state.sb.from('usuarios').update({perfil: sel.value || null, activo: chk.checked}).eq('email', u.email).then(function(r){
+            if(r.error){ showToast('No se pudo guardar: '+r.error.message); return; }
+            u.perfil = sel.value || null; u.activo = chk.checked;
+            showToast('Usuario actualizado.');
+          });
+        }
+        sel.addEventListener('change', guardar);
+        chk.addEventListener('change', guardar);
+        box.appendChild(row);
+      });
+      if(!(res.data||[]).length) box.innerHTML = '<div class="sub">Todavía no hay usuarios.</div>';
+    });
+  }
+  // Evita que el administrador se saque a sí mismo el acceso sin querer.
+  function confirmarCambioPropio(perfil, activo){
+    var r = (state.auth.roles||[]).find(function(x){ return x.id===perfil; });
+    if(activo && r && r.manageAccess) return true;
+    showToast('No podés quitarte a vos mismo el acceso de administrador. Pedíselo a otro administrador.');
+    return false;
+  }
+  document.getElementById('nu-add').addEventListener('click', function(){
+    var email = document.getElementById('nu-email').value.trim().toLowerCase();
+    var pw = document.getElementById('nu-password').value;
+    var perfil = document.getElementById('nu-perfil').value || null;
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ showToast('Ingresá un email válido.'); return; }
+    if(pw.length<6){ showToast('La contraseña inicial tiene que tener al menos 6 caracteres.'); return; }
+    var btn = this; btn.disabled = true;
+    var aux = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, {auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false, storageKey:'alta-usuario'}});
+    // Si Supabase tiene cerrado el registro (signup_disabled, lo recomendable),
+    // igual se anota el usuario con su perfil y la cuenta se crea a mano en
+    // Supabase → Authentication → Users → Add user.
+    var sinRegistro = false;
+    aux.auth.signUp({email:email, password:pw}).then(function(r){
+      if(r.error && /signup.*(disabled|not allowed)|signups not allowed/i.test((r.error.code||'')+' '+r.error.message)) sinRegistro = true;
+      else if(r.error && !/already|registered|exist/i.test(r.error.message)) throw r.error;
+      return state.sb.from('usuarios').upsert({email:email, activo:true, perfil:perfil}, {onConflict:'email'});
+    }).then(function(r){
+      if(r && r.error) throw r.error;
+      document.getElementById('nu-email').value = ''; document.getElementById('nu-password').value = '';
+      if(sinRegistro) showToast('Usuario anotado con su perfil. Falta crearle la cuenta: en Supabase → Authentication → Users → Add user → Create new user, con este email, la contraseña y "Auto Confirm User" tildado.', 12000);
+      else showToast('Usuario agregado. Si ya tenía cuenta, entra con su contraseña de siempre; si Supabase pide confirmar el email, le llega un mail.');
+      renderUsuarios();
+    }).catch(function(e){ showToast('No se pudo agregar: '+((e&&e.message)||'error')); })
+    .finally(function(){ btn.disabled = false; });
+  });
 
   function personRow(p, writeFn, showScope){
     var row = document.createElement('div');
@@ -5213,9 +5366,9 @@
       var card = cards[i];
       var nombre = card.querySelector('.role-nombre').value.trim();
       var password = card.querySelector('.role-password').value.trim();
-      if(!nombre || !password){ showToast('Completá nombre y contraseña de todos los perfiles.'); return; }
-      if(pwSeen[password]){ showToast('Las contraseñas de los perfiles tienen que ser todas distintas.'); return; }
-      pwSeen[password] = true;
+      if(!nombre){ showToast('Completá el nombre de todos los perfiles.'); return; }
+      if(password && pwSeen[password]){ showToast('Las contraseñas de los perfiles tienen que ser todas distintas.'); return; }
+      if(password) pwSeen[password] = true;
       var manageAccess = card.querySelector('.role-manage-access').checked;
       if(manageAccess) anyManage = true;
       var permisos = {};
@@ -5386,7 +5539,7 @@
         }
       });
     });
-    state.sb.from('app_config').select('*').eq('id','auth').then(function(res){
+    state.configPromise = state.sb.from('app_config').select('*').eq('id','auth').then(function(res){
       if(!res.error && res.data && res.data.length){
         var row = res.data[0];
         if(row.roles && Array.isArray(row.roles) && row.roles.length){
@@ -5507,45 +5660,165 @@
     document.querySelector('.shell').hidden = !loggedIn;
   }
 
+  // ---------- Inicio por áreas ----------
+  function renderHome(){
+    var grid = document.getElementById('home-grid');
+    grid.innerHTML = '';
+    var r = currentRole();
+    document.getElementById('home-hello').textContent = (state.sessionEmail ? 'Hola '+state.sessionEmail : (r ? 'Perfil '+r.nombre : ''))+' · elegí un área';
+    if(!visibleAreas().length) grid.innerHTML = '<div class="sub">Tu perfil todavía no tiene ningún área habilitada. Pedile acceso al administrador.</div>';
+    visibleAreas().forEach(function(a){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'area-card';
+      b.style.setProperty('--ac', a.color);
+      var sinSesion = a.href && !state.sessionEmail;
+      b.innerHTML = '<div class="ai">'+a.icon+'</div><h3>'+esc(a.label)+'</h3><p>'+esc(a.desc)+'</p>'+
+        '<div class="go">'+(sinSesion ? 'Para entrar a Comercial ingresá con tu email' : 'Entrar →')+'</div>';
+      if(sinSesion) b.disabled = true;
+      b.addEventListener('click', function(){ openArea(a.id); });
+      grid.appendChild(b);
+    });
+  }
+  function showHome(){
+    state.area = null;
+    try{ localStorage.removeItem('hdr_area'); }catch(e){}
+    ['grid','day','dashboard','branches','company','occasional','compras','pagos','tesoreria'].forEach(function(v){
+      document.getElementById('view-'+v).hidden = true;
+      document.getElementById('toolbar-'+v).hidden = true;
+    });
+    refreshTabVisibility();
+    renderHome();
+    document.getElementById('view-home').hidden = false;
+  }
+  function openArea(id){
+    var a = areaById(id);
+    if(!a || !areaVisible(a)) return;
+    if(a.href){ window.location.href = a.href; return; }
+    state.area = id;
+    try{ localStorage.setItem('hdr_area', id); }catch(e){}
+    var prev = state.view;
+    setView(a.tabs.indexOf(prev)!==-1 ? prev : null);
+  }
+  document.getElementById('home-btn').addEventListener('click', showHome);
+
+  // ---------- Ingreso: email (Supabase) o contraseña de perfil (anterior) ----------
+  function updateAuthVisibility(){
+    var loggedIn = isLoggedIn();
+    document.getElementById('login-overlay').classList.toggle('show', !loggedIn);
+    document.querySelector('.shell').hidden = !loggedIn;
+  }
+
   function enterApp(){
     document.getElementById('who-fields').style.display = canEditAnything() ? 'contents' : 'none';
-    refreshTabVisibility();
     updateAuthVisibility();
-    setView(firstAccessibleTab() || 'day');
+    var areas = visibleAreas();
+    if(areas.length===1 && areas[0].href && state.sessionEmail){ window.location.href = areas[0].href; return; }
+    var saved = null;
+    try{ saved = localStorage.getItem('hdr_area'); }catch(e){}
+    var internas = areas.filter(function(a){ return !a.href; });
+    if(areas.length===1 && !areas[0].href) openArea(areas[0].id);
+    else if(saved && areaById(saved) && !areaById(saved).href && areaVisible(areaById(saved))) openArea(saved);
+    else if(!areas.length || (internas.length===0 && !state.sessionEmail)){ state.area = null; showHome(); }
+    else showHome();
+    refreshTabVisibility();
   }
 
   function logout(){
     state.roleId = null;
-    try{ localStorage.removeItem('hdr_role'); }catch(e){}
+    state.area = null;
+    state.sessionEmail = null;
+    try{ localStorage.removeItem('hdr_role'); localStorage.removeItem('hdr_area'); }catch(e){}
+    if(state.sb && state.sb.auth) state.sb.auth.signOut().catch(function(){});
     document.getElementById('login-password').value = '';
     document.getElementById('login-error').style.display = 'none';
     updateAuthVisibility();
   }
 
+  var loginModo = 'email';
+  function setLoginModo(m){
+    loginModo = m;
+    document.getElementById('login-email-field').hidden = m!=='email';
+    document.getElementById('login-sub').textContent = m==='email' ? 'Ingresá con tu email y tu contraseña' : 'Contraseña del perfil (ingreso anterior)';
+    document.getElementById('login-mode-btn').textContent = m==='email' ? 'Ingresar con contraseña de perfil (sistema anterior)' : 'Ingresar con email';
+    document.getElementById('login-error').style.display = 'none';
+  }
+  document.getElementById('login-mode-btn').addEventListener('click', function(){ setLoginModo(loginModo==='email' ? 'perfil' : 'email'); });
+  function loginError(msg){
+    var el = document.getElementById('login-error');
+    el.textContent = msg; el.style.display = '';
+  }
+
+  // Con la sesión de Supabase, busca a la persona en la tabla usuarios:
+  // activo + perfil. Sin perfil = "Solo Comercial" (como hasta ahora).
+  function resolverSesion(session){
+    var email = ((session && session.user && session.user.email) || '').toLowerCase();
+    if(!email) return Promise.resolve(false);
+    return (state.configPromise || Promise.resolve()).then(function(){
+      return state.sb.from('usuarios').select('*').eq('email', email);
+    }).then(function(res){
+      var row = (res.data||[])[0];
+      if(res.error || !row || row.activo===false){
+        state.sb.auth.signOut().catch(function(){});
+        loginError('Tu cuenta todavía no tiene acceso. Pedile acceso al administrador.');
+        return false;
+      }
+      if(row.perfil && !(state.auth.roles||[]).some(function(r){ return r.id===row.perfil; })){
+        state.sb.auth.signOut().catch(function(){});
+        loginError('Tu usuario tiene un perfil que ya no existe. Avisale al administrador.');
+        return false;
+      }
+      state.sessionEmail = email;
+      state.roleId = row.perfil || '__comercial__';
+      try{ localStorage.removeItem('hdr_role'); }catch(e){}
+      document.getElementById('login-password').value = '';
+      document.getElementById('login-error').style.display = 'none';
+      enterApp();
+      return true;
+    }, function(){ loginError('No se pudo verificar tu acceso. Probá de nuevo.'); return false; });
+  }
+
   function tryLogin(){
     var pw = document.getElementById('login-password').value;
-    var role = (state.auth.roles||[]).find(function(r){ return pw && r.password===pw; });
-    if(!role){
-      document.getElementById('login-error').style.display = '';
+    if(loginModo==='email'){
+      var email = document.getElementById('login-email').value.trim().toLowerCase();
+      if(!email || !pw){ loginError('Ingresá tu email y tu contraseña.'); return; }
+      if(!state.sb){ loginError('Sin conexión con la base.'); return; }
+      var btn = document.getElementById('login-btn');
+      btn.disabled = true; btn.textContent = 'Ingresando…';
+      state.sb.auth.signInWithPassword({email:email, password:pw}).then(function(res){
+        if(res.error || !res.data || !res.data.session){ loginError('Email o contraseña incorrectos.'); return; }
+        return resolverSesion(res.data.session);
+      }, function(){ loginError('No se pudo conectar. Probá de nuevo.'); })
+      .finally(function(){ btn.disabled = false; btn.textContent = 'Ingresar'; });
       return;
     }
+    var role = (state.auth.roles||[]).find(function(r){ return pw && r.password && r.password===pw; });
+    if(!role){ loginError('Contraseña incorrecta.'); return; }
     document.getElementById('login-error').style.display = 'none';
     document.getElementById('login-password').value = '';
     state.roleId = role.id;
+    state.sessionEmail = null;
     try{ localStorage.setItem('hdr_role', role.id); }catch(e){}
     enterApp();
   }
 
   document.getElementById('login-btn').addEventListener('click', tryLogin);
   document.getElementById('login-password').addEventListener('keydown', function(e){ if(e.key==='Enter') tryLogin(); });
+  document.getElementById('login-email').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('login-password').focus(); });
   document.getElementById('logout-btn').addEventListener('click', logout);
 
   // ---------- Init ----------
   renderAll();
   initSupabase();
-  if(isLoggedIn()){
-    enterApp();
-  }else{
-    updateAuthVisibility();
-  }
+  // Si hay una sesión de email abierta (de acá o del tablero Comercial) entra
+  // directo; si no, el ingreso anterior por perfil guardado en el navegador.
+  var sesionPromesa = (state.sb && state.sb.auth) ? state.sb.auth.getSession().then(function(r){ return r && r.data && r.data.session; }, function(){ return null; }) : Promise.resolve(null);
+  sesionPromesa.then(function(session){
+    if(session) return resolverSesion(session).then(function(ok){ if(!ok){ state.roleId = null; updateAuthVisibility(); } });
+    (state.configPromise || Promise.resolve()).then(function(){
+      if(isLoggedIn()) enterApp(); else updateAuthVisibility();
+    });
+  });
+  updateAuthVisibility();
 })();
