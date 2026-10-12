@@ -3,7 +3,7 @@
   "private": true,
   "description": "Sistema de gestión ANAFER: Gestión (Logística, Administración), Comercial y RR.HH. (Fichaje) en un solo sitio",
   "scripts": {
-    "build": "npm ci --prefix rrhh && npm run build --prefix rrhh && node scripts/armar-sitio.mjs",
+    "build": "npm install --prefix rrhh --no-audit --no-fund && npm run build --prefix rrhh && node scripts/armar-sitio.mjs",
     "armar": "node scripts/armar-sitio.mjs"
   }
 }
