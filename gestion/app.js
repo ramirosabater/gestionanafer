@@ -737,12 +737,12 @@
     return base+'_'+n;
   }
 
-  function showToast(msg){
+  function showToast(msg, ms){
     var t = document.getElementById('toast');
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(t._timer);
-    t._timer = setTimeout(function(){ t.classList.remove('show'); }, 2600);
+    t._timer = setTimeout(function(){ t.classList.remove('show'); }, ms || 2600);
   }
 
   // ---------- View switching ----------
@@ -2561,7 +2561,12 @@
   // cuentas (email + contraseña) son de Supabase Auth; acá se crean con
   // signUp desde un cliente aparte, para no cerrar la sesión de quien la crea.
   function perfilOptionsHtml(sel){
-    return '<option value="">Solo Comercial</option>'+(state.auth.roles||[]).map(function(r){
+    var roles = state.auth.roles||[];
+    // Perfil asignado que ya no está en la lista (borrado o nunca guardado):
+    // se muestra marcado en vez de aparentar "Solo Comercial".
+    var huerfano = sel && !roles.some(function(r){ return r.id===sel; })
+      ? '<option value="'+esc(sel)+'" selected>⚠ Perfil inexistente — elegí otro</option>' : '';
+    return huerfano+'<option value="">Solo Comercial</option>'+roles.map(function(r){
       return '<option value="'+esc(r.id)+'"'+(r.id===sel?' selected':'')+'>'+esc(r.nombre||r.id)+'</option>'; }).join('');
   }
   function renderUsuarios(){
@@ -2618,13 +2623,19 @@
     if(pw.length<6){ showToast('La contraseña inicial tiene que tener al menos 6 caracteres.'); return; }
     var btn = this; btn.disabled = true;
     var aux = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, {auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false, storageKey:'alta-usuario'}});
+    // Si Supabase tiene cerrado el registro (signup_disabled, lo recomendable),
+    // igual se anota el usuario con su perfil y la cuenta se crea a mano en
+    // Supabase → Authentication → Users → Add user.
+    var sinRegistro = false;
     aux.auth.signUp({email:email, password:pw}).then(function(r){
-      if(r.error && !/already|registered|exist/i.test(r.error.message)) throw r.error;
+      if(r.error && /signup.*(disabled|not allowed)|signups not allowed/i.test((r.error.code||'')+' '+r.error.message)) sinRegistro = true;
+      else if(r.error && !/already|registered|exist/i.test(r.error.message)) throw r.error;
       return state.sb.from('usuarios').upsert({email:email, activo:true, perfil:perfil}, {onConflict:'email'});
     }).then(function(r){
       if(r && r.error) throw r.error;
       document.getElementById('nu-email').value = ''; document.getElementById('nu-password').value = '';
-      showToast('Usuario agregado. Si ya tenía cuenta, entra con su contraseña de siempre; si Supabase pide confirmar el email, le llega un mail.');
+      if(sinRegistro) showToast('Usuario anotado con su perfil. Falta crearle la cuenta: en Supabase → Authentication → Users → Add user → Create new user, con este email, la contraseña y "Auto Confirm User" tildado.', 12000);
+      else showToast('Usuario agregado. Si ya tenía cuenta, entra con su contraseña de siempre; si Supabase pide confirmar el email, le llega un mail.');
       renderUsuarios();
     }).catch(function(e){ showToast('No se pudo agregar: '+((e&&e.message)||'error')); })
     .finally(function(){ btn.disabled = false; });
@@ -2700,10 +2711,14 @@
       if(res.error) showToast('No se pudo guardar '+kind.singularLower+': '+res.error.message);
     });
   }
+  // Devuelve una promesa que se resuelve true solo si quedó guardado en la
+  // base: así no se muestran (ni se asignan a usuarios) perfiles que no se
+  // guardaron de verdad.
   function writeAuthRoles(roles){
-    if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
-    state.sb.from('app_config').upsert({id:'auth', roles: roles}).then(function(res){
-      if(res.error) showToast('No se pudieron guardar los perfiles: '+res.error.message);
+    if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return Promise.resolve(false); }
+    return state.sb.from('app_config').upsert({id:'auth', roles: roles}).then(function(res){
+      if(res.error){ showToast('No se pudieron guardar los perfiles: '+res.error.message, 8000); return false; }
+      return true;
     });
   }
 
@@ -5347,7 +5362,9 @@
 
   document.getElementById('add-role-btn').addEventListener('click', function(){
     var list = document.getElementById('roles-list');
-    list.appendChild(buildRoleCard({id:'perfil_'+Date.now().toString(36), nombre:'', password:'', manageAccess:false, permisos:defaultPermisos('oculta')}));
+    var card = buildRoleCard({id:'perfil_'+Date.now().toString(36), nombre:'', password:'', manageAccess:false, permisos:defaultPermisos('oculta')});
+    card.dataset.nuevo = '1';   // al guardar, el código sale del nombre (ej. "RR.HH." → rrhh)
+    list.appendChild(card);
   });
 
   document.getElementById('auth-save-btn').addEventListener('click', function(){
@@ -5367,14 +5384,27 @@
       if(manageAccess) anyManage = true;
       var permisos = {};
       card.querySelectorAll('.role-permiso-select').forEach(function(sel){ permisos[sel.dataset.tab] = sel.value; });
+      if(card.dataset.nuevo){
+        var base = nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'perfil';
+        var cand = base, n = 2;
+        var usados = Array.prototype.map.call(cards, function(c){ return c.dataset.nuevo ? null : c.dataset.roleId; }).concat(roles.map(function(x){ return x.id; }));
+        while(usados.indexOf(cand)!==-1 || cand==='__comercial__'){ cand = base+'_'+(n++); }
+        card.dataset.roleId = cand;
+      }
       roles.push({id: card.dataset.roleId, nombre: nombre, password: password, manageAccess: manageAccess, permisos: permisos});
     }
     if(!anyManage){ showToast('Al menos un perfil tiene que poder administrar el acceso.'); return; }
-    state.auth.roles = roles;
-    writeAuthRoles(roles);
-    refreshTabVisibility();
-    refreshSettingsTabsVisibility();
-    showToast('Perfiles guardados.');
+    var btn = this; btn.disabled = true;
+    writeAuthRoles(roles).then(function(ok){
+      btn.disabled = false;
+      if(!ok) return;
+      document.querySelectorAll('#roles-list .role-card').forEach(function(c){ delete c.dataset.nuevo; });
+      state.auth.roles = roles;
+      refreshTabVisibility();
+      refreshSettingsTabsVisibility();
+      renderUsuarios();
+      showToast('Perfiles guardados.');
+    });
   });
 
   document.getElementById('add-route-btn').addEventListener('click', function(){
@@ -5533,7 +5563,14 @@
         }
       });
     });
-    state.configPromise = state.sb.from('app_config').select('*').eq('id','auth').then(function(res){
+    state.configPromise = cargarConfigAuth();
+  }
+
+  // Lee los perfiles (app_config 'auth'). Se llama al abrir la página y de
+  // nuevo al iniciar sesión: antes de loguearse la lectura puede fallar
+  // (rol anon sin permiso) y quedarían solo los perfiles por defecto.
+  function cargarConfigAuth(){
+    return state.sb.from('app_config').select('*').eq('id','auth').then(function(res){
       if(!res.error && res.data && res.data.length){
         var row = res.data[0];
         if(row.roles && Array.isArray(row.roles) && row.roles.length){
@@ -5707,7 +5744,7 @@
     document.getElementById('who-fields').style.display = canEditAnything() ? 'contents' : 'none';
     updateAuthVisibility();
     var areas = visibleAreas();
-    if(areas.length===1 && areas[0].href && state.sessionEmail){ window.location.href = areas[0].href; return; }
+    if(areas.length===1 && areas[0].href && state.sessionEmail){ state.redirigiendo = true; window.location.href = areas[0].href; return; }
     var saved = null;
     try{ saved = localStorage.getItem('hdr_area'); }catch(e){}
     var internas = areas.filter(function(a){ return !a.href; });
@@ -5749,6 +5786,8 @@
     var email = ((session && session.user && session.user.email) || '').toLowerCase();
     if(!email) return Promise.resolve(false);
     return (state.configPromise || Promise.resolve()).then(function(){
+      return cargarConfigAuth();   // ya con la sesión: trae los perfiles reales
+    }).then(function(){
       return state.sb.from('usuarios').select('*').eq('email', email);
     }).then(function(res){
       var row = (res.data||[])[0];
@@ -5782,7 +5821,12 @@
       btn.disabled = true; btn.textContent = 'Ingresando…';
       state.sb.auth.signInWithPassword({email:email, password:pw}).then(function(res){
         if(res.error || !res.data || !res.data.session){ loginError('Email o contraseña incorrectos.'); return; }
-        return resolverSesion(res.data.session);
+        return resolverSesion(res.data.session).then(function(ok){
+          // Los datos se cargaron al abrir la página, todavía sin sesión. Se
+          // recarga para traerlos ya como usuario logueado (la sesión queda
+          // guardada y entra directo).
+          if(ok && !state.redirigiendo) window.location.reload();
+        });
       }, function(){ loginError('No se pudo conectar. Probá de nuevo.'); })
       .finally(function(){ btn.disabled = false; btn.textContent = 'Ingresar'; });
       return;
