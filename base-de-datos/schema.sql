@@ -914,3 +914,19 @@ begin
     drop function public.es_admin();
   end if;
 end $$;
+
+-- ---------------------------------------------------------------------
+-- Permisos base para quien entra con email (rol authenticated). Sin esto:
+-- "permission denied for table ..." (42501). Lo que cada uno ve lo deciden
+-- las políticas RLS de arriba. (Igual que permisos-usuarios-logueados.sql)
+-- ---------------------------------------------------------------------
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on all tables    in schema public to authenticated;
+grant usage, select                  on all sequences in schema public to authenticated;
+grant execute                        on all functions in schema public to authenticated;
+alter default privileges in schema public grant select, insert, update, delete on tables    to authenticated;
+alter default privileges in schema public grant usage, select                  on sequences to authenticated;
+alter default privileges in schema public grant execute                        on functions to authenticated;
+
+-- Sugerencia de pagos: proveedores que se pagan primero (combustible, servicios...)
+alter table proveedores add column if not exists prioritario boolean not null default false;
