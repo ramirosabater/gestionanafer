@@ -470,6 +470,9 @@
     editingPagoId: null,
     facturaFilterEstado: '',
     pagoFilterEstado: '',
+    sugMonto: null,        // monto a destinar escrito a mano (null = lo disponible)
+    sugManual: {},         // facturaId -> true/false tildado/destildado a mano
+    sugVerTodo: false,
     // Tesorería: cuentas de caja/banco y sus movimientos. Por ahora solo
     // egresos (pagos a proveedores, incluido el egreso automático que se
     // genera al marcar una orden de pago como Pagada, y egresos manuales
@@ -3199,10 +3202,11 @@
     if(f.items && f.items.length>=2) return f.items;
     return [{centroCostoId:f.centroCostoId, conceptoId:f.conceptoId, monto:Number(f.monto||0), detalle:''}];
   }
-  // Monto escrito a mano: acepta "1234,56", "1.234,56" y "1234.56".
+  // Monto escrito a mano: acepta "1234,56", "1.234,56", "1.200.000" y "1234.56".
   function parseMontoInput(str){
     var t = String(str||'').trim().replace(/\s|\$/g,'');
     if(t.indexOf(',')!==-1) t = t.replace(/\./g,'').replace(',','.');
+    else if(/^-?\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g,'');   // "1.200.000" = miles
     var n = parseFloat(t);
     return isNaN(n) ? NaN : n;
   }
@@ -3652,14 +3656,15 @@
 
   function writeProveedor(p){
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
-    state.sb.from('proveedores').upsert({
+    // "prioritario" solo se manda si la columna existe (schema.sql nuevo).
+    state.sb.from('proveedores').upsert(Object.assign({
       id:p.id, nombre:p.nombre, cuit:p.cuit||'', rubro:p.rubro||'', contacto:p.contacto||'',
       telefono:p.telefono||'', email:p.email||'', direccion:p.direccion||'',
       banco:p.banco||'', cbu:p.cbu||'', notas:p.notas||'', archivos:p.archivos||[],
       codigo:p.codigo||'', nombre_fantasia:p.nombreFantasia||'', localidad:p.localidad||'',
       provincia:p.provincia||'', condicion_iva:p.condicionIva||'', condicion_pago:p.condicionPago||'',
       imputaciones:(p.imputaciones||[]).map(function(im){ return {centro_costo_id:im.centroCostoId, concepto_id:im.conceptoId}; })
-    }).then(function(res){
+    }, state.colPrioritario ? {prioritario: !!p.prioritario} : {})).then(function(res){
       if(res.error) showToast('No se pudo guardar el proveedor: '+res.error.message);
     });
   }
@@ -3780,6 +3785,7 @@
     document.getElementById('pm-provincia').value = p ? (p.provincia||'') : '';
     setSelectValueLoose('pm-condicion-iva', p ? p.condicionIva : '');
     setSelectValueLoose('pm-condicion-pago', p ? p.condicionPago : '');
+    document.getElementById('pm-prioritario').checked = !!(p && p.prioritario);
     state.editingProveedorImput = p ? (p.imputaciones||[]).map(function(im){ return {centroCostoId:im.centroCostoId, conceptoId:im.conceptoId}; }) : [];
     fillImputAddSelects();
     renderProveedorImputList();
@@ -3818,8 +3824,10 @@
       provincia: document.getElementById('pm-provincia').value.trim(),
       condicionIva: document.getElementById('pm-condicion-iva').value,
       condicionPago: document.getElementById('pm-condicion-pago').value,
+      prioritario: document.getElementById('pm-prioritario').checked,
       imputaciones: state.editingProveedorImput.slice()
     };
+    if(baseData.prioritario && !state.colPrioritario) showToast('Para guardar "pago prioritario" falta correr el schema.sql nuevo en Supabase.', 6000);
     asegurarRubro(baseData.rubro);
     var saveBtn = this;
     var tienePendientes = state.editingProveedorArchivos.some(function(a){ return a.pending; });
@@ -3925,6 +3933,7 @@
   });
 
   function mapProveedorRow(row){
+    if(row && Object.prototype.hasOwnProperty.call(row, 'prioritario')) state.colPrioritario = true;
     return {
       id:row.id, nombre:row.nombre||row.id, cuit:row.cuit||'', rubro:row.rubro||'',
       contacto:row.contacto||'', telefono:row.telefono||'', email:row.email||'',
@@ -3932,6 +3941,7 @@
       archivos: Array.isArray(row.archivos) ? row.archivos : [],
       codigo:row.codigo||'', nombreFantasia:row.nombre_fantasia||'', localidad:row.localidad||'',
       provincia:row.provincia||'', condicionIva:row.condicion_iva||'', condicionPago:row.condicion_pago||'',
+      prioritario: row.prioritario===true,
       imputaciones: (Array.isArray(row.imputaciones) ? row.imputaciones : []).filter(function(im){ return im && im.centro_costo_id && im.concepto_id; })
         .map(function(im){ return {centroCostoId:im.centro_costo_id, conceptoId:im.concepto_id}; })
     };
@@ -4036,6 +4046,7 @@
   }
 
   function renderPagos(){
+    renderSugerenciaPagos();
     renderFacturasList();
     renderPagosList();
   }
@@ -4093,6 +4104,186 @@
       body.appendChild(tr);
     });
   }
+
+
+  // ---------- Sugerencia de pagos ----------
+  // Propone qué facturas pagar con la plata disponible: primero las de
+  // proveedores prioritarios (★ en la ficha), después las más viejas. Solo
+  // toma facturas pendientes que no estén ya en una orden de pago.
+  function sugLeerLS(k, def){ try{ var v = localStorage.getItem(k); return v==null ? def : JSON.parse(v); }catch(e){ return def; } }
+  function sugGuardarLS(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+  function sugFondos(){
+    var excl = sugLeerLS('sug_excl', {});
+    var fondos = state.cuentas.filter(function(c){ return c.tipo!=='cartera'; })
+      .sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); })
+      .map(function(c){ return {id:c.id, nombre:c.nombre, saldo:cuentaSaldoActual(c.id), on:!excl[c.id]}; });
+    var cartera = chequesEnCartera().reduce(function(t,c){ return t+Number(c.importe||0); }, 0);
+    if(cartera>0 || state.cheques.length) fondos.push({id:'__cheques__', nombre:'Cheques en cartera', saldo:cartera, on:!excl.__cheques__});
+    // Lo ya comprometido en órdenes de pago pendientes (todavía no salió de
+    // ninguna cuenta) se resta.
+    var comprometido = state.ordenesPago.filter(function(p){ return p.estado!=='pagada'; }).reduce(function(t,p){ return t+Number(p.monto||0); }, 0);
+    if(comprometido>0) fondos.push({id:'__ops__', nombre:'− Órdenes de pago pendientes', saldo:-comprometido, on:!excl.__ops__});
+    return fondos;
+  }
+  function sugCandidatas(){
+    var enOP = {};
+    state.ordenesPago.forEach(function(p){ (p.facturaIds||[]).forEach(function(fid){ enOP[fid] = true; }); });
+    var prio = {};
+    state.proveedores.forEach(function(p){ if(p.prioritario) prio[p.id] = true; });
+    return state.facturas.filter(function(f){ return f.estado==='pendiente' && !enOP[f.id] && Number(f.monto||0)!==0; })
+      .map(function(f){ return {f:f, prio:!!prio[f.proveedorId]}; })
+      .sort(function(a,b){
+        if(a.prio!==b.prio) return a.prio ? -1 : 1;
+        var fa = a.f.fecha||'9999', fb = b.f.fecha||'9999';
+        if(fa!==fb) return fa.localeCompare(fb);
+        return Number(a.f.monto||0)-Number(b.f.monto||0);
+      });
+  }
+  function sugDias(fecha){
+    if(!fecha) return null;
+    var d = new Date(fecha+'T00:00:00'), h = new Date(todayStr()+'T00:00:00');
+    return Math.round((h-d)/86400000);
+  }
+  function renderSugerenciaPagos(){
+    var box = document.getElementById('sug-box');
+    if(!box) return;
+    box.classList.toggle('cerrado', !!sugLeerLS('sug_cerrado', false));
+    var fondos = sugFondos();
+    var disponible = Math.max(0, fondos.reduce(function(t,x){ return t+(x.on ? x.saldo : 0); }, 0));
+    var monto = state.sugMonto!=null ? state.sugMonto : disponible;
+
+    var fw = document.getElementById('sug-fondos');
+    fw.innerHTML = '';
+    if(!fondos.length) fw.innerHTML = '<span class="sug-sub" style="margin:0;">No hay cuentas cargadas en Tesorería: escribí el monto a destinar.</span>';
+    fondos.forEach(function(x){
+      var lab = document.createElement('label');
+      lab.className = 'sug-fondo'+(x.saldo<0?' neg':'');
+      if(x.id==='__ops__') lab.title = 'Órdenes de pago creadas y todavía no pagadas: esa plata ya está comprometida.';
+      lab.innerHTML = '<input type="checkbox"'+(x.on?' checked':'')+'> '+esc(x.nombre)+' <b>'+fmtMoney(x.id==='__ops__' ? -x.saldo : x.saldo)+'</b>';
+      lab.querySelector('input').addEventListener('change', function(){
+        var excl = sugLeerLS('sug_excl', {});
+        if(this.checked) delete excl[x.id]; else excl[x.id] = true;
+        sugGuardarLS('sug_excl', excl);
+        state.sugMonto = null; state.sugManual = {};
+        renderSugerenciaPagos();
+      });
+      fw.appendChild(lab);
+    });
+    var mi = document.getElementById('sug-monto');
+    if(document.activeElement!==mi) mi.value = Number(monto||0).toLocaleString('es-AR', {maximumFractionDigits:2});
+
+    // Selección automática: en orden, cada factura que entra en lo que queda.
+    var cands = sugCandidatas();
+    var resto = monto;
+    cands.forEach(function(c){
+      var m = Number(c.f.monto||0);
+      c.auto = m<=resto+0.004;
+      if(c.auto) resto -= m;
+      c.sel = state.sugManual.hasOwnProperty(c.f.id) ? state.sugManual[c.f.id] : c.auto;
+    });
+    var totalSel = cands.reduce(function(t,c){ return t+(c.sel ? Number(c.f.monto||0) : 0); }, 0);
+    var nSel = cands.filter(function(c){ return c.sel; }).length;
+    var totalPend = cands.reduce(function(t,c){ return t+Number(c.f.monto||0); }, 0);
+
+    // Agrupado por proveedor, en el orden en que aparece cada uno.
+    var grupos = [], porProv = {};
+    cands.forEach(function(c){
+      var g = porProv[c.f.proveedorId];
+      if(!g){ g = porProv[c.f.proveedorId] = {id:c.f.proveedorId, prio:c.prio, items:[]}; grupos.push(g); }
+      g.items.push(c);
+    });
+    var conSel = grupos.filter(function(g){ return g.items.some(function(c){ return c.sel; }); });
+    var sinSel = grupos.filter(function(g){ return !g.items.some(function(c){ return c.sel; }); });
+    var mostrar = state.sugVerTodo ? conSel.concat(sinSel) : conSel.concat(sinSel.slice(0, 8));
+
+    var tb = document.getElementById('sug-tbody');
+    tb.innerHTML = '';
+    if(!cands.length) tb.innerHTML = '<tr class="day-row empty"><td colspan="6">No hay facturas pendientes fuera de una orden de pago.</td></tr>';
+    mostrar.forEach(function(g){
+      var sub = g.items.reduce(function(t,c){ return t+(c.sel ? Number(c.f.monto||0) : 0); }, 0);
+      var trh = document.createElement('tr');
+      trh.className = 'sug-prov';
+      trh.innerHTML = '<td></td><td colspan="4">'+(g.prio?'<span class="sug-star">★</span> ':'')+esc(proveedorNombre(g.id))+'</td><td class="num">'+(sub ? fmtMoney(sub) : '')+'</td>';
+      tb.appendChild(trh);
+      g.items.forEach(function(c){
+        var f = c.f, dias = sugDias(f.fecha);
+        var tr = document.createElement('tr');
+        tr.className = 'day-row'+(c.sel ? '' : ' sug-nocabe');
+        tr.innerHTML = '<td><input type="checkbox"'+(c.sel?' checked':'')+'></td>'
+          +'<td></td>'
+          +'<td class="num">'+esc(f.numero||'—')+'</td>'
+          +'<td class="num">'+esc(f.fecha||'—')+'</td>'
+          +'<td class="num">'+(dias==null ? '—' : dias+' días')+'</td>'
+          +'<td class="num">'+fmtMoney(f.monto)+(!c.auto && !c.sel ? '<span class="sug-tag">no alcanza</span>' : '')+'</td>';
+        tr.querySelector('input').addEventListener('change', function(){
+          if(!canEdit('pagos')){ this.checked = !this.checked; return; }
+          state.sugManual[f.id] = this.checked;
+          renderSugerenciaPagos();
+        });
+        tr.children[2].style.cursor = 'pointer';
+        tr.children[2].addEventListener('click', function(){ openFacturaModal(f.id); });
+        tb.appendChild(tr);
+      });
+    });
+    if(!state.sugVerTodo && sinSel.length>8){
+      var trm = document.createElement('tr');
+      trm.className = 'day-row';
+      trm.innerHTML = '<td colspan="6" style="text-align:center;"><button type="button" class="btn">Mostrar todas las pendientes ('+(sinSel.length-8)+' proveedores más)</button></td>';
+      trm.querySelector('button').addEventListener('click', function(){ state.sugVerTodo = true; renderSugerenciaPagos(); });
+      tb.appendChild(trm);
+    }
+
+    var queda = monto - totalSel;
+    document.getElementById('sug-total').innerHTML = 'Seleccionado: <b>'+fmtMoney(totalSel)+'</b> en '+nSel+' factura'+(nSel===1?'':'s')
+      +' · Queda: <b class="'+(queda<0?'neg':'')+'">'+fmtMoney(queda)+'</b>';
+    document.getElementById('sug-resumen').textContent = cands.length
+      ? 'Pendiente sin orden de pago: '+fmtMoney(totalPend)+' · Alcanza para '+nSel+' de '+cands.length+' facturas'
+      : '';
+    var proveedoresSel = conSel.length;
+    var btn = document.getElementById('sug-crear');
+    btn.disabled = !nSel;
+    btn.textContent = nSel ? 'Crear '+proveedoresSel+(proveedoresSel===1?' orden':' órdenes')+' de pago' : 'Crear órdenes de pago';
+    state.sugGrupos = conSel;
+  }
+  document.getElementById('sug-toggle').addEventListener('click', function(){
+    sugGuardarLS('sug_cerrado', !sugLeerLS('sug_cerrado', false));
+    renderSugerenciaPagos();
+  });
+  function sugAplicarMonto(){
+    var v = parseMontoInput(document.getElementById('sug-monto').value);
+    state.sugMonto = isNaN(v) ? null : Math.max(0, v);
+    state.sugManual = {};
+    renderSugerenciaPagos();
+  }
+  document.getElementById('sug-recalc').addEventListener('click', sugAplicarMonto);
+  document.getElementById('sug-monto').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); this.blur(); sugAplicarMonto(); } });
+  // Una orden de pago pendiente por proveedor con sus facturas tildadas. El
+  // concepto de pago y la cuenta se eligen después, al marcarla como pagada.
+  document.getElementById('sug-crear').addEventListener('click', function(){
+    if(!canEdit('pagos')) return;
+    var grupos = (state.sugGrupos||[]).map(function(g){
+      return {proveedorId:g.id, facturas:g.items.filter(function(c){ return c.sel; }).map(function(c){ return c.f; })};
+    }).filter(function(g){ return g.facturas.length; });
+    if(!grupos.length) return;
+    var total = grupos.reduce(function(t,g){ return t+g.facturas.reduce(function(s,f){ return s+Number(f.monto||0); },0); }, 0);
+    if(!window.confirm('Se van a crear '+grupos.length+' órdenes de pago pendientes por '+fmtMoney(total)+'. ¿Seguimos?')) return;
+    var hoy = todayStr(), quien = whoName();
+    grupos.forEach(function(g){
+      var numero = nextPagoNumero();
+      var p = {
+        id:'op_'+numero, numero:numero, proveedorId:g.proveedorId,
+        facturaIds:g.facturas.map(function(f){ return f.id; }),
+        fecha:hoy, monto:g.facturas.reduce(function(s,f){ return s+Number(f.monto||0); },0),
+        medioPago:'transferencia', medioId:'', chequeIds:[], estado:'pendiente', cuentaId:'',
+        notas:'Creada desde la sugerencia de pagos', who:quien
+      };
+      state.ordenesPago.push(p);
+      writePago(p);
+    });
+    state.sugManual = {}; state.sugMonto = null;
+    renderPagos();
+    showToast(grupos.length+' órdenes de pago creadas como pendientes. Para pagarlas, abrilas y marcalas como pagadas.', 6000);
+  });
 
   function writeFactura(f){
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
@@ -4708,6 +4899,7 @@
   function chequeResumen(c){ return (c.banco||'Cheque')+' N° '+(c.numero||'s/n'); }
 
   function renderTesoreria(){
+    renderSugerenciaPagos();
     renderCuentasList();
     fillMovFilterCuentaSelect();
     renderChequesList();

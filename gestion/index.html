@@ -242,6 +242,30 @@
   body.tab-readonly td.cell.empty:hover::after{content:none;}
   body.tab-readonly .cell-add-btn{display:none;}
   body.tab-readonly .edit-action{display:none;}
+  /* Sugerencia de pagos */
+  .sug-box{border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin:10px 0 18px; background:var(--surface);}
+  .sug-head{display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none;}
+  .sug-head h3{margin:0; font-size:15px;}
+  .sug-resumen{font-size:12.5px; color:var(--ink-2); flex:1;}
+  .sug-caret{font-size:14px; color:var(--ink-2); transition:transform .15s;}
+  .sug-box.cerrado .sug-caret{transform:rotate(-90deg);}
+  .sug-box.cerrado #sug-body{display:none;}
+  .sug-sub{font-size:12.5px; color:var(--ink-2); margin:8px 0 10px;}
+  .sug-fondos{display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; justify-content:space-between; margin-bottom:10px;}
+  .sug-fondos-list{display:flex; flex-wrap:wrap; gap:6px;}
+  .sug-fondo{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--border); border-radius:999px; padding:4px 10px; font-size:12.5px; cursor:pointer;}
+  .sug-fondo b{font-variant-numeric:tabular-nums;}
+  .sug-fondo.neg b{color:var(--danger);}
+  .sug-monto{display:flex; align-items:center; gap:6px; font-size:12.5px;}
+  .sug-monto input{width:150px; text-align:right;}
+  #sug-tbody tr.sug-prov td{background:var(--surface-2); font-weight:600; font-size:12.5px;}
+  #sug-tbody tr.sug-nocabe td{color:var(--muted);}
+  #sug-tbody .sug-tag{font-size:11px; color:var(--danger); margin-left:6px; font-weight:400;}
+  #sug-tbody .sug-star{color:#d4a017;}
+  .sug-foot{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;}
+  .sug-total{font-size:13px;}
+  .sug-total .neg{color:var(--danger);}
+  .sug-prio-check{display:flex; align-items:center; gap:8px; font-size:13px; margin:4px 0 12px;}
   body.tab-readonly .legend{display:none;}
 
   .overlay{position:fixed; inset:0; background:rgba(10,9,6,0.45); display:none; align-items:center; justify-content:center; z-index:50; padding:16px;}
@@ -897,6 +921,35 @@
       <div style="font-size:12.5px; color:var(--ink-2);">Facturas y órdenes de pago</div>
     </div>
 
+    <div class="sug-box" id="sug-box">
+      <div class="sug-head" id="sug-toggle">
+        <h3>💡 Sugerencia de pagos</h3>
+        <span class="sug-resumen" id="sug-resumen"></span>
+        <span class="sug-caret" id="sug-caret">▾</span>
+      </div>
+      <div id="sug-body">
+        <div class="sug-sub">Facturas pendientes que todavía no están en ninguna orden de pago. Primero los proveedores marcados como prioritarios (★, se marcan en la ficha del proveedor) y después las facturas más viejas, hasta donde alcanza la plata. Podés tildar o destildar a mano.</div>
+        <div class="sug-fondos">
+          <div class="sug-fondos-list" id="sug-fondos"></div>
+          <div class="sug-monto">
+            <label for="sug-monto">Monto a destinar</label>
+            <input type="text" id="sug-monto" inputmode="decimal" autocomplete="off">
+            <button type="button" class="btn" id="sug-recalc" title="Volver a proponer con este monto">↻ Proponer</button>
+          </div>
+        </div>
+        <div class="day-wrap">
+          <table class="day-table" id="sug-table">
+            <thead><tr><th></th><th>Proveedor</th><th>N° Factura</th><th>Fecha</th><th>Antigüedad</th><th>Monto</th></tr></thead>
+            <tbody id="sug-tbody"></tbody>
+          </table>
+        </div>
+        <div class="sug-foot">
+          <div class="sug-total" id="sug-total"></div>
+          <button class="btn primary edit-action" id="sug-crear">Crear órdenes de pago</button>
+        </div>
+      </div>
+    </div>
+
     <div class="compras-section-head">
       <h3>Facturas</h3>
       <div style="display:flex; gap:8px; align-items:center;">
@@ -1224,6 +1277,7 @@
         </select>
       </div>
     </div>
+    <label class="sug-prio-check"><input type="checkbox" id="pm-prioritario"> ★ Pago prioritario (aparece primero en la sugerencia de pagos: combustible, servicios, etc.)</label>
     <div class="field">
       <label>Imputaciones contables</label>
       <div class="imput-help">Combinaciones de centro de costo + concepto que usa este proveedor. Al cargar una factura se propone la más usada (si todavía no tiene facturas, la marcada ★).</div>
