@@ -6025,7 +6025,9 @@
 
   // Con la sesión de Supabase, busca a la persona en la tabla usuarios:
   // activo + perfil. Sin perfil = "Solo Comercial" (como hasta ahora).
-  function resolverSesion(session){
+  // opts.recargar: viene del formulario de ingreso. No se muestra nada de
+  // la app: se valida y se recarga para entrar ya logueado al inicio.
+  function resolverSesion(session, opts){
     var email = ((session && session.user && session.user.email) || '').toLowerCase();
     if(!email) return Promise.resolve(false);
     return (state.configPromise || Promise.resolve()).then(function(){
@@ -6049,6 +6051,14 @@
       try{ localStorage.removeItem('hdr_role'); }catch(e){}
       document.getElementById('login-password').value = '';
       document.getElementById('login-error').style.display = 'none';
+      if(opts && opts.recargar){
+        var areas = visibleAreas();
+        if(areas.length===1 && areas[0].href){ state.redirigiendo = true; window.location.href = areas[0].href; return true; }
+        try{ localStorage.removeItem('hdr_area'); }catch(e){}   // después de ingresar, siempre al inicio
+        state.redirigiendo = true;
+        window.location.reload();
+        return true;
+      }
       enterApp();
       return true;
     }, function(){ loginError('No se pudo verificar tu acceso. Probá de nuevo.'); return false; });
@@ -6064,14 +6074,11 @@
       btn.disabled = true; btn.textContent = 'Ingresando…';
       state.sb.auth.signInWithPassword({email:email, password:pw}).then(function(res){
         if(res.error || !res.data || !res.data.session){ loginError('Email o contraseña incorrectos.'); return; }
-        return resolverSesion(res.data.session).then(function(ok){
-          // Los datos se cargaron al abrir la página, todavía sin sesión. Se
-          // recarga para traerlos ya como usuario logueado (la sesión queda
-          // guardada y entra directo).
-          if(ok && !state.redirigiendo) window.location.reload();
-        });
+        // Los datos se cargaron al abrir la página, todavía sin sesión: se
+        // recarga para traerlos ya como usuario logueado y entrar al inicio.
+        return resolverSesion(res.data.session, {recargar:true});
       }, function(){ loginError('No se pudo conectar. Probá de nuevo.'); })
-      .finally(function(){ btn.disabled = false; btn.textContent = 'Ingresar'; });
+      .finally(function(){ if(!state.redirigiendo){ btn.disabled = false; btn.textContent = 'Ingresar'; } });
       return;
     }
     var role = (state.auth.roles||[]).find(function(r){ return pw && r.password && r.password===pw; });
