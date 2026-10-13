@@ -2561,7 +2561,12 @@
   // cuentas (email + contraseña) son de Supabase Auth; acá se crean con
   // signUp desde un cliente aparte, para no cerrar la sesión de quien la crea.
   function perfilOptionsHtml(sel){
-    return '<option value="">Solo Comercial</option>'+(state.auth.roles||[]).map(function(r){
+    var roles = state.auth.roles||[];
+    // Perfil asignado que ya no está en la lista (borrado o nunca guardado):
+    // se muestra marcado en vez de aparentar "Solo Comercial".
+    var huerfano = sel && !roles.some(function(r){ return r.id===sel; })
+      ? '<option value="'+esc(sel)+'" selected>⚠ Perfil inexistente — elegí otro</option>' : '';
+    return huerfano+'<option value="">Solo Comercial</option>'+roles.map(function(r){
       return '<option value="'+esc(r.id)+'"'+(r.id===sel?' selected':'')+'>'+esc(r.nombre||r.id)+'</option>'; }).join('');
   }
   function renderUsuarios(){
@@ -2706,10 +2711,14 @@
       if(res.error) showToast('No se pudo guardar '+kind.singularLower+': '+res.error.message);
     });
   }
+  // Devuelve una promesa que se resuelve true solo si quedó guardado en la
+  // base: así no se muestran (ni se asignan a usuarios) perfiles que no se
+  // guardaron de verdad.
   function writeAuthRoles(roles){
-    if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
-    state.sb.from('app_config').upsert({id:'auth', roles: roles}).then(function(res){
-      if(res.error) showToast('No se pudieron guardar los perfiles: '+res.error.message);
+    if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return Promise.resolve(false); }
+    return state.sb.from('app_config').upsert({id:'auth', roles: roles}).then(function(res){
+      if(res.error){ showToast('No se pudieron guardar los perfiles: '+res.error.message, 8000); return false; }
+      return true;
     });
   }
 
@@ -5376,11 +5385,16 @@
       roles.push({id: card.dataset.roleId, nombre: nombre, password: password, manageAccess: manageAccess, permisos: permisos});
     }
     if(!anyManage){ showToast('Al menos un perfil tiene que poder administrar el acceso.'); return; }
-    state.auth.roles = roles;
-    writeAuthRoles(roles);
-    refreshTabVisibility();
-    refreshSettingsTabsVisibility();
-    showToast('Perfiles guardados.');
+    var btn = this; btn.disabled = true;
+    writeAuthRoles(roles).then(function(ok){
+      btn.disabled = false;
+      if(!ok) return;
+      state.auth.roles = roles;
+      refreshTabVisibility();
+      refreshSettingsTabsVisibility();
+      renderUsuarios();
+      showToast('Perfiles guardados.');
+    });
   });
 
   document.getElementById('add-route-btn').addEventListener('click', function(){
