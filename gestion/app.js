@@ -501,11 +501,9 @@
     try{ localStorage.setItem('hdr_who', this.value.slice(0,30)); }catch(e){}
   });
 
-  try {
-    var savedRoleId = localStorage.getItem('hdr_role');
-    if(savedRoleId==='viewer') savedRoleId = 'lectura'; // migración del rol antiguo
-    if(savedRoleId) state.roleId = savedRoleId;
-  } catch(e){}
+  // El ingreso por contraseña de perfil (sistema anterior) se sacó: solo se
+  // entra con email. Se borra lo que haya quedado guardado de ese ingreso.
+  try { localStorage.removeItem('hdr_role'); } catch(e){}
 
   function whoName(){
     var v = document.getElementById('who-input').value.trim();
@@ -2501,6 +2499,7 @@
     pwInp.type = 'text'; pwInp.className = 'role-password'; pwInp.maxLength = 60;
     pwInp.placeholder = 'Contraseña (ingreso anterior, opcional)'; pwInp.value = role.password || '';
     pwInp.title = 'Solo para el ingreso anterior por contraseña de perfil. Con el ingreso por email no hace falta.';
+    pwInp.style.display = 'none'; pwInp.value = '';   // ingreso por contraseña de perfil eliminado
     top.appendChild(nombreInp); top.appendChild(pwInp);
     card.appendChild(top);
 
@@ -6014,10 +6013,9 @@
     loginModo = m;
     document.getElementById('login-email-field').hidden = m!=='email';
     document.getElementById('login-sub').textContent = m==='email' ? 'Ingresá con tu email y tu contraseña' : 'Contraseña del perfil (ingreso anterior)';
-    document.getElementById('login-mode-btn').textContent = m==='email' ? 'Ingresar con contraseña de perfil (sistema anterior)' : 'Ingresar con email';
     document.getElementById('login-error').style.display = 'none';
   }
-  document.getElementById('login-mode-btn').addEventListener('click', function(){ setLoginModo(loginModo==='email' ? 'perfil' : 'email'); });
+
   function loginError(msg){
     var el = document.getElementById('login-error');
     el.textContent = msg; el.style.display = '';
@@ -6081,14 +6079,6 @@
       .finally(function(){ if(!state.redirigiendo){ btn.disabled = false; btn.textContent = 'Ingresar'; } });
       return;
     }
-    var role = (state.auth.roles||[]).find(function(r){ return pw && r.password && r.password===pw; });
-    if(!role){ loginError('Contraseña incorrecta.'); return; }
-    document.getElementById('login-error').style.display = 'none';
-    document.getElementById('login-password').value = '';
-    state.roleId = role.id;
-    state.sessionEmail = null;
-    try{ localStorage.setItem('hdr_role', role.id); }catch(e){}
-    enterApp();
   }
 
   document.getElementById('login-btn').addEventListener('click', tryLogin);
