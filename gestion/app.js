@@ -3573,6 +3573,7 @@
     renderConceptosList();
     renderRubrosList();
     renderOCList();
+    actualizarSubtabs();
   }
 
   function proveedorMatches(p, q){
@@ -4049,6 +4050,7 @@
     renderSugerenciaPagos();
     renderFacturasList();
     renderPagosList();
+    actualizarSubtabs();
   }
 
   function renderFacturasList(){
@@ -4105,6 +4107,53 @@
     });
   }
 
+
+
+  // ---------- Submenús de Compras / Pagos / Tesorería ----------
+  // Cada vista tiene sus secciones en <section class="subsec" data-sub>; se
+  // muestra una a la vez y se recuerda la última elegida en el navegador.
+  function subtabActual(view){
+    var secs = document.querySelectorAll('#view-'+view+' .subsec');
+    var guardada = null;
+    try{ guardada = localStorage.getItem('subtab_'+view); }catch(e){}
+    var ids = Array.prototype.map.call(secs, function(x){ return x.dataset.sub; });
+    return ids.indexOf(guardada)!==-1 ? guardada : ids[0];
+  }
+  function mostrarSubtab(view, sub){
+    try{ localStorage.setItem('subtab_'+view, sub); }catch(e){}
+    document.querySelectorAll('#view-'+view+' .subsec').forEach(function(x){ x.hidden = x.dataset.sub!==sub; });
+    document.querySelectorAll('#subtabs-'+view+' .stabbtn').forEach(function(b){ b.classList.toggle('active', b.dataset.sub===sub); });
+  }
+  function armarSubtabs(view){
+    var bar = document.getElementById('subtabs-'+view);
+    if(!bar) return;
+    bar.innerHTML = '';
+    document.querySelectorAll('#view-'+view+' .subsec').forEach(function(sec){
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'stabbtn'; b.dataset.sub = sec.dataset.sub;
+      b.innerHTML = esc(sec.dataset.label)+'<span class="cnt"></span>';
+      b.addEventListener('click', function(){ mostrarSubtab(view, sec.dataset.sub); });
+      bar.appendChild(b);
+    });
+    mostrarSubtab(view, subtabActual(view));
+  }
+  ['compras','pagos','tesoreria'].forEach(armarSubtabs);
+  // Contadores al lado de cada submenú (lo pendiente de cada cosa).
+  function actualizarSubtabs(){
+    function cnt(view, sub, n){
+      var el = document.querySelector('#subtabs-'+view+' .stabbtn[data-sub="'+sub+'"] .cnt');
+      if(el) el.textContent = n ? '('+n+')' : '';
+    }
+    cnt('compras', 'proveedores', state.proveedores.length);
+    cnt('compras', 'ocs', state.ordenesCompra.filter(function(o){ return o.estado==='pendiente'; }).length);
+    var enOP = {};
+    state.ordenesPago.forEach(function(p){ (p.facturaIds||[]).forEach(function(fid){ enOP[fid] = true; }); });
+    cnt('pagos', 'sugerencia', state.facturas.filter(function(f){ return f.estado==='pendiente' && !enOP[f.id] && Number(f.monto||0)!==0; }).length);
+    cnt('pagos', 'facturas', state.facturas.filter(function(f){ return f.estado==='pendiente'; }).length);
+    cnt('pagos', 'ordenes', state.ordenesPago.filter(function(p){ return p.estado!=='pagada'; }).length);
+    cnt('tesoreria', 'cuentas', 0);
+    cnt('tesoreria', 'cheques', chequesEnCartera().length);
+  }
 
   // ---------- Sugerencia de pagos ----------
   // Propone qué facturas pagar con la plata disponible: primero las de
@@ -4282,6 +4331,7 @@
     });
     state.sugManual = {}; state.sugMonto = null;
     renderPagos();
+    mostrarSubtab('pagos', 'ordenes');
     showToast(grupos.length+' órdenes de pago creadas como pendientes. Para pagarlas, abrilas y marcalas como pagadas.', 6000);
   });
 
@@ -4905,6 +4955,7 @@
     renderChequesList();
     renderMovimientosList();
     renderMediosList();
+    actualizarSubtabs();
   }
 
   function renderCuentasList(){
