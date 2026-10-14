@@ -930,3 +930,133 @@ alter default privileges in schema public grant execute                        o
 
 -- Sugerencia de pagos: proveedores que se pagan primero (combustible, servicios...)
 alter table proveedores add column if not exists prioritario boolean not null default false;
+
+-- usuarios.perfil_id viene del Comercial anterior (NOT NULL con FK). Gestión
+-- usa usuarios.perfil; sin esto, "+ Agregar usuario" falla con
+-- 'null value in column "perfil_id" ... violates not-null constraint'.
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_schema='public' and table_name='usuarios' and column_name='perfil_id') then
+    execute 'alter table public.usuarios alter column perfil_id drop not null';
+  end if;
+end $$;
+
+-- =====================================================================
+-- Centros de costo en árbol + Retenciones de Ganancias (RG 830 / RG 5423)
+-- =====================================================================
+-- Centros de costo: árbol (parent_id). Solo se imputa a las hojas.
+-- requiere: '' | 'movil' | 'sucursal' (pide el camión o la sucursal).
+alter table centros_costo add column if not exists parent_id text;
+alter table centros_costo add column if not exists activo boolean not null default true;
+alter table centros_costo add column if not exists requiere text not null default '';
+alter table centros_costo add column if not exists orden int not null default 0;
+
+-- Factura: camión/sucursal del centro ("movil:<id>" | "suc:<id>"), neto
+-- gravado (base de la retención) y régimen de Ganancias.
+alter table facturas add column if not exists cc_ref text not null default '';
+alter table facturas add column if not exists neto numeric;
+alter table facturas add column if not exists regimen_gan int;
+
+-- Proveedor: condición en Ganancias ('' = automática según IVA |
+-- 'inscripto' | 'no_inscripto' | 'exento' | 'monotributo' | 'no_retener')
+-- y régimen por defecto (si no, sale del rubro).
+alter table proveedores add column if not exists gan_condicion text not null default '';
+alter table proveedores add column if not exists gan_regimen int;
+
+-- Orden de pago: retenciones practicadas
+-- [{regimen, base, acum_prev, ret_prev, importe, certificado, condicion}]
+alter table ordenes_pago add column if not exists retenciones jsonb not null default '[]'::jsonb;
+alter table ordenes_pago add column if not exists retenido numeric not null default 0;
+
+-- Régimenes del Anexo VIII de la RG 830 (valores de la RG 5423). Se editan
+-- desde ⚙ → Retenciones cuando ARCA los actualiza.
+create table if not exists gan_regimenes (
+  codigo int primary key,
+  descripcion text not null default '',
+  alic_insc numeric,                 -- % inscriptos (null si va por escala)
+  escala text,                       -- 'general' | '119' | null
+  alic_no_insc numeric,              -- % no inscriptos (sociedades / todos)
+  alic_no_insc_ph numeric,           -- % no inscriptos personas humanas (si difiere)
+  mnsr numeric not null default 0,   -- monto no sujeto a retención (mensual, inscriptos)
+  mnsr_no_insc boolean not null default false, -- 112/113: también para no inscriptos
+  min_insc numeric not null default 240,
+  min_no_insc numeric not null default 240,
+  activo boolean not null default true,
+  orden int not null default 0
+);
+create table if not exists gan_escalas (
+  escala text not null,
+  desde numeric not null,
+  hasta numeric,                     -- null = en adelante
+  fijo numeric not null default 0,
+  pct numeric not null default 0,
+  primary key (escala, desde)
+);
+-- Parámetros generales (datos del agente de retención para el certificado).
+create table if not exists parametros (
+  id text primary key,
+  valor jsonb not null default '{}'::jsonb
+);
+
+insert into gan_regimenes (codigo, descripcion, alic_insc, escala, alic_no_insc, alic_no_insc_ph, mnsr, mnsr_no_insc, min_insc, min_no_insc, orden) values
+  (78,  'Enajenación de bienes muebles y bienes de cambio', 2, null, 10, null, 224000, false, 240, 240, 1),
+  (94,  'Locaciones de obra y/o servicios no ejecutados en relación de dependencia', 2, null, 25, 28, 67170, false, 240, 240, 2),
+  (95,  'Operaciones de transporte de carga nacional e internacional', 0.25, null, 25, 28, 67170, false, 240, 240, 3),
+  (119, 'Profesiones liberales, oficios', null, '119', 28, null, 160000, false, 240, 240, 4),
+  (31,  'Alquileres de inmuebles urbanos (incluye leasing y suburbanos)', 6, null, 25, 28, 11200, false, 240, 1020, 5),
+  (32,  'Alquileres de inmuebles rurales (incluye leasing y subrurales)', 6, null, 25, 28, 11200, false, 240, 240, 6),
+  (30,  'Alquileres o arrendamientos de bienes muebles', 6, null, 25, 28, 11200, false, 240, 240, 7),
+  (116, 'Honorarios de director, síndico, fiduciario, consejero, socio administrador; albacea, mandatario, gestor', null, 'general', 28, null, 67170, false, 240, 240, 8),
+  (124, 'Corredor, viajante de comercio y despachante de aduana', null, 'general', 28, null, 16830, false, 240, 240, 9),
+  (25,  'Comisiones (comisionista, rematador, consignatario y auxiliares de comercio)', null, 'general', 28, null, 16830, false, 240, 240, 10),
+  (110, 'Explotación de derechos de autor (Ley 11.723)', null, 'general', 28, null, 10000, false, 240, 240, 11),
+  (86,  'Transferencia de derechos de llave, marcas, patentes, regalías, concesiones', 2, null, 10, null, 224000, false, 240, 240, 12),
+  (21,  'Intereses originados en operaciones no comprendidas en el código 19', 6, null, 25, 28, 7870, false, 240, 240, 13),
+  (19,  'Intereses por operaciones en entidades financieras (Ley 21.526), agentes de bolsa o mercado abierto', 3, null, 10, null, 0, false, 240, 240, 14),
+  (35,  'Regalías', 6, null, 25, 28, 7870, false, 240, 240, 15),
+  (43,  'Interés accionario, excedentes y retornos de cooperativas (excepto consumo)', 6, null, 25, 28, 7870, false, 240, 240, 16),
+  (51,  'Obligaciones de no hacer, o por abandono o no ejercicio de una actividad', 6, null, 25, 28, 7870, false, 240, 240, 17),
+  (53,  'Operaciones en mercados de cereales a término, futuros y opciones', 0.5, null, 2, null, 0, false, 240, 240, 18),
+  (55,  'Distribución de películas. Transmisión de programación. Televisión satelital', 0.5, null, 2, null, 0, false, 240, 240, 19),
+  (111, 'Cualquier otra cesión o locación de derechos', 0.5, null, 2, null, 0, false, 240, 240, 20),
+  (112, 'Beneficios de planes de seguro de retiro privados', 3, null, 3, null, 16830, true, 240, 240, 21),
+  (113, 'Rescates de planes de seguro de retiro', 3, null, 3, null, 16830, true, 240, 240, 22),
+  (779, 'Subsidios del Estado por enajenación de bienes muebles y bienes de cambio', 2, null, 10, null, 76140, false, 240, 240, 23),
+  (780, 'Subsidios del Estado por locaciones de obra y/o servicios', 2, null, 25, 28, 31460, false, 240, 240, 24)
+on conflict (codigo) do nothing;
+
+insert into gan_escalas (escala, desde, hasta, fijo, pct) values
+  ('general', 0, 8000, 0, 5), ('general', 8000, 16000, 400, 9), ('general', 16000, 24000, 1120, 12),
+  ('general', 24000, 32000, 2080, 15), ('general', 32000, 48000, 3280, 19), ('general', 48000, 64000, 6320, 23),
+  ('general', 64000, 96000, 10000, 27), ('general', 96000, null, 18640, 31),
+  ('119', 0, 71000, 0, 5), ('119', 71000, 142000, 3550, 9), ('119', 142000, 213000, 9940, 12),
+  ('119', 213000, 284000, 18460, 15), ('119', 284000, 426000, 29110, 19), ('119', 426000, 568000, 56090, 23),
+  ('119', 568000, 852000, 88750, 27), ('119', 852000, null, 165430, 31)
+on conflict (escala, desde) do nothing;
+
+insert into parametros (id, valor) values
+  ('agente_retencion', '{"razon_social":"ANAFER S.A.","cuit":"","domicilio":"","localidad":"Comodoro Rivadavia","provincia":"Chubut"}'::jsonb)
+on conflict (id) do nothing;
+
+alter table gan_regimenes enable row level security;
+alter table gan_escalas   enable row level security;
+alter table parametros    enable row level security;
+drop policy if exists "anon full access gan_regimenes" on gan_regimenes;
+create policy "anon full access gan_regimenes" on gan_regimenes for all using (true) with check (true);
+drop policy if exists "anon full access gan_escalas" on gan_escalas;
+create policy "anon full access gan_escalas" on gan_escalas for all using (true) with check (true);
+drop policy if exists "anon full access parametros" on parametros;
+create policy "anon full access parametros" on parametros for all using (true) with check (true);
+grant select, insert, update, delete on gan_regimenes, gan_escalas, parametros to authenticated;
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname='supabase_realtime') then
+    if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='gan_regimenes') then
+      alter publication supabase_realtime add table gan_regimenes;
+    end if;
+    if not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='parametros') then
+      alter publication supabase_realtime add table parametros;
+    end if;
+  end if;
+end $$;
