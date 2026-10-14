@@ -265,6 +265,24 @@
   .sug-foot{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;}
   .sug-total{font-size:13px;}
   .sug-total .neg{color:var(--danger);}
+  .fm-hint{font-weight:400; color:var(--muted); font-size:11.5px; text-transform:none; letter-spacing:0;}
+  .ret-box{border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin:6px 0 12px; background:var(--surface-2);}
+  .ret-box[hidden]{display:none;}
+  .ret-head{font-weight:600; font-size:13px; margin-bottom:6px;}
+  .ret-line{display:flex; justify-content:space-between; gap:10px; font-size:12.5px; padding:3px 0; border-bottom:1px dashed var(--border);}
+  .ret-line .det{color:var(--ink-2);}
+  .ret-line b{font-variant-numeric:tabular-nums;}
+  .ret-total{display:flex; justify-content:space-between; font-size:14px; padding-top:6px;}
+  #pom-ret-certs{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;}
+  .ret-cfg input{width:78px; padding:4px 6px; font-size:12.5px; text-align:right;}
+  .ret-cfg td.desc{font-size:12px; min-width:220px;}
+  .ret-cfg-wrap{max-height:340px; overflow:auto;}
+  .ret-escalas{display:flex; flex-wrap:wrap; gap:16px;}
+  .ret-escalas table input{width:92px; padding:4px 6px; font-size:12.5px; text-align:right;}
+  .cc-tree td.ind{white-space:nowrap;}
+  .cc-tree tr.inactivo td{color:var(--muted);}
+  .cc-tree .rama{font-weight:600;}
+  .split-line select.ref{min-width:110px;}
   .sug-prio-check{display:flex; align-items:center; gap:8px; font-size:13px; margin:4px 0 12px;}
   body.tab-readonly .legend{display:none;}
 
@@ -798,7 +816,10 @@
       <div class="kpi-tile tile-gastos"><div class="kpi-label">Concepto con más gasto</div><div class="kpi-value" id="kpi-gastos-concepto">—</div></div>
     </div>
     <div class="dash-grid">
+      <div class="panel panel-gastos"><h4>Gasto por área</h4><div id="bar-gastos-area"></div></div>
       <div class="panel panel-gastos"><h4>Gasto por centro de costo</h4><div id="bar-gastos-centro"></div></div>
+      <div class="panel panel-gastos"><h4>Gasto por móvil</h4><div id="bar-gastos-movil"></div></div>
+      <div class="panel panel-gastos"><h4>Gasto por sucursal</h4><div id="bar-gastos-sucursal"></div></div>
       <div class="panel panel-gastos"><h4>Gasto por concepto</h4><div id="bar-gastos-concepto"></div></div>
       <div class="panel panel-gastos panel-wide"><h4>Gasto por proveedor</h4><div id="bar-gastos-proveedor"></div></div>
     </div>
@@ -1005,6 +1026,22 @@
       <table class="day-table" id="pagos-table">
         <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Facturas</th><th>Monto</th><th>Estado</th></tr></thead>
         <tbody id="pagos-body"></tbody>
+      </table>
+    </div>
+    </section>
+
+    <section class="subsec" data-sub="retenciones" data-label="Retenciones">
+    <div class="compras-section-head">
+      <h3>Retenciones practicadas <span class="prov-count" id="ret-resumen"></span></h3>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="month" id="ret-mes" class="scope-select" style="max-width:170px;">
+        <button class="btn" id="ret-csv">Descargar CSV</button>
+      </div>
+    </div>
+    <div class="day-wrap">
+      <table class="day-table" id="ret-table">
+        <thead><tr><th>Fecha</th><th>Certificado</th><th>OP</th><th>Proveedor</th><th>CUIT</th><th>Régimen</th><th>Base</th><th>Retención</th><th></th></tr></thead>
+        <tbody id="ret-body"></tbody>
       </table>
     </div>
     </section>
@@ -1308,6 +1345,23 @@
         </select>
       </div>
     </div>
+    <div class="crew-fields">
+      <div class="field">
+        <label for="pm-gan-condicion">Ganancias: condición <span class="fm-hint" id="pm-gan-hint"></span></label>
+        <select id="pm-gan-condicion">
+          <option value="">Automática (según IVA)</option>
+          <option value="inscripto">Inscripto</option>
+          <option value="no_inscripto">No inscripto</option>
+          <option value="exento">Exento / con certificado de exclusión</option>
+          <option value="monotributo">Monotributo (no se retiene)</option>
+          <option value="no_retener">No retener</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="pm-gan-regimen">Régimen de retención <span class="fm-hint" id="pm-gan-reg-hint"></span></label>
+        <select id="pm-gan-regimen"></select>
+      </div>
+    </div>
     <label class="sug-prio-check"><input type="checkbox" id="pm-prioritario"> ★ Pago prioritario (aparece primero en la sugerencia de pagos: combustible, servicios, etc.)</label>
     <div class="field">
       <label>Imputaciones contables</label>
@@ -1360,8 +1414,16 @@
   <div class="modal" id="centro-costo-modal" style="max-width:380px;">
     <h3 id="ccm-title">Nuevo centro de costo</h3>
     <div class="sub">Se usa para clasificar las facturas y después poder separar los gastos en el dashboard</div>
-    <div class="field"><label for="ccm-codigo">Código</label><input type="text" id="ccm-codigo" maxlength="20" placeholder="Ej: 100"></div>
-    <div class="field"><label for="ccm-descripcion">Descripción</label><input type="text" id="ccm-descripcion" maxlength="80" placeholder="Ej: Administración"></div>
+    <div class="field"><label for="ccm-parent">Depende de</label><select id="ccm-parent"></select></div>
+    <div class="crew-fields">
+      <div class="field"><label for="ccm-descripcion">Nombre</label><input type="text" id="ccm-descripcion" maxlength="80" placeholder="Ej: Insumos"></div>
+      <div class="field"><label for="ccm-codigo">Código (opcional)</label><input type="text" id="ccm-codigo" maxlength="20" placeholder="Ej: 20V"></div>
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label for="ccm-requiere">Al imputar, pedir</label>
+        <select id="ccm-requiere"><option value="">Nada más</option><option value="movil">N° de móvil (camión)</option><option value="sucursal">Sucursal</option></select></div>
+      <div class="field"><label>&nbsp;</label><label class="sug-prio-check" style="margin:6px 0;"><input type="checkbox" id="ccm-activo"> Activo (aparece para imputar)</label></div>
+    </div>
     <div class="modal-actions">
       <div class="left">
         <button class="btn" id="ccm-cancel">Cancelar</button>
@@ -1534,6 +1596,10 @@
         <label for="fm-concepto">Concepto</label>
         <select id="fm-concepto"></select>
       </div>
+      <div class="field" id="fm-ccref-field" hidden>
+        <label for="fm-ccref" id="fm-ccref-label">Móvil</label>
+        <select id="fm-ccref"></select>
+      </div>
     </div>
     <div class="imput-chips" id="fm-imputaciones" hidden></div>
     <div class="split-box" id="fm-split" hidden>
@@ -1554,8 +1620,12 @@
     </div>
     <div class="crew-fields">
       <div class="field">
-        <label for="fm-monto">Monto</label>
+        <label for="fm-monto">Monto total</label>
         <input type="text" id="fm-monto" inputmode="decimal" placeholder="0,00">
+        <label for="fm-neto" style="margin-top:8px;">Neto gravado (sin IVA) <span class="fm-hint" id="fm-neto-hint"></span></label>
+        <input type="text" id="fm-neto" inputmode="decimal" placeholder="Automático">
+        <label for="fm-regimen" style="margin-top:8px;">Retención de Ganancias</label>
+        <select id="fm-regimen"></select>
       </div>
       <div class="field">
         <label>Archivos adjuntos</label>
@@ -1622,6 +1692,12 @@
         <label for="pom-cuenta">Cuenta de pago</label>
         <select id="pom-cuenta"></select>
       </div>
+    </div>
+    <div class="ret-box" id="pom-ret-box" hidden>
+      <div class="ret-head">Retención de Ganancias <span class="fm-hint" id="pom-ret-hint"></span></div>
+      <div id="pom-ret-lines"></div>
+      <div class="ret-total"><span>Neto a pagar</span><b id="pom-neto">$0,00</b></div>
+      <div id="pom-ret-certs"></div>
     </div>
     <div class="field" id="pom-cartera-field" hidden>
       <label>Cheques de la cartera que se entregan <span class="pom-chq-total" id="pom-cartera-total"></span></label>
@@ -1783,6 +1859,7 @@
         </div>
         <div class="settings-tabs settings-subtabs" id="settings-subtabs-tesoreria" hidden>
           <button class="stabbtn" id="stabbtn-medios-caja">Conceptos de caja</button>
+          <button class="stabbtn" id="stabbtn-retenciones">Retenciones</button>
         </div>
         <div class="settings-tabs settings-subtabs" id="settings-subtabs-acceso" hidden>
           <button class="stabbtn" id="stabbtn-auth">Perfiles y permisos</button>
@@ -1823,10 +1900,10 @@
           <div class="addrow"><input type="text" id="new-occasional-input" placeholder="Nuevo eventual" maxlength="60"><button class="btn" id="add-occasional-btn">+</button></div>
         </div>
         <div id="stab-centros-costo" hidden>
-          <div class="sub" style="margin-bottom:10px;">Se usan para clasificar las facturas y separar los gastos en el Dashboard.</div>
+          <div class="sub" style="margin-bottom:10px;">Árbol de centros de costo. Las facturas se imputan a las ramas finales (sin subdivisiones). Los inactivos no aparecen para cargar, pero las facturas viejas los conservan.</div>
           <div class="day-wrap">
-            <table class="day-table" id="centros-costo-table">
-              <thead><tr><th>Código</th><th>Descripción</th></tr></thead>
+            <table class="day-table cc-tree" id="centros-costo-table">
+              <thead><tr><th>Centro de costo</th><th>Pide</th><th>Estado</th></tr></thead>
               <tbody id="centros-costo-body"></tbody>
             </table>
           </div>
@@ -1861,6 +1938,30 @@
             </table>
           </div>
           <div class="addrow"><button class="btn primary" id="new-medio-btn">+ Nuevo concepto de caja</button></div>
+        </div>
+        <div id="stab-retenciones" hidden>
+          <div class="sub" style="margin-bottom:10px;">Retención de Ganancias (RG 830, valores de la RG 5423). Cuando ARCA actualice alícuotas o montos, se cambian acá y rigen para los pagos nuevos.</div>
+          <h4 style="margin:6px 0 8px;">Agente de retención (para el certificado)</h4>
+          <div class="crew-fields">
+            <div class="field"><label for="ag-razon">Razón social</label><input type="text" id="ag-razon"></div>
+            <div class="field"><label for="ag-cuit">CUIT</label><input type="text" id="ag-cuit" placeholder="30-XXXXXXXX-X"></div>
+          </div>
+          <div class="crew-fields">
+            <div class="field"><label for="ag-domicilio">Domicilio</label><input type="text" id="ag-domicilio"></div>
+            <div class="field"><label for="ag-localidad">Localidad / provincia</label><input type="text" id="ag-localidad"></div>
+          </div>
+          <div class="addrow"><button class="btn primary" id="ag-save">Guardar datos del agente</button></div>
+          <h4 style="margin:16px 0 8px;">Regímenes</h4>
+          <div class="day-wrap ret-cfg-wrap">
+            <table class="day-table ret-cfg" id="gan-reg-table">
+              <thead><tr><th>Cód.</th><th>Concepto</th><th>% insc.</th><th>% no insc.</th><th>% no insc. pers. humana</th><th>No sujeto</th><th>Mín. insc.</th><th>Mín. no insc.</th><th>Activo</th></tr></thead>
+              <tbody id="gan-reg-body"></tbody>
+            </table>
+          </div>
+          <div class="sub" style="margin-top:6px;">"% insc." vacío = se calcula por escala (general o la del código 119). "% no insc. pers. humana" vacío = igual que "% no insc.".</div>
+          <h4 style="margin:16px 0 8px;">Escalas</h4>
+          <div class="ret-escalas" id="gan-escalas"></div>
+          <div class="addrow"><button class="btn primary" id="gan-save">Guardar regímenes y escalas</button></div>
         </div>
         <div id="stab-auth" hidden>
           <div class="sub" style="margin-bottom:14px;">Cada perfil tiene sus propios permisos por pestaña; a cada persona se le asigna un perfil en Usuarios (más abajo). "Ver" deja mirar esa pestaña sin poder crear, editar ni borrar nada ahí; "Editar" da acceso completo. Los cambios se guardan recién al tocar "Guardar perfiles".</div>

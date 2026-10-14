@@ -303,7 +303,7 @@
     routes:'grid', trucks:'grid', drivers:'grid', helpers:'grid', cargo:'grid',
     branches:'branches', companies:'company', occasionals:'occasional',
     'centros-costo':'compras', conceptos:'compras', rubros:'compras',
-    'medios-caja':'tesoreria'
+    'medios-caja':'tesoreria', retenciones:'pagos'
   };
   function settingsTabVisible(t){
     if(t==='auth') return canManageAccess();
@@ -318,7 +318,7 @@
     {id:'flota',       label:'Flota y viajes',            tabs:['routes','trucks','drivers','helpers','cargo']},
     {id:'sucursales',  label:'Sucursales y empresas',     tabs:['branches','companies','occasionals']},
     {id:'compras',     label:'Compras',                   tabs:['centros-costo','conceptos','rubros']},
-    {id:'tesoreria',   label:'Tesorería',                 tabs:['medios-caja']},
+    {id:'tesoreria',   label:'Tesorería',                 tabs:['medios-caja','retenciones']},
     {id:'acceso',      label:'Acceso',                     tabs:['auth']}
   ];
   function settingsCategoryVisible(catId){
@@ -350,7 +350,7 @@
     });
   }
   function firstVisibleSettingsTab(){
-    var order = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','medios-caja','auth'];
+    var order = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','medios-caja','retenciones','auth'];
     for(var i=0;i<order.length;i++){ if(settingsTabVisible(order[i])) return order[i]; }
     return 'auth';
   }
@@ -473,6 +473,10 @@
     sugMonto: null,        // monto a destinar escrito a mano (null = lo disponible)
     sugManual: {},         // facturaId -> true/false tildado/destildado a mano
     sugVerTodo: false,
+    ganRegimenes: [],      // régimenes de retención de Ganancias (RG 830)
+    ganEscalas: [],        // escalas 'general' y '119'
+    agente: {},            // datos del agente de retención (parametros.agente_retencion)
+    retMes: '',            // mes del listado de retenciones (YYYY-MM)
     // Tesorería: cuentas de caja/banco y sus movimientos. Por ahora solo
     // egresos (pagos a proveedores, incluido el egreso automático que se
     // genera al marcar una orden de pago como Pagada, y egresos manuales
@@ -2270,7 +2274,15 @@
     document.getElementById('kpi-gastos-centro').textContent = porCentro[0] ? porCentro[0].label+' ('+fmtMoney(porCentro[0].count)+')' : '—';
     document.getElementById('kpi-gastos-concepto').textContent = porConcepto[0] ? porConcepto[0].label+' ('+fmtMoney(porConcepto[0].count)+')' : '—';
 
-    renderMoneyBarList('bar-gastos-centro', porCentro);
+    renderMoneyBarList('bar-gastos-centro', porCentro, {limit:15});
+    // Por área (raíz del árbol) y por móvil / sucursal (centros que lo piden).
+    var porArea = sumBy(lineasPeriodo, function(l){ var r = ccRaiz(l.centroCostoId); return r ? r.id : ''; },
+      function(id){ var c = centroCostoById(id); return c ? ccNombre(c) : ''; }, function(l){return Number(l.monto||0);}, '(Sin centro de costo)');
+    renderMoneyBarList('bar-gastos-area', porArea);
+    var porRef = function(pref){ return sumBy(lineasPeriodo.filter(function(l){ return (l.ccRef||'').indexOf(pref)===0; }),
+      function(l){ return l.ccRef; }, ccRefLabel, function(l){return Number(l.monto||0);}, ''); };
+    renderMoneyBarList('bar-gastos-movil', porRef('movil:'), {limit:20});
+    renderMoneyBarList('bar-gastos-sucursal', porRef('suc:'), {limit:20});
     renderMoneyBarList('bar-gastos-concepto', porConcepto);
     renderMoneyBarList('bar-gastos-proveedor', porProveedorGasto, {limit:12});
   }
@@ -2307,7 +2319,7 @@
   }
 
   // ---------- Settings (ABM: rutas, camiones, choferes, ayudantes, etc.) ----------
-  var SETTINGS_ALL_TABS = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','medios-caja','auth'];
+  var SETTINGS_ALL_TABS = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','medios-caja','retenciones','auth'];
   function switchSettingsTab(tab){
     refreshSettingsTabsVisibility();
     if(!settingsTabVisible(tab)) tab = firstVisibleSettingsTab();
@@ -2329,6 +2341,7 @@
       if(subtabsEl) subtabsEl.hidden = (c.id!==cat);
     });
     if(tab==='auth') renderAccesoSettings();
+    if(tab==='retenciones') renderRetencionesSettings();
   }
   function switchSettingsCategory(cat){
     refreshSettingsTabsVisibility();
@@ -3162,13 +3175,73 @@
   function centroCostoById(id){
     return state.centrosCosto.find(function(x){ return x.id===id; }) || null;
   }
+  // ---- Árbol de centros de costo ----
+  // Cada centro puede tener padre (parentId). Se imputa solo a las hojas
+  // (sin hijos). requiere 'movil'|'sucursal' pide además el camión o la
+  // sucursal (factura.ccRef = "movil:<id>" | "suc:<id>").
+  function ccNombre(c){ return c.codigo ? (c.codigo+(c.parentId ? ' · ' : ' — ')+c.descripcion) : c.descripcion; }
+  function ccHijos(id){ return state.centrosCosto.filter(function(x){ return (x.parentId||'')===(id||''); }).sort(function(a,b){ return (a.orden||0)-(b.orden||0) || (a.descripcion||'').localeCompare(b.descripcion||''); }); }
+  function ccEsHoja(c){ return !state.centrosCosto.some(function(x){ return x.parentId===c.id; }); }
+  function ccRuta(id){
+    var out = [], c = centroCostoById(id), guard = 0;
+    while(c && guard++<10){ out.unshift(c); c = c.parentId ? centroCostoById(c.parentId) : null; }
+    return out;
+  }
   function centroCostoLabel(id){
     var c = centroCostoById(id);
     if(!c) return '';
-    return c.codigo ? (c.codigo+' — '+c.descripcion) : c.descripcion;
+    var txt = ccRuta(id).map(ccNombre).join(' › ');
+    return txt + (c.activo===false ? ' (anterior)' : '');
+  }
+  // Raíz (área) de un centro: para agrupar gastos por área.
+  function ccRaiz(id){ var r = ccRuta(id); return r.length ? r[0] : null; }
+  // <option>s agrupadas por área, solo hojas activas (+ la elegida aunque esté inactiva).
+  function ccOptionsHtml(sel, placeholder){
+    var html = '<option value="">'+esc(placeholder||'Centro de costo')+'</option>';
+    var raices = ccHijos('').filter(function(r){ return r.activo!==false || r.id===sel || state.centrosCosto.some(function(x){ return x.id===sel && ccRaiz(x.id)===r; }); });
+    var sueltas = [];
+    raices.forEach(function(r){
+      if(ccEsHoja(r)){ if(r.activo!==false || r.id===sel) sueltas.push(r); return; }
+      var hojas = [];
+      (function rec(n, pref){
+        ccHijos(n.id).forEach(function(h){
+          var lab = pref ? pref+' › '+ccNombre(h) : ccNombre(h);
+          if(ccEsHoja(h)){ if(h.activo!==false || h.id===sel) hojas.push({id:h.id, label:lab+(h.activo===false?' (anterior)':'')}); }
+          else if(h.activo!==false) rec(h, lab);
+        });
+      })(r, '');
+      if(!hojas.length) return;
+      html += '<optgroup label="'+esc(ccNombre(r))+'">'+hojas.map(function(o){ return '<option value="'+esc(o.id)+'"'+(o.id===sel?' selected':'')+'>'+esc(o.label)+'</option>'; }).join('')+'</optgroup>';
+    });
+    if(sueltas.length){
+      html += '<optgroup label="Otros">'+sueltas.map(function(c){ return '<option value="'+esc(c.id)+'"'+(c.id===sel?' selected':'')+'>'+esc(ccNombre(c)+(c.activo===false?' (anterior)':''))+'</option>'; }).join('')+'</optgroup>';
+    }
+    return html;
+  }
+  function fillCentroSelect(sel, placeholder, valor){
+    var v = valor!==undefined ? valor : sel.value;
+    sel.innerHTML = ccOptionsHtml(v, placeholder);
+    sel.value = v || '';
+  }
+  function ccRequiere(id){ var c = centroCostoById(id); return c ? (c.requiere||'') : ''; }
+  // Opciones del segundo desplegable (camión o sucursal) según el centro.
+  function ccRefOptionsHtml(req, sel){
+    if(req==='movil') return '<option value="">Elegir móvil</option>'+state.trucks.filter(function(t){ return t.active!==false || ('movil:'+t.id)===sel; })
+      .map(function(t){ var v='movil:'+t.id; return '<option value="'+esc(v)+'"'+(v===sel?' selected':'')+'>'+esc(t.label)+'</option>'; }).join('');
+    if(req==='sucursal') return '<option value="">Elegir sucursal</option>'+state.branches.filter(function(b){ return b.active!==false || ('suc:'+b.id)===sel; })
+      .slice().sort(function(a,b){ return (a.order||0)-(b.order||0); })
+      .map(function(b){ var v='suc:'+b.id; return '<option value="'+esc(v)+'"'+(v===sel?' selected':'')+'>'+esc(b.label)+'</option>'; }).join('');
+    return '';
+  }
+  function ccRefLabel(ref){
+    if(!ref) return '';
+    var i = ref.indexOf(':'), k = ref.slice(0,i), id = ref.slice(i+1);
+    if(k==='movil'){ var t = state.trucks.find(function(x){ return x.id===id; }); return t ? t.label : 'Móvil '+id; }
+    if(k==='suc'){ var b = state.branches.find(function(x){ return x.id===id; }); return b ? b.label : id; }
+    return ref;
   }
   function generateCentroCostoId(codigo){
-    var base = slug(codigo) || 'cc';
+    var base = 'cc_'+(slug(codigo) || 'centro');
     var used = {};
     state.centrosCosto.forEach(function(c){ used[c.id] = true; });
     if(!used[base]) return base;
@@ -3199,7 +3272,7 @@
   // usos por proveedor, chequeos antes de borrar) pasa por acá.
   function facturaLineas(f){
     if(f.items && f.items.length>=2) return f.items;
-    return [{centroCostoId:f.centroCostoId, conceptoId:f.conceptoId, monto:Number(f.monto||0), detalle:''}];
+    return [{centroCostoId:f.centroCostoId, conceptoId:f.conceptoId, ccRef:f.ccRef||'', monto:Number(f.monto||0), detalle:''}];
   }
   // Monto escrito a mano: acepta "1234,56", "1.234,56", "1.200.000" y "1234.56".
   function parseMontoInput(str){
@@ -3266,17 +3339,28 @@
     if(!body) return;
     body.innerHTML = '';
     if(state.centrosCosto.length===0){
-      body.innerHTML = '<tr class="day-row empty"><td colspan="2">Todavía no hay centros de costo cargados.</td></tr>';
+      body.innerHTML = '<tr class="day-row empty"><td colspan="3">Todavía no hay centros de costo cargados.</td></tr>';
       return;
     }
-    state.centrosCosto.slice().sort(function(a,b){ return (a.codigo||'').localeCompare(b.codigo||'', undefined, {numeric:true}); }).forEach(function(c){
+    var vistos = {};
+    function fila(c, nivel){
+      vistos[c.id] = true;
+      var hoja = ccEsHoja(c);
       var tr = document.createElement('tr');
-      tr.className = 'day-row';
-      tr.innerHTML = '<td class="day-route num">'+esc(c.codigo||'—')+'</td>'
-        +'<td>'+esc(c.descripcion)+'</td>';
+      tr.className = 'day-row'+(c.activo===false ? ' inactivo' : '');
+      tr.innerHTML = '<td class="ind"><span style="display:inline-block; width:'+(nivel*18)+'px;"></span>'
+        +'<span class="'+(hoja?'':'rama')+'">'+esc(ccNombre(c))+'</span></td>'
+        +'<td>'+(c.requiere==='movil' ? 'Móvil' : (c.requiere==='sucursal' ? 'Sucursal' : ''))+'</td>'
+        +'<td>'+(c.activo===false ? 'Inactivo' : (hoja ? 'Se imputa' : ''))+'</td>';
       tr.addEventListener('click', function(){ openCentroCostoModal(c.id); });
       body.appendChild(tr);
-    });
+      ccHijos(c.id).forEach(function(h){ fila(h, nivel+1); });
+    }
+    // Primero el árbol activo; los anteriores (inactivos sin padre) al final.
+    var raices = ccHijos('');
+    raices.filter(function(r){ return r.activo!==false; }).forEach(function(r){ fila(r, 0); });
+    raices.filter(function(r){ return r.activo===false; }).forEach(function(r){ fila(r, 0); });
+    state.centrosCosto.filter(function(c){ return !vistos[c.id]; }).forEach(function(c){ fila(c, 0); });
   }
 
   function renderConceptosList(){
@@ -3298,9 +3382,9 @@
 
   function writeCentroCosto(c){
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
-    state.sb.from('centros_costo').upsert({
+    state.sb.from('centros_costo').upsert(Object.assign({
       id:c.id, codigo:c.codigo||'', descripcion:c.descripcion||''
-    }).then(function(res){
+    }, state.schemaV3 ? {parent_id:c.parentId||null, activo:c.activo!==false, requiere:c.requiere||'', orden:c.orden||0} : {})).then(function(res){
       if(res.error) showToast('No se pudo guardar el centro de costo: '+res.error.message);
     });
   }
@@ -3311,6 +3395,22 @@
     document.getElementById('ccm-title').textContent = c ? 'Editar centro de costo' : 'Nuevo centro de costo';
     document.getElementById('ccm-codigo').value = c ? c.codigo : '';
     document.getElementById('ccm-descripcion').value = c ? c.descripcion : '';
+    // "Depende de": cualquier centro que no sea él mismo ni uno de sus descendientes.
+    var excl = {};
+    if(c) (function m(id){ excl[id] = true; ccHijos(id).forEach(function(h){ m(h.id); }); })(c.id);
+    var opts = '<option value="">— Ninguno (área principal) —</option>';
+    (function rec(pid, nivel){
+      ccHijos(pid).forEach(function(n){
+        if(excl[n.id]) return;
+        opts += '<option value="'+esc(n.id)+'">'+'\u00a0\u00a0'.repeat(nivel)+esc(ccNombre(n))+(n.activo===false?' (inactivo)':'')+'</option>';
+        rec(n.id, nivel+1);
+      });
+    })('', 0);
+    var ps = document.getElementById('ccm-parent');
+    ps.innerHTML = opts;
+    ps.value = c ? (c.parentId||'') : '';
+    document.getElementById('ccm-requiere').value = c ? (c.requiere||'') : '';
+    document.getElementById('ccm-activo').checked = c ? c.activo!==false : true;
     document.getElementById('ccm-delete').style.display = c ? '' : 'none';
     document.getElementById('centro-costo-overlay').classList.add('show');
   }
@@ -3323,13 +3423,19 @@
   document.getElementById('centro-costo-overlay').addEventListener('click', function(e){ if(e.target===this) closeCentroCostoModal(); });
   document.getElementById('ccm-save').addEventListener('click', function(){
     var codigo = document.getElementById('ccm-codigo').value.trim();
-    if(!codigo){ showToast('Ingresá el código del centro de costo.'); return; }
     var descripcion = document.getElementById('ccm-descripcion').value.trim();
-    if(!descripcion){ showToast('Ingresá la descripción del centro de costo.'); return; }
+    if(!descripcion){ showToast('Ingresá el nombre del centro de costo.'); return; }
+    var parentId = document.getElementById('ccm-parent').value || '';
+    if(!state.schemaV3 && parentId){ showToast('Para armar el árbol falta correr el schema.sql nuevo en Supabase.', 6000); return; }
     var id = state.editingCentroCostoId;
     var isNew = !id;
-    if(isNew) id = generateCentroCostoId(codigo);
-    var c = { id:id, codigo:codigo, descripcion:descripcion };
+    var prev = id ? centroCostoById(id) : null;
+    if(isNew) id = generateCentroCostoId(ccRuta(parentId).map(function(x){ return x.descripcion; }).concat([codigo||descripcion]).join('_'));
+    var hermanos = ccHijos(parentId).filter(function(x){ return x.id!==id; });
+    var c = { id:id, codigo:codigo, descripcion:descripcion, parentId:parentId,
+      requiere: document.getElementById('ccm-requiere').value || '',
+      activo: document.getElementById('ccm-activo').checked,
+      orden: prev && prev.parentId===parentId ? (prev.orden||0) : (hermanos.reduce(function(m,x){ return Math.max(m, x.orden||0); }, 0)+1) };
     if(isNew) state.centrosCosto.push(c);
     else { var idx = state.centrosCosto.findIndex(function(x){ return x.id===id; }); if(idx>=0) state.centrosCosto[idx]=c; }
     writeCentroCosto(c);
@@ -3341,7 +3447,8 @@
     var id = state.editingCentroCostoId;
     if(!id) return;
     var used = state.facturas.some(function(f){ return facturaLineas(f).some(function(l){ return l.centroCostoId===id; }); });
-    if(used){ showToast('No se puede eliminar: hay facturas con este centro de costo.'); return; }
+    if(used){ showToast('No se puede eliminar: hay facturas con este centro de costo. Podés desactivarlo.'); return; }
+    if(ccHijos(id).length){ showToast('No se puede eliminar: tiene subdivisiones. Eliminá o mové primero las de adentro.'); return; }
     state.centrosCosto = state.centrosCosto.filter(function(x){ return x.id!==id; });
     if(state.sb) state.sb.from('centros_costo').delete().eq('id', id).then(function(res){
       if(res.error) showToast('No se pudo eliminar: '+res.error.message);
@@ -3664,7 +3771,8 @@
       codigo:p.codigo||'', nombre_fantasia:p.nombreFantasia||'', localidad:p.localidad||'',
       provincia:p.provincia||'', condicion_iva:p.condicionIva||'', condicion_pago:p.condicionPago||'',
       imputaciones:(p.imputaciones||[]).map(function(im){ return {centro_costo_id:im.centroCostoId, concepto_id:im.conceptoId}; })
-    }, state.colPrioritario ? {prioritario: !!p.prioritario} : {})).then(function(res){
+    }, state.colPrioritario ? {prioritario: !!p.prioritario} : {},
+       state.schemaV3 ? {gan_condicion: p.ganCondicion||'', gan_regimen: p.ganRegimen||null} : {})).then(function(res){
       if(res.error) showToast('No se pudo guardar el proveedor: '+res.error.message);
     });
   }
@@ -3680,9 +3788,7 @@
     sel.value = value;
   }
   function fillImputAddSelects(){
-    fillSelect(document.getElementById('pm-imput-cc'),
-      state.centrosCosto.slice().sort(function(a,b){ return (a.descripcion||'').localeCompare(b.descripcion||''); }).map(function(c){ return {id:c.id, label:centroCostoLabel(c.id)}; }),
-      'id', 'label', 'Centro de costo');
+    fillCentroSelect(document.getElementById('pm-imput-cc'), 'Centro de costo', '');
     fillSelect(document.getElementById('pm-imput-concepto'),
       state.conceptos.slice().sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); }),
       'id', 'nombre', 'Concepto');
@@ -3786,6 +3892,9 @@
     setSelectValueLoose('pm-condicion-iva', p ? p.condicionIva : '');
     setSelectValueLoose('pm-condicion-pago', p ? p.condicionPago : '');
     document.getElementById('pm-prioritario').checked = !!(p && p.prioritario);
+    document.getElementById('pm-gan-condicion').value = p ? (p.ganCondicion||'') : '';
+    fillRegimenSelect(document.getElementById('pm-gan-regimen'), p && p.ganRegimen ? String(p.ganRegimen) : '', 'Según rubro');
+    actualizarPmGanHint();
     state.editingProveedorImput = p ? (p.imputaciones||[]).map(function(im){ return {centroCostoId:im.centroCostoId, conceptoId:im.conceptoId}; }) : [];
     fillImputAddSelects();
     renderProveedorImputList();
@@ -3825,6 +3934,8 @@
       condicionIva: document.getElementById('pm-condicion-iva').value,
       condicionPago: document.getElementById('pm-condicion-pago').value,
       prioritario: document.getElementById('pm-prioritario').checked,
+      ganCondicion: document.getElementById('pm-gan-condicion').value || '',
+      ganRegimen: document.getElementById('pm-gan-regimen').value ? Number(document.getElementById('pm-gan-regimen').value) : null,
       imputaciones: state.editingProveedorImput.slice()
     };
     if(baseData.prioritario && !state.colPrioritario) showToast('Para guardar "pago prioritario" falta correr el schema.sql nuevo en Supabase.', 6000);
@@ -3942,6 +4053,7 @@
       codigo:row.codigo||'', nombreFantasia:row.nombre_fantasia||'', localidad:row.localidad||'',
       provincia:row.provincia||'', condicionIva:row.condicion_iva||'', condicionPago:row.condicion_pago||'',
       prioritario: row.prioritario===true,
+      ganCondicion: row.gan_condicion||'', ganRegimen: row.gan_regimen==null ? null : Number(row.gan_regimen),
       imputaciones: (Array.isArray(row.imputaciones) ? row.imputaciones : []).filter(function(im){ return im && im.centro_costo_id && im.concepto_id; })
         .map(function(im){ return {centroCostoId:im.centro_costo_id, conceptoId:im.concepto_id}; })
     };
@@ -3954,7 +4066,9 @@
     };
   }
   function mapCentroCostoRow(row){
-    return { id:row.id, codigo:row.codigo||'', descripcion:row.descripcion||'' };
+    if(row && Object.prototype.hasOwnProperty.call(row, 'parent_id')) state.schemaV3 = true;
+    return { id:row.id, codigo:row.codigo||'', descripcion:row.descripcion||'',
+      parentId:row.parent_id||'', activo:row.activo!==false, requiere:row.requiere||'', orden:row.orden||0 };
   }
   function mapConceptoRow(row){
     return { id:row.id, nombre:row.nombre||'' };
@@ -4010,6 +4124,7 @@
       state.conceptos = (res.data||[]).map(mapConceptoRow);
       renderCompras();
     });
+    cargarParametrosRetencion();
     state.sb.from('rubros').select('*').then(function(res){
       if(res.error){ showToast('Error cargando rubros (¿corriste el schema.sql nuevo?): '+res.error.message); return; }
       state.rubros = (res.data||[]).map(function(row){ return {id:row.id, nombre:row.nombre||''}; });
@@ -4049,6 +4164,7 @@
     renderSugerenciaPagos();
     renderFacturasList();
     renderPagosList();
+    renderRetencionesList();
     actualizarSubtabs();
   }
 
@@ -4099,7 +4215,7 @@
         +'<td>'+esc(proveedorNombre(p.proveedorId))+'</td>'
         +'<td class="num">'+esc(p.fecha||'—')+'</td>'
         +'<td class="day-note">'+esc(facturasLabel)+'</td>'
-        +'<td class="num">$'+montoStr+'</td>'
+        +'<td class="num">$'+montoStr+(p.retenido ? '<div class="fm-hint">ret. '+fmtMoney(p.retenido)+'</div>' : '')+'</td>'
         +'<td><span class="oc-badge '+esc(p.estado||'pendiente')+'">'+pagoEstadoLabel(p.estado)+'</span></td>';
       tr.addEventListener('click', function(){ openPagoModal(p.id); });
       body.appendChild(tr);
@@ -4107,6 +4223,305 @@
   }
 
 
+
+
+  // ---------- Retención de Ganancias (RG 830 / RG 5423) ----------
+  // Parámetros editables en ⚙ → Tesorería → Retenciones. El cálculo sigue el
+  // Anexo VIII: inscriptos, acumulado de pagos del mes por proveedor y
+  // régimen − monto no sujeto, × alícuota (o escala), − lo ya retenido en el
+  // mes; si da menos que el mínimo no se retiene. No inscriptos: alícuota
+  // sobre el pago, sin monto no sujeto (salvo 112/113).
+  var RUBRO_REGIMEN = {'bienes':78, 'locacion de servicios':94, 'honorarios':119, 'alquileres':31, 'transporte de carga':95};
+  function normTxt(t){ return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); }
+  function cargarParametrosRetencion(){
+    if(!state.sb) return;
+    state.sb.from('gan_regimenes').select('*').then(function(res){
+      if(res.error) return; // schema viejo: sin retenciones
+      state.schemaV3 = true;
+      state.ganRegimenes = (res.data||[]).map(function(r){ return {
+        codigo:Number(r.codigo), descripcion:r.descripcion||'', alicInsc:r.alic_insc==null?null:Number(r.alic_insc), escala:r.escala||'',
+        alicNoInsc:r.alic_no_insc==null?null:Number(r.alic_no_insc), alicNoInscPH:r.alic_no_insc_ph==null?null:Number(r.alic_no_insc_ph),
+        mnsr:Number(r.mnsr||0), mnsrNoInsc:!!r.mnsr_no_insc, minInsc:Number(r.min_insc||0), minNoInsc:Number(r.min_no_insc||0),
+        activo:r.activo!==false, orden:r.orden||0 }; }).sort(function(a,b){ return (a.orden||0)-(b.orden||0) || a.codigo-b.codigo; });
+      if(state.settingsTab==='retenciones') renderRetencionesSettings();
+      renderPagos();
+    });
+    state.sb.from('gan_escalas').select('*').then(function(res){
+      if(res.error) return;
+      state.ganEscalas = (res.data||[]).map(function(r){ return {escala:r.escala, desde:Number(r.desde), hasta:r.hasta==null?null:Number(r.hasta), fijo:Number(r.fijo||0), pct:Number(r.pct||0)}; })
+        .sort(function(a,b){ return a.escala.localeCompare(b.escala) || a.desde-b.desde; });
+    });
+    state.sb.from('parametros').select('*').eq('id','agente_retencion').then(function(res){
+      if(res.error || !res.data || !res.data[0]) return;
+      state.agente = res.data[0].valor || {};
+    });
+  }
+  function regimenByCodigo(c){ c = Number(c); return state.ganRegimenes.find(function(r){ return r.codigo===c; }) || null; }
+  function regimenLabel(c){ var r = regimenByCodigo(c); return r ? (r.codigo+' — '+r.descripcion) : (c ? 'Régimen '+c : ''); }
+  function fillRegimenSelect(sel, valor, placeholder){
+    sel.innerHTML = '<option value="">'+esc(placeholder||'Elegir régimen')+'</option>'+state.ganRegimenes.filter(function(r){ return r.activo || String(r.codigo)===String(valor); })
+      .map(function(r){ return '<option value="'+r.codigo+'">'+esc(r.codigo+' — '+r.descripcion)+'</option>'; }).join('')
+      +'<option value="0">No retener en esta factura</option>';
+    sel.value = valor==null ? '' : String(valor);
+  }
+  function esPersonaHumana(cuit){ var d = String(cuit||'').replace(/\D/g,''); return /^(20|23|24|27)/.test(d); }
+  // Condición en Ganancias: la elegida en el proveedor o, si no, según IVA.
+  function provGanCondicionAuto(p){
+    var iva = normTxt(p && p.condicionIva);
+    if(iva.indexOf('monotrib')!==-1) return 'monotributo';
+    if(iva.indexOf('exento')!==-1) return 'exento';
+    if(iva.indexOf('inscripto')!==-1) return 'inscripto';
+    return 'no_inscripto';
+  }
+  function provGanCondicion(p){ return (p && p.ganCondicion) || provGanCondicionAuto(p); }
+  function provGanRegimen(p){
+    if(p && p.ganRegimen) return p.ganRegimen;
+    return RUBRO_REGIMEN[normTxt(p && p.rubro)] || null;
+  }
+  var GAN_COND_LABEL = {inscripto:'Inscripto', no_inscripto:'No inscripto', exento:'Exento', monotributo:'Monotributo', no_retener:'No retener'};
+  function actualizarPmGanHint(){
+    var p = {condicionIva: document.getElementById('pm-condicion-iva').value, rubro: (typeof rubroElegido==='function' ? rubroElegido() : ''),
+             cuit: document.getElementById('pm-cuit').value};
+    document.getElementById('pm-gan-hint').textContent = document.getElementById('pm-gan-condicion').value ? '' : '→ '+GAN_COND_LABEL[provGanCondicionAuto(p)];
+    var r = RUBRO_REGIMEN[normTxt(p.rubro)];
+    document.getElementById('pm-gan-reg-hint').textContent = document.getElementById('pm-gan-regimen').value ? '' : (r ? '→ '+r+' (por el rubro)' : '→ sin régimen: no retiene');
+  }
+  ['pm-gan-condicion','pm-gan-regimen','pm-condicion-iva','pm-cuit','pm-rubro'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.addEventListener(el.tagName==='SELECT' ? 'change' : 'input', actualizarPmGanHint);
+  });
+  // Neto gravado: el cargado o, si está vacío, total/1,21 para Responsables
+  // Inscriptos (factura A) y el total para el resto.
+  function facturaNetoAuto(f){
+    var p = state.proveedores.find(function(x){ return x.id===f.proveedorId; });
+    var ri = normTxt(p && p.condicionIva).indexOf('inscripto')!==-1 && normTxt(p && p.condicionIva).indexOf('monotrib')===-1;
+    return Math.round((ri ? Number(f.monto||0)/1.21 : Number(f.monto||0))*100)/100;
+  }
+  function facturaNeto(f){ return f.neto!=null && !isNaN(f.neto) ? Number(f.neto) : facturaNetoAuto(f); }
+  function facturaRegimen(f){
+    if(f.regimenGan===0) return 0;
+    if(f.regimenGan) return f.regimenGan;
+    var p = state.proveedores.find(function(x){ return x.id===f.proveedorId; });
+    return provGanRegimen(p) || 0;
+  }
+  function escalaCalc(nombre, monto){
+    var tramos = state.ganEscalas.filter(function(t){ return t.escala===nombre; });
+    for(var i=0;i<tramos.length;i++){
+      var t = tramos[i];
+      if(monto>t.desde && (t.hasta==null || monto<=t.hasta)) return t.fijo + (monto-t.desde)*t.pct/100;
+    }
+    return 0;
+  }
+  // Redondeo a 2 decimales "hacia arriba" en el medio (2332,075 → 2332,08), sin el error de coma flotante.
+  function r2(n){ n = Number(n)||0; return Math.round(Number((n*100).toFixed(6)))/100; }
+  function mesDe(fecha){ return String(fecha||'').slice(0,7); }
+  // Retenciones de una orden de pago (sin guardar). Devuelve una línea por
+  // régimen: {regimen, base, acum_prev, ret_prev, importe, condicion, detalle}.
+  function calcularRetenciones(proveedorId, facturaIds, fecha, opId){
+    var p = state.proveedores.find(function(x){ return x.id===proveedorId; });
+    if(!p || !state.ganRegimenes.length) return [];
+    var cond = provGanCondicion(p);
+    var porReg = {};
+    facturaIds.forEach(function(fid){
+      var f = facturaById(fid); if(!f) return;
+      var reg = facturaRegimen(f); if(!reg) return;
+      porReg[reg] = (porReg[reg]||0) + facturaNeto(f);
+    });
+    var mes = mesDe(fecha);
+    var ph = esPersonaHumana(p.cuit);
+    return Object.keys(porReg).map(function(k){
+      var reg = regimenByCodigo(k), base = r2(porReg[k]);
+      var out = {regimen:Number(k), base:base, acum_prev:0, ret_prev:0, importe:0, condicion:cond, detalle:''};
+      if(!reg){ out.detalle = 'Régimen '+k+' no está en la tabla'; return out; }
+      if(cond==='exento' || cond==='monotributo' || cond==='no_retener'){ out.detalle = GAN_COND_LABEL[cond]+': no se retiene'; return out; }
+      // Lo pagado y retenido en el mes al mismo proveedor por el mismo régimen.
+      state.ordenesPago.forEach(function(o){
+        if(o.id===opId || o.proveedorId!==proveedorId || o.estado!=='pagada' || mesDe(o.fecha)!==mes) return;
+        (o.retenciones||[]).forEach(function(e){ if(Number(e.regimen)===reg.codigo){ out.acum_prev += Number(e.base||0); out.ret_prev += Number(e.importe||0); } });
+      });
+      out.acum_prev = r2(out.acum_prev); out.ret_prev = r2(out.ret_prev);
+      var total, minimo;
+      if(cond==='inscripto'){
+        var sujeto = Math.max(0, out.acum_prev + base - reg.mnsr);
+        total = r2(reg.alicInsc!=null ? sujeto*reg.alicInsc/100 : escalaCalc(reg.escala||'general', sujeto));
+        minimo = reg.minInsc;
+        out.detalle = 'Acumulado del mes '+fmtMoney(out.acum_prev+base)+' − no sujeto '+fmtMoney(reg.mnsr)+' = '+fmtMoney(sujeto)
+          +(reg.alicInsc!=null ? ' × '+String(reg.alicInsc).replace('.',',')+'%' : ' por escala')+(out.ret_prev ? ' − ya retenido '+fmtMoney(out.ret_prev) : '');
+      } else {
+        var alic = (ph && reg.alicNoInscPH!=null) ? reg.alicNoInscPH : (reg.alicNoInsc!=null ? reg.alicNoInsc : 0);
+        if(reg.mnsrNoInsc){ total = r2(Math.max(0, out.acum_prev + base - reg.mnsr)*alic/100); }
+        else { total = r2((out.acum_prev + base)*alic/100); }
+        minimo = reg.minNoInsc;
+        out.detalle = 'No inscripto: '+String(alic).replace('.',',')+'% sobre '+fmtMoney(out.acum_prev+base)+(out.ret_prev ? ' − ya retenido '+fmtMoney(out.ret_prev) : '');
+      }
+      var imp = r2(total - out.ret_prev);
+      if(imp < minimo){ if(imp>0) out.detalle += ' → '+fmtMoney(imp)+' no llega al mínimo de '+fmtMoney(minimo); imp = 0; }
+      out.importe = Math.max(0, imp);
+      return out;
+    });
+  }
+  function proximoCertificado(){
+    var max = 0;
+    state.ordenesPago.forEach(function(o){ (o.retenciones||[]).forEach(function(e){ if(Number(e.certificado)>max) max = Number(e.certificado); }); });
+    return max+1;
+  }
+  function certNumeroLabel(n){ return String(n||0).padStart(6,'0'); }
+  function imprimirCertificado(op, e){
+    var p = state.proveedores.find(function(x){ return x.id===op.proveedorId; }) || {};
+    var ag = state.agente || {};
+    var facts = (op.facturaIds||[]).map(function(fid){ var f = facturaById(fid); return f && facturaRegimen(f)===Number(e.regimen) ? f : null; }).filter(Boolean);
+    var reg = regimenByCodigo(e.regimen);
+    var w = window.open('', '_blank');
+    if(!w){ showToast('El navegador bloqueó la ventana del certificado: permití las ventanas emergentes para este sitio.', 6000); return; }
+    var fila = function(a,b){ return '<tr><th>'+esc(a)+'</th><td>'+b+'</td></tr>'; };
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Certificado de retención '+certNumeroLabel(e.certificado)+'</title>'
+      +'<style>body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:32px;font-size:13px}h1{font-size:18px;margin:0 0 4px}h2{font-size:14px;margin:20px 0 6px;border-bottom:1px solid #999;padding-bottom:3px}'
+      +'table{border-collapse:collapse;width:100%}th{text-align:left;width:38%;padding:4px 6px;color:#444;font-weight:600}td{padding:4px 6px}.n{text-align:right;font-variant-numeric:tabular-nums}'
+      +'.cab{display:flex;justify-content:space-between;align-items:flex-start}.box{border:1px solid #999;padding:8px 12px;text-align:right}.firma{margin-top:70px;display:flex;justify-content:flex-end}.firma div{border-top:1px solid #333;width:260px;text-align:center;padding-top:4px}'
+      +'.lst th,.lst td{border:1px solid #ccc}@media print{button{display:none}}</style></head><body>'
+      +'<div class="cab"><div><h1>Certificado de retención</h1><div>Impuesto a las Ganancias — RG (AFIP/ARCA) 830</div></div>'
+      +'<div class="box"><b>N° '+certNumeroLabel(e.certificado)+'</b><br>Fecha: '+esc(op.fecha||'')+'</div></div>'
+      +'<h2>Agente de retención</h2><table>'+fila('Razón social', esc(ag.razon_social||''))+fila('CUIT', esc(ag.cuit||''))+fila('Domicilio', esc([ag.domicilio, ag.localidad, ag.provincia].filter(Boolean).join(', ')))+'</table>'
+      +'<h2>Sujeto retenido</h2><table>'+fila('Nombre / razón social', esc(p.nombre||''))+fila('CUIT', esc(p.cuit||''))+fila('Domicilio', esc([p.direccion, p.localidad, p.provincia].filter(Boolean).join(', ')))
+      +fila('Condición', esc(GAN_COND_LABEL[e.condicion]||e.condicion||''))+'</table>'
+      +'<h2>Retención</h2><table>'+fila('Régimen', esc(reg ? reg.codigo+' — '+reg.descripcion : String(e.regimen)))
+      +fila('Orden de pago', esc(pagoNumeroLabel(op.numero)))
+      +fila('Comprobantes', esc(facts.map(function(f){ return (f.numero||'')+' ('+(f.fecha||'')+')'; }).join(', ')))
+      +fila('Importe neto de este pago', '<span class="n">'+fmtMoney(e.base)+'</span>')
+      +fila('Pagos anteriores del mes', '<span class="n">'+fmtMoney(e.acum_prev)+'</span>')
+      +fila('Retenido anteriormente en el mes', '<span class="n">'+fmtMoney(e.ret_prev)+'</span>')
+      +fila('Importe retenido', '<b class="n">'+fmtMoney(e.importe)+'</b>')+'</table>'
+      +'<div class="firma"><div>Firma y aclaración<br>Agente de retención</div></div>'
+      +'<p style="margin-top:24px"><button onclick="window.print()">Imprimir</button></p></body></html>');
+    w.document.close();
+    setTimeout(function(){ try{ w.focus(); w.print(); }catch(err){} }, 300);
+  }
+
+
+  // ---------- Listado de retenciones practicadas (Pagos → Retenciones) ----------
+  function retencionesDelMes(mes){
+    var out = [];
+    state.ordenesPago.forEach(function(o){
+      if(o.estado!=='pagada' || mesDe(o.fecha)!==mes) return;
+      (o.retenciones||[]).forEach(function(e){ if(e.importe>0) out.push({op:o, e:e}); });
+    });
+    return out.sort(function(a,b){ return Number(a.e.certificado||0)-Number(b.e.certificado||0); });
+  }
+  function renderRetencionesList(){
+    var body = document.getElementById('ret-body');
+    if(!body) return;
+    var mi = document.getElementById('ret-mes');
+    if(!state.retMes) state.retMes = todayStr().slice(0,7);
+    if(mi.value!==state.retMes) mi.value = state.retMes;
+    var lista = retencionesDelMes(state.retMes);
+    body.innerHTML = '';
+    if(!state.ganRegimenes.length){ body.innerHTML = '<tr class="day-row empty"><td colspan="9">Para usar retenciones falta correr el schema.sql nuevo en Supabase.</td></tr>'; return; }
+    if(!lista.length){ body.innerHTML = '<tr class="day-row empty"><td colspan="9">No hay retenciones en ese mes.</td></tr>'; }
+    var total = 0;
+    lista.forEach(function(x){
+      var prov = state.proveedores.find(function(p){ return p.id===x.op.proveedorId; }) || {};
+      total += Number(x.e.importe||0);
+      var tr = document.createElement('tr');
+      tr.className = 'day-row';
+      tr.innerHTML = '<td class="num">'+esc(x.op.fecha||'')+'</td><td class="num">'+certNumeroLabel(x.e.certificado)+'</td><td class="num">'+esc(pagoNumeroLabel(x.op.numero))+'</td>'
+        +'<td>'+esc(prov.nombre||'')+'</td><td class="num">'+esc(prov.cuit||'')+'</td><td class="num">'+esc(String(x.e.regimen))+'</td>'
+        +'<td class="num">'+fmtMoney(x.e.base)+'</td><td class="num"><b>'+fmtMoney(x.e.importe)+'</b></td><td><button type="button" class="btn">🖨</button></td>';
+      tr.querySelector('button').addEventListener('click', function(ev){ ev.stopPropagation(); imprimirCertificado(x.op, x.e); });
+      tr.addEventListener('click', function(){ openPagoModal(x.op.id); });
+      body.appendChild(tr);
+    });
+    document.getElementById('ret-resumen').textContent = lista.length ? lista.length+' · '+fmtMoney(total) : '';
+  }
+  document.getElementById('ret-mes').addEventListener('change', function(){ state.retMes = this.value || todayStr().slice(0,7); renderRetencionesList(); });
+  document.getElementById('ret-csv').addEventListener('click', function(){
+    var lista = retencionesDelMes(state.retMes);
+    if(!lista.length){ showToast('No hay retenciones en ese mes.'); return; }
+    var num = function(n){ return (Math.round(Number(n||0)*100)/100).toFixed(2).replace('.',','); };
+    var q = function(t){ return '"'+String(t==null?'':t).replace(/"/g,'""')+'"'; };
+    var rows = [['Fecha','Certificado','Orden de pago','Proveedor','CUIT','Condición','Régimen','Descripción régimen','Importe neto pagado','Pagos anteriores del mes','Retenido anteriormente','Importe retenido'].map(q).join(';')];
+    lista.forEach(function(x){
+      var prov = state.proveedores.find(function(p){ return p.id===x.op.proveedorId; }) || {};
+      var reg = regimenByCodigo(x.e.regimen);
+      rows.push([x.op.fecha, certNumeroLabel(x.e.certificado), pagoNumeroLabel(x.op.numero), prov.nombre, prov.cuit, GAN_COND_LABEL[x.e.condicion]||x.e.condicion,
+        x.e.regimen, reg ? reg.descripcion : ''].map(q).concat([num(x.e.base), num(x.e.acum_prev), num(x.e.ret_prev), num(x.e.importe)]).join(';'));
+    });
+    var blob = new Blob(['﻿'+rows.join('\r\n')], {type:'text/csv;charset=utf-8'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'retenciones-ganancias-'+state.retMes+'.csv';
+    document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  });
+
+  // ---------- ⚙ → Tesorería → Retenciones ----------
+  function renderRetencionesSettings(){
+    var ag = state.agente || {};
+    document.getElementById('ag-razon').value = ag.razon_social||'';
+    document.getElementById('ag-cuit').value = ag.cuit||'';
+    document.getElementById('ag-domicilio').value = ag.domicilio||'';
+    document.getElementById('ag-localidad').value = [ag.localidad, ag.provincia].filter(Boolean).join(', ');
+    var body = document.getElementById('gan-reg-body');
+    body.innerHTML = '';
+    if(!state.ganRegimenes.length){ body.innerHTML = '<tr class="day-row empty"><td colspan="9">Falta correr el schema.sql nuevo en Supabase.</td></tr>'; }
+    var inp = function(cls, v){ return '<input type="text" inputmode="decimal" class="'+cls+'" value="'+(v==null?'':String(v).replace('.',','))+'">'; };
+    state.ganRegimenes.forEach(function(r){
+      var tr = document.createElement('tr');
+      tr.dataset.codigo = r.codigo;
+      tr.innerHTML = '<td class="num">'+r.codigo+'</td><td class="desc">'+esc(r.descripcion)+(r.escala ? ' <span class="fm-hint">(escala '+esc(r.escala)+')</span>' : '')+'</td>'
+        +'<td>'+inp('ai', r.alicInsc)+'</td><td>'+inp('an', r.alicNoInsc)+'</td><td>'+inp('aph', r.alicNoInscPH)+'</td>'
+        +'<td>'+inp('mn', r.mnsr)+'</td><td>'+inp('mi', r.minInsc)+'</td><td>'+inp('mni', r.minNoInsc)+'</td>'
+        +'<td><input type="checkbox" class="act"'+(r.activo?' checked':'')+'></td>';
+      body.appendChild(tr);
+    });
+    var box = document.getElementById('gan-escalas');
+    box.innerHTML = '';
+    ['general','119'].forEach(function(nombre){
+      var tramos = state.ganEscalas.filter(function(t){ return t.escala===nombre; });
+      if(!tramos.length) return;
+      var html = '<div><div class="fm-hint" style="margin-bottom:4px; font-size:12.5px;">'+(nombre==='general' ? 'Escala general (códigos 25, 110, 116, 124)' : 'Escala del código 119')+'</div>'
+        +'<table class="day-table" data-escala="'+nombre+'"><thead><tr><th>Más de $</th><th>Hasta $</th><th>Fijo $</th><th>Más el %</th></tr></thead><tbody>';
+      tramos.forEach(function(t){
+        html += '<tr data-desde="'+t.desde+'"><td class="num">'+fmtMontoInput(t.desde)+'</td><td class="num">'+(t.hasta==null ? 'en adelante' : fmtMontoInput(t.hasta))+'</td>'
+          +'<td><input type="text" inputmode="decimal" class="fj" value="'+fmtMontoInput(t.fijo)+'"></td><td><input type="text" inputmode="decimal" class="pc" value="'+fmtMontoInput(t.pct)+'"></td></tr>';
+      });
+      box.insertAdjacentHTML('beforeend', html+'</tbody></table></div>');
+    });
+  }
+  document.getElementById('ag-save').addEventListener('click', function(){
+    if(!state.schemaV3){ showToast('Falta correr el schema.sql nuevo en Supabase.'); return; }
+    var loc = document.getElementById('ag-localidad').value.split(',');
+    var v = {razon_social:document.getElementById('ag-razon').value.trim(), cuit:document.getElementById('ag-cuit').value.trim(),
+      domicilio:document.getElementById('ag-domicilio').value.trim(), localidad:(loc[0]||'').trim(), provincia:loc.slice(1).join(',').trim()};
+    state.sb.from('parametros').upsert({id:'agente_retencion', valor:v}).then(function(res){
+      if(res.error){ showToast('No se pudo guardar: '+res.error.message); return; }
+      state.agente = v; showToast('Datos del agente guardados.');
+    });
+  });
+  document.getElementById('gan-save').addEventListener('click', function(){
+    if(!state.schemaV3){ showToast('Falta correr el schema.sql nuevo en Supabase.'); return; }
+    var num = function(el){ var t = el.value.trim(); if(t==='') return null; var n = parseMontoInput(t); return isNaN(n) ? null : n; };
+    var filas = [];
+    document.querySelectorAll('#gan-reg-body tr[data-codigo]').forEach(function(tr){
+      var r = regimenByCodigo(tr.dataset.codigo); if(!r) return;
+      var n = {alicInsc:num(tr.querySelector('.ai')), alicNoInsc:num(tr.querySelector('.an')), alicNoInscPH:num(tr.querySelector('.aph')),
+        mnsr:num(tr.querySelector('.mn'))||0, minInsc:num(tr.querySelector('.mi'))||0, minNoInsc:num(tr.querySelector('.mni'))||0, activo:tr.querySelector('.act').checked};
+      if(n.alicInsc==null && !r.escala) n.alicInsc = 0;
+      Object.assign(r, n);
+      filas.push({codigo:r.codigo, descripcion:r.descripcion, escala:r.escala||null, alic_insc:r.escala && n.alicInsc==null ? null : n.alicInsc,
+        alic_no_insc:n.alicNoInsc, alic_no_insc_ph:n.alicNoInscPH, mnsr:n.mnsr, mnsr_no_insc:r.mnsrNoInsc, min_insc:n.minInsc, min_no_insc:n.minNoInsc, activo:n.activo, orden:r.orden||0});
+    });
+    var esc2 = [];
+    document.querySelectorAll('#gan-escalas table').forEach(function(tb){
+      tb.querySelectorAll('tbody tr').forEach(function(tr){
+        var t = state.ganEscalas.find(function(x){ return x.escala===tb.dataset.escala && x.desde===Number(tr.dataset.desde); }); if(!t) return;
+        t.fijo = num(tr.querySelector('.fj'))||0; t.pct = num(tr.querySelector('.pc'))||0;
+        esc2.push({escala:t.escala, desde:t.desde, hasta:t.hasta, fijo:t.fijo, pct:t.pct});
+      });
+    });
+    Promise.all([state.sb.from('gan_regimenes').upsert(filas), esc2.length ? state.sb.from('gan_escalas').upsert(esc2) : Promise.resolve({})]).then(function(rs){
+      var err = rs.find(function(r){ return r && r.error; });
+      if(err){ showToast('No se pudo guardar: '+err.error.message); return; }
+      showToast('Regímenes y escalas guardados.');
+    });
+  });
 
   // ---------- Submenús de Compras / Pagos / Tesorería ----------
   // Cada vista tiene sus secciones en <section class="subsec" data-sub>; se
@@ -4150,6 +4565,7 @@
     cnt('pagos', 'sugerencia', state.facturas.filter(function(f){ return f.estado==='pendiente' && !enOP[f.id] && Number(f.monto||0)!==0; }).length);
     cnt('pagos', 'facturas', state.facturas.filter(function(f){ return f.estado==='pendiente'; }).length);
     cnt('pagos', 'ordenes', state.ordenesPago.filter(function(p){ return p.estado!=='pagada'; }).length);
+    cnt('pagos', 'retenciones', 0);
     cnt('tesoreria', 'cuentas', 0);
     cnt('tesoreria', 'cheques', chequesEnCartera().length);
   }
@@ -4336,12 +4752,14 @@
 
   function writeFactura(f){
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
-    state.sb.from('facturas').upsert({
+    // Las columnas nuevas (cc_ref, neto, regimen_gan) solo se mandan si ya se
+    // corrió el schema.sql nuevo (state.schemaV3), para no romper el guardado.
+    state.sb.from('facturas').upsert(Object.assign({
       id:f.id, proveedor_id:f.proveedorId||'', oc_id:f.ocId||null,
       centro_costo_id:f.centroCostoId||null, concepto_id:f.conceptoId||null, numero:f.numero||'',
       fecha:f.fecha||'', monto:f.monto||0, estado:f.estado||'pendiente', notas:f.notas||'', archivos:f.archivos||[],
-      items:(f.items||[]).map(function(it){ return {centro_costo_id:it.centroCostoId, concepto_id:it.conceptoId, monto:it.monto||0, detalle:it.detalle||''}; })
-    }).then(function(res){
+      items:(f.items||[]).map(function(it){ return {centro_costo_id:it.centroCostoId, concepto_id:it.conceptoId, cc_ref:it.ccRef||'', monto:it.monto||0, detalle:it.detalle||''}; })
+    }, state.schemaV3 ? {cc_ref:f.ccRef||'', neto:(f.neto==null ? null : f.neto), regimen_gan:(f.regimenGan||null)} : {})).then(function(res){
       if(res.error) showToast('No se pudo guardar la factura: '+res.error.message);
     });
   }
@@ -4374,14 +4792,15 @@
     if(!def) return;
     var ccSel = document.getElementById('fm-centro-costo');
     var coSel = document.getElementById('fm-concepto');
-    if(centroCostoById(def.centroCostoId)) ccSel.value = def.centroCostoId;
+    var ccDef = centroCostoById(def.centroCostoId);
+    if(ccDef && ccDef.activo!==false){ ccSel.value = def.centroCostoId; actualizarFmRef(''); }
     if(conceptoById(def.conceptoId)) coSel.value = def.conceptoId;
   }
   function renderFacturaImputChips(){
     var box = document.getElementById('fm-imputaciones');
     var proveedorId = document.getElementById('fm-proveedor').value;
     box.innerHTML = '';
-    var list = proveedorId ? imputacionesOrdenadas(proveedorId).filter(function(im){ return centroCostoById(im.centroCostoId) && conceptoById(im.conceptoId); }) : [];
+    var list = proveedorId ? imputacionesOrdenadas(proveedorId).filter(function(im){ var c = centroCostoById(im.centroCostoId); return c && c.activo!==false && conceptoById(im.conceptoId); }) : [];
     if(list.length<1){ box.hidden = true; return; }
     var curKey = state.editingFacturaItems ? '' : imputKey(document.getElementById('fm-centro-costo').value, document.getElementById('fm-concepto').value);
     var lbl = document.createElement('div');
@@ -4401,13 +4820,24 @@
         }
         document.getElementById('fm-centro-costo').value = im.centroCostoId;
         document.getElementById('fm-concepto').value = im.conceptoId;
+        actualizarFmRef('');
         renderFacturaImputChips();
       });
       box.appendChild(b);
     });
     box.hidden = false;
   }
-  document.getElementById('fm-centro-costo').addEventListener('change', renderFacturaImputChips);
+  function actualizarFmRef(valor){
+    var req = ccRequiere(document.getElementById('fm-centro-costo').value);
+    var field = document.getElementById('fm-ccref-field');
+    field.hidden = !req;
+    document.getElementById('fm-ccref-label').textContent = req==='movil' ? 'Móvil' : 'Sucursal';
+    var sel = document.getElementById('fm-ccref');
+    var v = valor!==undefined ? valor : sel.value;
+    sel.innerHTML = ccRefOptionsHtml(req, v);
+    if(!req) sel.value = '';
+  }
+  document.getElementById('fm-centro-costo').addEventListener('change', function(){ actualizarFmRef(''); renderFacturaImputChips(); });
   document.getElementById('fm-concepto').addEventListener('change', renderFacturaImputChips);
   // Si la factura se guarda con una combinación que el proveedor todavía no
   // tenía, se le agrega a su lista de imputaciones.
@@ -4418,14 +4848,16 @@
     if(on){
       var cc = document.getElementById('fm-centro-costo').value;
       var co = document.getElementById('fm-concepto').value;
-      state.editingFacturaItems = [{centroCostoId:cc, conceptoId:co, monto:facturaMontoActual(), detalle:''},
-                                   {centroCostoId:'', conceptoId:'', monto:0, detalle:''}];
+      var ref = document.getElementById('fm-ccref').value || '';
+      state.editingFacturaItems = [{centroCostoId:cc, conceptoId:co, ccRef:ref, monto:facturaMontoActual(), detalle:''},
+                                   {centroCostoId:'', conceptoId:'', ccRef:'', monto:0, detalle:''}];
     } else {
       var first = (state.editingFacturaItems||[]).slice().sort(function(a,b){ return (b.monto||0)-(a.monto||0); })[0];
       state.editingFacturaItems = null;
       if(first){
         document.getElementById('fm-centro-costo').value = first.centroCostoId||'';
         document.getElementById('fm-concepto').value = first.conceptoId||'';
+        actualizarFmRef(first.ccRef||'');
       }
     }
     renderSplitUI();
@@ -4441,11 +4873,6 @@
       state.editingFacturaItems.push({centroCostoId:ccId||'', conceptoId:coId||'', monto: falta>0 ? falta : 0, detalle:''});
     }
     renderSplitUI();
-  }
-  function ccOptionsHtml(sel){
-    return '<option value="">Centro de costo</option>'+state.centrosCosto.map(function(c){ return {id:c.id, label:centroCostoLabel(c.id)}; })
-      .sort(function(a,b){ return a.label.localeCompare(b.label, undefined, {numeric:true}); })
-      .map(function(c){ return '<option value="'+esc(c.id)+'"'+(c.id===sel?' selected':'')+'>'+esc(c.label)+'</option>'; }).join('');
   }
   function coOptionsHtml(sel){
     return '<option value="">Concepto</option>'+state.conceptos.slice().sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); })
@@ -4473,14 +4900,17 @@
       state.editingFacturaItems.forEach(function(l, i){
         var row = document.createElement('div');
         row.className = 'split-line';
+        var reqL = ccRequiere(l.centroCostoId);
         row.innerHTML = '<select class="cc">'+ccOptionsHtml(l.centroCostoId)+'</select>'
+          +(reqL ? '<select class="ref">'+ccRefOptionsHtml(reqL, l.ccRef||'')+'</select>' : '')
           +'<select class="co">'+coOptionsHtml(l.conceptoId)+'</select>'
           +'<input type="text" class="detalle" maxlength="80" placeholder="Detalle (opcional)">'
           +'<input type="text" class="monto" inputmode="decimal" placeholder="0,00">'
           +'<button type="button" class="del" title="Quitar línea">✕</button>';
         row.querySelector('.detalle').value = l.detalle||'';
         row.querySelector('.monto').value = l.monto ? fmtMontoInput(l.monto) : '';
-        row.querySelector('.cc').addEventListener('change', function(){ l.centroCostoId = this.value; });
+        row.querySelector('.cc').addEventListener('change', function(){ l.centroCostoId = this.value; if(!ccRequiere(this.value)) l.ccRef = ''; renderSplitUI(); });
+        if(row.querySelector('.ref')) row.querySelector('.ref').addEventListener('change', function(){ l.ccRef = this.value; });
         row.querySelector('.co').addEventListener('change', function(){ l.conceptoId = this.value; });
         row.querySelector('.detalle').addEventListener('input', function(){ l.detalle = this.value; });
         row.querySelector('.monto').addEventListener('input', function(){ var n = parseMontoInput(this.value); l.monto = isNaN(n) ? 0 : n; updateSplitTotal(); });
@@ -4502,6 +4932,21 @@
     renderSplitUI();
   });
   document.getElementById('fm-monto').addEventListener('input', updateSplitTotal);
+  // Pistas de neto y régimen según el proveedor elegido.
+  function actualizarFmNetoHint(){
+    var provId = document.getElementById('fm-proveedor').value;
+    var f = {proveedorId:provId, monto:facturaMontoActual()};
+    document.getElementById('fm-neto').placeholder = provId ? 'Automático: '+fmtMontoInput(facturaNetoAuto(f)) : 'Automático';
+    var p = state.proveedores.find(function(x){ return x.id===provId; });
+    var hint = document.getElementById('fm-neto-hint');
+    if(!state.ganRegimenes.length){ hint.textContent = ''; return; }
+    var reg = p ? provGanRegimen(p) : null, cond = p ? provGanCondicion(p) : '';
+    var opt = document.querySelector('#fm-regimen option[value=""]');
+    if(opt) opt.textContent = p ? ('Según el proveedor'+(reg ? ' ('+reg+')' : ': no retiene')) : 'Según el proveedor';
+    hint.textContent = p ? '· '+(GAN_COND_LABEL[cond]||'')+' en Ganancias' : '';
+  }
+  document.getElementById('fm-monto').addEventListener('input', actualizarFmNetoHint);
+  document.getElementById('fm-proveedor').addEventListener('change', actualizarFmNetoHint);
 
   function sumarImputacionAProveedor(proveedorId, ccId, coId){
     var p = state.proveedores.find(function(x){ return x.id===proveedorId; });
@@ -4514,10 +4959,7 @@
   }
 
   function fillFacturaCentroCostoSelect(){
-    var sel = document.getElementById('fm-centro-costo');
-    var current = sel.value;
-    fillSelect(sel, state.centrosCosto.map(function(c){ return {id:c.id, label:centroCostoLabel(c.id)}; }).sort(function(a,b){ return a.label.localeCompare(b.label, undefined, {numeric:true}); }), 'id', 'label', 'Elegir centro de costo');
-    sel.value = current;
+    fillCentroSelect(document.getElementById('fm-centro-costo'), 'Elegir centro de costo');
   }
   function fillFacturaConceptoSelect(){
     var sel = document.getElementById('fm-concepto');
@@ -4534,13 +4976,17 @@
     fillFacturaOCSelect(f ? f.proveedorId : '');
     document.getElementById('fm-oc').value = f ? (f.ocId||'') : '';
     fillFacturaCentroCostoSelect();
-    document.getElementById('fm-centro-costo').value = f ? (f.centroCostoId||'') : '';
+    fillCentroSelect(document.getElementById('fm-centro-costo'), 'Elegir centro de costo', f ? (f.centroCostoId||'') : '');
+    actualizarFmRef(f ? (f.ccRef||'') : '');
     fillFacturaConceptoSelect();
     document.getElementById('fm-concepto').value = f ? (f.conceptoId||'') : '';
     state.editingFacturaItems = (f && f.items && f.items.length>=2) ? f.items.map(function(l){ return Object.assign({}, l); }) : null;
     document.getElementById('fm-numero').value = f ? (f.numero||'') : '';
     document.getElementById('fm-fecha').value = f ? (f.fecha||todayStr()) : todayStr();
     document.getElementById('fm-monto').value = f ? String(f.monto||0).replace('.',',') : '';
+    document.getElementById('fm-neto').value = (f && f.neto!=null) ? fmtMontoInput(f.neto) : '';
+    fillRegimenSelect(document.getElementById('fm-regimen'), f && f.regimenGan!=null ? f.regimenGan : '', 'Según el proveedor');
+    actualizarFmNetoHint();
     document.getElementById('fm-notas').value = f ? (f.notas||'') : '';
     document.getElementById('fm-delete').style.display = f ? '' : 'none';
     state.editingFacturaArchivos = f ? (f.archivos||[]).slice() : [];
@@ -4567,7 +5013,7 @@
     if(!numero){ showToast('Ingresá el número de factura.'); return; }
     var monto = parseMontoInput(document.getElementById('fm-monto').value);
     if(isNaN(monto) || monto<0) monto = 0;
-    var centroCostoId, conceptoId, items = [];
+    var centroCostoId, conceptoId, ccRef = '', items = [];
     if(state.editingFacturaItems){
       // Repartida: se descartan líneas totalmente vacías; cada línea que
       // quede necesita centro, concepto y monto, y la suma tiene que dar el
@@ -4575,6 +5021,9 @@
       var lineas = state.editingFacturaItems.filter(function(l){ return l.centroCostoId || l.conceptoId || l.monto || (l.detalle||'').trim(); });
       for(var i=0;i<lineas.length;i++){
         if(!lineas[i].centroCostoId || !lineas[i].conceptoId){ showToast('Línea '+(i+1)+': elegí centro de costo y concepto.'); return; }
+        var reqI = ccRequiere(lineas[i].centroCostoId);
+        if(reqI && !lineas[i].ccRef){ showToast('Línea '+(i+1)+': elegí '+(reqI==='movil'?'el móvil':'la sucursal')+'.'); return; }
+        if(!reqI) lineas[i].ccRef = '';
         if(!(lineas[i].monto>0)){ showToast('Línea '+(i+1)+': ingresá el monto.'); return; }
       }
       if(lineas.length===0){ showToast('Cargá al menos una línea de imputación.'); return; }
@@ -4582,13 +5031,16 @@
       if(!monto) monto = suma;
       if(Math.abs(suma-monto)>=0.005){ showToast('La suma de las líneas ($'+suma.toLocaleString('es-AR',{minimumFractionDigits:2})+') no coincide con el monto de la factura.'); return; }
       var mayor = lineas.slice().sort(function(a,b){ return b.monto-a.monto; })[0];
-      centroCostoId = mayor.centroCostoId; conceptoId = mayor.conceptoId;
-      items = lineas.length>=2 ? lineas.map(function(l){ return {centroCostoId:l.centroCostoId, conceptoId:l.conceptoId, monto:Math.round(l.monto*100)/100, detalle:(l.detalle||'').trim()}; }) : [];
+      centroCostoId = mayor.centroCostoId; conceptoId = mayor.conceptoId; ccRef = mayor.ccRef||'';
+      items = lineas.length>=2 ? lineas.map(function(l){ return {centroCostoId:l.centroCostoId, conceptoId:l.conceptoId, ccRef:l.ccRef||'', monto:Math.round(l.monto*100)/100, detalle:(l.detalle||'').trim()}; }) : [];
     } else {
       centroCostoId = document.getElementById('fm-centro-costo').value;
       if(!centroCostoId){ showToast('Elegí un centro de costo.'); return; }
       conceptoId = document.getElementById('fm-concepto').value;
       if(!conceptoId){ showToast('Elegí un concepto.'); return; }
+      var reqS = ccRequiere(centroCostoId);
+      ccRef = reqS ? (document.getElementById('fm-ccref').value||'') : '';
+      if(reqS && !ccRef){ showToast('Elegí '+(reqS==='movil'?'el móvil':'la sucursal')+' del centro de costo.'); return; }
     }
     var id = state.editingFacturaId;
     var isNew = !id;
@@ -4601,6 +5053,9 @@
       ocId: document.getElementById('fm-oc').value || '',
       centroCostoId: centroCostoId,
       conceptoId: conceptoId,
+      ccRef: ccRef,
+      neto: (function(){ var t = document.getElementById('fm-neto').value.trim(); if(!t) return null; var n = parseMontoInput(t); return isNaN(n) ? null : r2(n); })(),
+      regimenGan: document.getElementById('fm-regimen').value==='' ? null : Number(document.getElementById('fm-regimen').value),
       items: items,
       numero:numero,
       fecha: document.getElementById('fm-fecha').value || todayStr(),
@@ -4642,12 +5097,12 @@
 
   function writePago(p){
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
-    state.sb.from('ordenes_pago').upsert({
+    state.sb.from('ordenes_pago').upsert(Object.assign({
       id:p.id, numero:p.numero, proveedor_id:p.proveedorId||'', factura_ids:p.facturaIds||[],
       fecha:p.fecha||'', monto:p.monto||0, medio_pago:p.medioPago||'transferencia',
       medio_id:p.medioId||null, cheque_ids:p.chequeIds||[],
       estado:p.estado||'pendiente', cuenta_id:p.cuentaId||null, notas:p.notas||'', who:p.who||''
-    }).then(function(res){
+    }, state.schemaV3 ? {retenciones:p.retenciones||[], retenido:p.retenido||0} : {})).then(function(res){
       if(res.error) showToast('No se pudo guardar la orden de pago: '+res.error.message);
     });
   }
@@ -4655,7 +5110,46 @@
   function selectedPagoFacturaIds(){
     return Array.prototype.slice.call(document.querySelectorAll('#pom-facturas-list input[type=checkbox]:checked')).map(function(c){ return c.value; });
   }
+  // Retenciones de la OP que se está editando (cálculo en vivo).
+  function pomRetencionesActuales(){
+    var provId = document.getElementById('pom-proveedor').value;
+    if(!provId) return [];
+    return calcularRetenciones(provId, selectedPagoFacturaIds(), document.getElementById('pom-fecha').value || todayStr(), state.editingPagoId);
+  }
+  function pomNetoPagar(){
+    var ret = pomRetencionesActuales().reduce(function(t,e){ return t+e.importe; }, 0);
+    return r2(pomTotalFacturas() - ret);
+  }
+  function renderPomRetenciones(){
+    var box = document.getElementById('pom-ret-box');
+    if(!box) return;
+    var rets = pomRetencionesActuales();
+    if(!state.ganRegimenes.length || !rets.length){ box.hidden = true; return; }
+    box.hidden = false;
+    var pagada = document.getElementById('pom-estado').value==='pagada';
+    document.getElementById('pom-ret-hint').textContent = pagada ? '' : '(estimada: se practica al marcarla Pagada)';
+    var lines = document.getElementById('pom-ret-lines');
+    lines.innerHTML = '';
+    rets.forEach(function(e){
+      var d = document.createElement('div');
+      d.className = 'ret-line';
+      d.innerHTML = '<div><div>'+esc(regimenLabel(e.regimen))+'</div><div class="det">Neto de este pago '+fmtMoney(e.base)+(e.detalle ? ' · '+esc(e.detalle) : '')+'</div></div><b>'+fmtMoney(e.importe)+'</b>';
+      lines.appendChild(d);
+    });
+    document.getElementById('pom-neto').textContent = fmtMoney(pomTotalFacturas() - rets.reduce(function(t,e){ return t+e.importe; }, 0));
+    var certs = document.getElementById('pom-ret-certs');
+    certs.innerHTML = '';
+    var op = state.editingPagoId ? state.ordenesPago.find(function(x){ return x.id===state.editingPagoId; }) : null;
+    if(op && op.estado==='pagada') (op.retenciones||[]).filter(function(e){ return e.importe>0 && e.certificado; }).forEach(function(e){
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn';
+      b.textContent = '🖨 Certificado N° '+certNumeroLabel(e.certificado);
+      b.addEventListener('click', function(){ imprimirCertificado(op, e); });
+      certs.appendChild(b);
+    });
+  }
   function updatePagoMontoTotal(){
+    renderPomRetenciones();
     updatePomCarteraTotal();
     var ids = selectedPagoFacturaIds();
     var total = ids.reduce(function(s,id){ var f=facturaById(id); return s+(f?Number(f.monto||0):0); },0);
@@ -4735,7 +5229,7 @@
   function updatePomCarteraTotal(){
     var el = document.getElementById('pom-cartera-total');
     if(!el) return;
-    var tc = pomTotalCheques(), tf = pomTotalFacturas();
+    var tc = pomTotalCheques(), tf = pomNetoPagar();
     el.textContent = '— '+fmtMoney(tc)+' de '+fmtMoney(tf);
     el.className = 'pom-chq-total'+(Math.abs(tc-tf)>=0.005 ? ' bad' : '');
   }
@@ -4744,7 +5238,8 @@
     if(md && md.cuentaId && cuentaById(md.cuentaId)) document.getElementById('pom-cuenta').value = md.cuentaId;
     updatePomCuentaVisibility();
   });
-  document.getElementById('pom-estado').addEventListener('change', updatePomCuentaVisibility);
+  document.getElementById('pom-estado').addEventListener('change', function(){ updatePomCuentaVisibility(); renderPomRetenciones(); });
+  document.getElementById('pom-fecha').addEventListener('change', updatePagoMontoTotal);
 
   function openPagoModal(id){
     fillMovimientoCuentaSelect(document.getElementById('pom-cuenta'));
@@ -4765,6 +5260,7 @@
     updatePomCuentaVisibility();
     document.getElementById('pom-notas').value = p ? (p.notas||'') : '';
     document.getElementById('pom-delete').style.display = p ? '' : 'none';
+    updatePagoMontoTotal();
     document.getElementById('pago-overlay').classList.add('show');
   }
   function closePagoModal(){
@@ -4796,7 +5292,8 @@
       chequeIdsPago = (state.editingPagoCheques||[]).filter(function(id){ return !!chequeById(id); });
       if(!chequeIdsPago.length){ showToast('Elegí los cheques de la cartera que se entregan.'); return; }
       var totChq = chequeIdsPago.reduce(function(s,id){ return s+Number(chequeById(id).importe||0); },0);
-      if(Math.abs(totChq-monto)>=0.005){ showToast('Los cheques suman '+fmtMoney(totChq)+' y la orden '+fmtMoney(monto)+': tienen que coincidir.'); return; }
+      var netoChq = pomNetoPagar();
+      if(Math.abs(totChq-netoChq)>=0.005){ showToast('Los cheques suman '+fmtMoney(totChq)+' y el neto a pagar es '+fmtMoney(netoChq)+': tienen que coincidir.'); return; }
     }
     var chqNumero = document.getElementById('pom-chq-numero').value.trim();
     if(estado==='pagada' && modoPago==='datos' && !chqNumero){ showToast('Ingresá el número de cheque / echeq.'); return; }
@@ -4805,6 +5302,21 @@
     var existing = id ? state.ordenesPago.find(function(x){ return x.id===id; }) : null;
     var numero = isNew ? nextPagoNumero() : (existing ? existing.numero : nextPagoNumero());
     if(isNew) id = 'op_'+numero;
+    // Retenciones: solo se practican cuando la orden queda Pagada. Se conserva
+    // el número de certificado si el régimen ya tenía uno en esta orden.
+    var retenciones = [], retenido = 0;
+    if(estado==='pagada' && state.schemaV3){
+      var prevCert = {};
+      (existing && existing.retenciones || []).forEach(function(e){ if(e.certificado) prevCert[e.regimen] = e.certificado; });
+      var proxCert = proximoCertificado();
+      retenciones = calcularRetenciones(proveedorId, facturaIds, document.getElementById('pom-fecha').value || todayStr(), id)
+        .map(function(e){
+          var o = {regimen:e.regimen, base:e.base, acum_prev:e.acum_prev, ret_prev:e.ret_prev, importe:e.importe, condicion:e.condicion};
+          if(e.importe>0) o.certificado = prevCert[e.regimen] || (proxCert++);
+          return o;
+        });
+      retenido = r2(retenciones.reduce(function(t,e){ return t+e.importe; }, 0));
+    }
     var p = {
       id:id, numero:numero, proveedorId:proveedorId, facturaIds:facturaIds,
       fecha: document.getElementById('pom-fecha').value || todayStr(),
@@ -4815,6 +5327,8 @@
       chequeNumero: chqNumero,
       chequeFecha: document.getElementById('pom-chq-fecha').value || '',
       estado: estado,
+      retenciones: retenciones,
+      retenido: retenido,
       cuentaId: estado==='pagada' ? cuentaId : '',
       notas: document.getElementById('pom-notas').value.trim(),
       who: whoName()
@@ -4831,7 +5345,7 @@
     closePagoModal();
     renderPagos();
     renderTesoreria();
-    showToast('Orden de pago guardada.');
+    showToast(retenido>0 ? 'Orden de pago guardada. Se retuvieron '+fmtMoney(retenido)+' de Ganancias: el certificado se imprime desde la orden o desde Pagos → Retenciones.' : 'Orden de pago guardada.', retenido>0 ? 7000 : 2600);
   });
   document.getElementById('pom-delete').addEventListener('click', function(){
     var id = state.editingPagoId;
@@ -4858,8 +5372,11 @@
       fecha:row.fecha||'', monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0,
       estado:row.estado||'pendiente', notas:row.notas||'',
       archivos: Array.isArray(row.archivos) ? row.archivos : [],
+      ccRef: row.cc_ref||'',
+      neto: (row.neto===null || row.neto===undefined || row.neto==='') ? null : Number(row.neto),
+      regimenGan: row.regimen_gan==null ? null : Number(row.regimen_gan),
       items: (Array.isArray(row.items) ? row.items : []).map(function(it){
-        return {centroCostoId:it.centro_costo_id||'', conceptoId:it.concepto_id||'',
+        return {centroCostoId:it.centro_costo_id||'', conceptoId:it.concepto_id||'', ccRef:it.cc_ref||'',
                 monto: typeof it.monto==='number' ? it.monto : parseFloat(it.monto)||0, detalle:it.detalle||''};
       })
     };
@@ -4870,6 +5387,7 @@
       fecha:row.fecha||'', monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0,
       medioPago:row.medio_pago||'transferencia', estado:row.estado||'pendiente', cuentaId:row.cuenta_id||'',
       medioId:row.medio_id||'', chequeIds:Array.isArray(row.cheque_ids)?row.cheque_ids:[],
+      retenciones: Array.isArray(row.retenciones) ? row.retenciones : [], retenido: Number(row.retenido||0),
       notas:row.notas||'', who:row.who||''
     };
   }
@@ -5204,7 +5722,7 @@
     if(pagada && modo==='datos'){
       var prev = chequeById(chqPropioId) || {};
       writeCheque(Object.assign({}, prev, {id:chqPropioId, medioId:pago.medioId, banco:medio.nombre, numero:pago.chequeNumero||prev.numero||'',
-        fechaCobro:pago.chequeFecha||prev.fechaCobro||'', importe:pago.monto||0, estado:'emitido', titular:'Anafer',
+        fechaCobro:pago.chequeFecha||prev.fechaCobro||'', importe:r2((pago.monto||0)-(pago.retenido||0)), estado:'emitido', titular:'Anafer',
         fechaSalida:pago.fecha||todayStr(), pagoId:pago.id, proveedorId:pago.proveedorId,
         destino:'Emitido a '+proveedorNombre(pago.proveedorId)+' ('+pagoNumeroLabel(pago.numero)+')', cuentaId:pago.cuentaId}));
     } else if(chequeById(chqPropioId)) deleteCheque(chqPropioId);
@@ -5213,7 +5731,7 @@
       upsertMovimientoLocal({
         id:movId, cuentaId:pago.cuentaId, fecha:pago.fecha||todayStr(), tipo:'egreso', medioId:pago.medioId||'',
         concepto:'Pago '+pagoNumeroLabel(pago.numero)+' — '+proveedorNombre(pago.proveedorId),
-        monto:pago.monto||0, pagoId:pago.id, notas:'',
+        monto:r2((pago.monto||0)-(pago.retenido||0)), pagoId:pago.id, notas:(pago.retenido ? 'Retención Ganancias '+fmtMoney(pago.retenido) : ''),
         chequeIds: modo==='cartera' ? quedan.slice() : (modo==='datos' ? [chqPropioId] : [])
       });
     } else {
