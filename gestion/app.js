@@ -2258,7 +2258,7 @@
     // no solo lo ya pagado) ---
     var gastoRange = dashboardDates();
     var facturasPeriodo = state.facturas.filter(function(f){
-      return f.fecha && f.fecha>=gastoRange.start && f.fecha<=gastoRange.end;
+      return noAnulado(f) && f.fecha && f.fecha>=gastoRange.start && f.fecha<=gastoRange.end;
     });
     var gastoTotal = facturasPeriodo.reduce(function(s,f){ return s+Number(f.monto||0); }, 0);
     document.getElementById('kpi-gastos-total').textContent = fmtMoney(gastoTotal);
@@ -3150,7 +3150,7 @@
 
   // ---------- Compras: proveedores y órdenes de compra ----------
   function ocEstadoLabel(e){
-    return e==='aprobada' ? 'Aprobada' : e==='recibida' ? 'Recibida' : 'Pendiente';
+    return e==='aprobada' ? 'Aprobada' : e==='recibida' ? 'Recibida' : e==='anulada' ? 'Anulada' : 'Pendiente';
   }
   function ocNumeroLabel(n){
     return 'OC-'+String(n||0).padStart(4,'0');
@@ -3305,7 +3305,7 @@
   function imputUsos(proveedorId){
     var usos = {};
     state.facturas.forEach(function(f){
-      if(f.proveedorId!==proveedorId) return;
+      if(f.proveedorId!==proveedorId || esAnulado(f)) return;
       var vistos = {};
       facturaLineas(f).forEach(function(l){
         if(!l.centroCostoId || !l.conceptoId) return;
@@ -3774,6 +3774,7 @@
         +'<td class="day-note">'+esc(o.descripcion||'—')+'</td>'
         +'<td class="num">$'+montoStr+'</td>'
         +'<td><span class="oc-badge '+esc(o.estado||'pendiente')+'">'+ocEstadoLabel(o.estado)+'</span></td>';
+      if(esAnulado(o)){ tr.className += ' anulado'; tr.title = anulacionTexto(o); }
       tr.addEventListener('click', function(){ openOCModal(o.id); });
       body.appendChild(tr);
     });
@@ -3988,16 +3989,17 @@
 
   function writeOC(o){
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
-    state.sb.from('ordenes_compra').upsert({
+    state.sb.from('ordenes_compra').upsert(Object.assign({
       id:o.id, numero:o.numero, proveedor_id:o.proveedorId||'', fecha:o.fecha||'',
       descripcion:o.descripcion||'', monto:o.monto||0, estado:o.estado||'pendiente',
       notas:o.notas||'', who:o.who||''
-    }).then(function(res){
+    }, camposAnulacion(o))).then(function(res){
       if(res.error) showToast('No se pudo guardar la orden de compra: '+res.error.message);
     });
   }
 
   function openOCModal(id){
+    marcarModalAnulado('ocm-save', 'ocm-delete', null);
     state.editingOCId = id || null;
     var o = id ? state.ordenesCompra.find(function(x){ return x.id===id; }) : null;
     document.getElementById('ocm-title').textContent = o ? ('Editar orden de compra') : 'Nueva orden de compra';
@@ -4009,6 +4011,7 @@
     document.getElementById('ocm-estado').value = o ? (o.estado||'pendiente') : 'pendiente';
     document.getElementById('ocm-notas').value = o ? (o.notas||'') : '';
     document.getElementById('ocm-delete').style.display = o ? '' : 'none';
+    marcarModalAnulado('ocm-save', 'ocm-delete', o, 'a');
     document.getElementById('oc-overlay').classList.add('show');
   }
   function closeOCModal(){
@@ -4051,14 +4054,16 @@
   });
   document.getElementById('ocm-delete').addEventListener('click', function(){
     var id = state.editingOCId;
-    if(!id) return;
-    state.ordenesCompra = state.ordenesCompra.filter(function(x){ return x.id!==id; });
-    if(state.sb) state.sb.from('ordenes_compra').delete().eq('id', id).then(function(res){
-      if(res.error) showToast('No se pudo eliminar: '+res.error.message);
+    var o = id ? state.ordenesCompra.find(function(x){ return x.id===id; }) : null;
+    if(!o || esAnulado(o)) return;
+    pedirAnulacion('Anular '+ocNumeroLabel(o.numero), proveedorNombre(o.proveedorId)+' — '+fmtMoney(o.monto)+'. La orden queda registrada como anulada y su número no se vuelve a usar.', function(motivo){
+      sellarAnulacion(o, motivo);
+      o.estado = 'anulada';
+      writeOC(o);
+      closeOCModal();
+      renderCompras();
+      showToast('Orden de compra anulada.');
     });
-    closeOCModal();
-    renderCompras();
-    showToast('Orden de compra eliminada.');
   });
 
   function mapProveedorRow(row){
@@ -4077,11 +4082,11 @@
     };
   }
   function mapOCRow(row){
-    return {
+    return leerAnulacion(row, {
       id:row.id, numero:row.numero||0, proveedorId:row.proveedor_id||'', fecha:row.fecha||'',
       descripcion:row.descripcion||'', monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0,
       estado:row.estado||'pendiente', notas:row.notas||'', who:row.who||''
-    };
+    });
   }
   function mapCentroCostoRow(row){
     if(row && Object.prototype.hasOwnProperty.call(row, 'parent_id')) state.schemaV3 = true;
@@ -4152,8 +4157,88 @@
   }
 
   // ---------- Pagos: facturas y órdenes de pago ----------
-  function facturaEstadoLabel(e){ return e==='pagada' ? 'Pagada' : 'Pendiente'; }
-  function pagoEstadoLabel(e){ return e==='pagada' ? 'Pagada' : 'Pendiente'; }
+  function facturaEstadoLabel(e){ return e==='pagada' ? 'Pagada' : e==='anulada' ? 'Anulada' : 'Pendiente'; }
+  function pagoEstadoLabel(e){ return e==='pagada' ? 'Pagada' : e==='anulada' ? 'Anulada' : 'Pendiente'; }
+
+  // ---------- Anulación de comprobantes ----------
+  // Facturas, órdenes de pago, órdenes de compra y movimientos de caja no se
+  // borran: se anulan. Quedan guardados con quién, cuándo y por qué, no
+  // cuentan en saldos, pendientes ni tableros, y su número no se reutiliza.
+  function esAnulado(x){ return !!x && (x.estado==='anulada' || !!x.anuladoEn); }
+  function noAnulado(x){ return !esAnulado(x); }
+  function leerAnulacion(row, o){
+    if(row && Object.prototype.hasOwnProperty.call(row, 'anulado_en')) state.colAnulacion = true;
+    o.anuladoEn = (row && row.anulado_en) || '';
+    o.anuladoPor = (row && row.anulado_por) || '';
+    o.motivoAnulacion = (row && row.motivo_anulacion) || '';
+    return o;
+  }
+  function camposAnulacion(x){
+    return state.colAnulacion ? {anulado_en:x.anuladoEn||null, anulado_por:x.anuladoPor||'', motivo_anulacion:x.motivoAnulacion||''} : {};
+  }
+  function quienAnula(){ return state.sessionEmail || whoName(); }
+  function fmtFechaHoraAnul(iso){
+    var d = new Date(iso);
+    if(isNaN(d.getTime())) return String(iso||'');
+    var z = function(n){ return String(n).padStart(2,'0'); };
+    return z(d.getDate())+'/'+z(d.getMonth()+1)+'/'+d.getFullYear()+' '+z(d.getHours())+':'+z(d.getMinutes());
+  }
+  function anulacionTexto(x){
+    return 'Anulad'+(x.__genero==='o' ? 'o' : 'a')+(x.anuladoEn ? ' el '+fmtFechaHoraAnul(x.anuladoEn) : '')+(x.anuladoPor ? ' por '+x.anuladoPor : '')
+      +(x.motivoAnulacion ? '. Motivo: '+x.motivoAnulacion : '');
+  }
+  // Pide el motivo en un cuadro propio (no window.prompt) y llama a cb(motivo).
+  function pedirAnulacion(titulo, detalle, cb){
+    if(!state.colAnulacion){ showToast('Para anular comprobantes falta correr base-de-datos/anulacion-comprobantes.sql en Supabase.', 7000); return; }
+    var ov = document.getElementById('anular-overlay');
+    document.getElementById('anul-title').textContent = titulo;
+    document.getElementById('anul-detalle').textContent = detalle || '';
+    var ta = document.getElementById('anul-motivo');
+    ta.value = '';
+    ov.classList.add('show');
+    setTimeout(function(){ try{ ta.focus(); }catch(e){} }, 30);
+    state.anulCallback = cb;
+  }
+  function cerrarAnulacion(){ document.getElementById('anular-overlay').classList.remove('show'); state.anulCallback = null; }
+  document.getElementById('anul-cancel').addEventListener('click', cerrarAnulacion);
+  document.getElementById('anul-ok').addEventListener('click', function(){
+    var motivo = document.getElementById('anul-motivo').value.trim();
+    if(!motivo){ showToast('Escribí el motivo de la anulación.'); return; }
+    var cb = state.anulCallback;
+    cerrarAnulacion();
+    if(cb) cb(motivo);
+  });
+  function sellarAnulacion(x, motivo){
+    x.anuladoEn = new Date().toISOString();
+    x.anuladoPor = quienAnula();
+    x.motivoAnulacion = motivo;
+    return x;
+  }
+  // Modal de un comprobante anulado: solo lectura, con la leyenda arriba.
+  // Lo que deshabilita lo marca, así al abrir otro comprobante se rehabilita.
+  function marcarModalAnulado(saveBtnId, anularBtnId, x, genero){
+    var save = document.getElementById(saveBtnId);
+    var modal = save.closest('.modal');
+    var banner = modal.querySelector('.anulado-banner');
+    Array.prototype.forEach.call(modal.querySelectorAll('[data-anul-dis]'), function(el){ el.disabled = false; el.removeAttribute('data-anul-dis'); });
+    if(!esAnulado(x)){
+      if(banner) banner.remove();
+      save.style.display = '';
+      return;
+    }
+    if(!banner){
+      banner = document.createElement('div');
+      banner.className = 'anulado-banner';
+      var sub = modal.querySelector('.sub');
+      if(sub) sub.insertAdjacentElement('afterend', banner); else modal.insertBefore(banner, modal.firstChild);
+    }
+    banner.textContent = anulacionTexto(Object.assign({__genero:genero}, x));
+    save.style.display = 'none';
+    document.getElementById(anularBtnId).style.display = 'none';
+    Array.prototype.forEach.call(modal.querySelectorAll('input, select, textarea, button:not([id$="-cancel"])'), function(el){
+      if(!el.disabled){ el.disabled = true; el.setAttribute('data-anul-dis', '1'); }
+    });
+  }
   function pagoNumeroLabel(n){ return 'OP-'+String(n||0).padStart(4,'0'); }
   function nextPagoNumero(){
     var max = 0;
@@ -4203,6 +4288,7 @@
       tr.className = 'day-row';
       var montoStr = Number(f.monto||0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
       var oc = f.ocId ? state.ordenesCompra.find(function(o){ return o.id===f.ocId; }) : null;
+      if(esAnulado(f)){ tr.className += ' anulado'; tr.title = anulacionTexto(f); }
       tr.innerHTML = '<td class="day-route">'+esc(proveedorNombre(f.proveedorId))+'</td>'
         +'<td class="num">'+esc(f.numero||'—')+'</td>'
         +'<td class="num">'+esc(f.fecha||'—')+'</td>'
@@ -4230,6 +4316,7 @@
       tr.className = 'day-row';
       var montoStr = Number(p.monto||0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
       var facturasLabel = (p.facturaIds||[]).map(function(fid){ var f=facturaById(fid); return f ? f.numero : '(eliminada)'; }).join(', ') || '—';
+      if(esAnulado(p)){ tr.className += ' anulado'; tr.title = anulacionTexto(p); }
       tr.innerHTML = '<td class="day-route num">'+pagoNumeroLabel(p.numero)+'</td>'
         +'<td>'+esc(proveedorNombre(p.proveedorId))+'</td>'
         +'<td class="num">'+esc(p.fecha||'—')+'</td>'
@@ -4256,6 +4343,8 @@
     if(!state.sb) return;
     // ¿Existe la columna ordenes_pago.formas (pagos mixtos)?
     state.sb.from('ordenes_pago').select('formas').limit(1).then(function(res){ if(!res.error) state.colFormas = true; });
+    // ¿Existen las columnas de anulación (anulacion-comprobantes.sql)?
+    state.sb.from('movimientos').select('anulado_en').limit(1).then(function(res){ if(!res.error) state.colAnulacion = true; });
     state.sb.from('gan_regimenes').select('*').then(function(res){
       if(res.error) return; // schema viejo: sin retenciones
       state.schemaV3 = true;
@@ -4420,10 +4509,10 @@
 
 
   // ---------- Listado de retenciones practicadas (Pagos → Retenciones) ----------
-  function retencionesDelMes(mes){
+  function retencionesDelMes(mes, conAnuladas){
     var out = [];
     state.ordenesPago.forEach(function(o){
-      if(o.estado!=='pagada' || mesDe(o.fecha)!==mes) return;
+      if(!(o.estado==='pagada' || (conAnuladas && esAnulado(o))) || mesDe(o.fecha)!==mes) return;
       (o.retenciones||[]).forEach(function(e){ if(e.importe>0) out.push({op:o, e:e}); });
     });
     return out.sort(function(a,b){ return Number(a.e.certificado||0)-Number(b.e.certificado||0); });
@@ -4434,24 +4523,28 @@
     var mi = document.getElementById('ret-mes');
     if(!state.retMes) state.retMes = todayStr().slice(0,7);
     if(mi.value!==state.retMes) mi.value = state.retMes;
-    var lista = retencionesDelMes(state.retMes);
+    var lista = retencionesDelMes(state.retMes, true);
     body.innerHTML = '';
     if(!state.ganRegimenes.length){ body.innerHTML = '<tr class="day-row empty"><td colspan="9">Para usar retenciones falta correr el schema.sql nuevo en Supabase.</td></tr>'; return; }
     if(!lista.length){ body.innerHTML = '<tr class="day-row empty"><td colspan="9">No hay retenciones en ese mes.</td></tr>'; }
     var total = 0;
+    var vigentes = 0;
     lista.forEach(function(x){
       var prov = state.proveedores.find(function(p){ return p.id===x.op.proveedorId; }) || {};
-      total += Number(x.e.importe||0);
+      var anul = esAnulado(x.op);
+      if(!anul){ total += Number(x.e.importe||0); vigentes++; }
       var tr = document.createElement('tr');
-      tr.className = 'day-row';
+      tr.className = 'day-row'+(anul ? ' anulado' : '');
+      if(anul) tr.title = 'Certificado anulado — '+anulacionTexto(x.op);
       tr.innerHTML = '<td class="num">'+esc(x.op.fecha||'')+'</td><td class="num">'+certNumeroLabel(x.e.certificado)+'</td><td class="num">'+esc(pagoNumeroLabel(x.op.numero))+'</td>'
         +'<td>'+esc(prov.nombre||'')+'</td><td class="num">'+esc(prov.cuit||'')+'</td><td class="num">'+esc(String(x.e.regimen))+'</td>'
-        +'<td class="num">'+fmtMoney(x.e.base)+'</td><td class="num"><b>'+fmtMoney(x.e.importe)+'</b></td><td><button type="button" class="btn">🖨</button></td>';
-      tr.querySelector('button').addEventListener('click', function(ev){ ev.stopPropagation(); imprimirCertificado(x.op, x.e); });
+        +'<td class="num">'+fmtMoney(x.e.base)+'</td><td class="num"><b>'+fmtMoney(x.e.importe)+'</b></td>'
+        +(anul ? '<td><span class="oc-badge anulada">Anulado</span></td>' : '<td><button type="button" class="btn">🖨</button></td>');
+      if(!anul) tr.querySelector('button').addEventListener('click', function(ev){ ev.stopPropagation(); imprimirCertificado(x.op, x.e); });
       tr.addEventListener('click', function(){ openPagoModal(x.op.id); });
       body.appendChild(tr);
     });
-    document.getElementById('ret-resumen').textContent = lista.length ? lista.length+' · '+fmtMoney(total) : '';
+    document.getElementById('ret-resumen').textContent = vigentes ? vigentes+' · '+fmtMoney(total) : '';
   }
   document.getElementById('ret-mes').addEventListener('change', function(){ state.retMes = this.value || todayStr().slice(0,7); renderRetencionesList(); });
   document.getElementById('ret-csv').addEventListener('click', function(){
@@ -4582,10 +4675,10 @@
     cnt('compras', 'proveedores', state.proveedores.length);
     cnt('compras', 'ocs', state.ordenesCompra.filter(function(o){ return o.estado==='pendiente'; }).length);
     var enOP = {};
-    state.ordenesPago.forEach(function(p){ (p.facturaIds||[]).forEach(function(fid){ enOP[fid] = true; }); });
+    state.ordenesPago.forEach(function(p){ if(noAnulado(p)) (p.facturaIds||[]).forEach(function(fid){ enOP[fid] = true; }); });
     cnt('pagos', 'sugerencia', state.facturas.filter(function(f){ return f.estado==='pendiente' && !enOP[f.id] && Number(f.monto||0)!==0; }).length);
     cnt('pagos', 'facturas', state.facturas.filter(function(f){ return f.estado==='pendiente'; }).length);
-    cnt('pagos', 'ordenes', state.ordenesPago.filter(function(p){ return p.estado!=='pagada'; }).length);
+    cnt('pagos', 'ordenes', state.ordenesPago.filter(function(p){ return p.estado==='pendiente'; }).length);
     cnt('pagos', 'retenciones', 0);
     cnt('tesoreria', 'cuentas', 0);
     cnt('tesoreria', 'cheques', chequesEnCartera().length);
@@ -4606,13 +4699,13 @@
     if(cartera>0 || state.cheques.length) fondos.push({id:'__cheques__', nombre:'Cheques en cartera', saldo:cartera, on:!excl.__cheques__});
     // Lo ya comprometido en órdenes de pago pendientes (todavía no salió de
     // ninguna cuenta) se resta.
-    var comprometido = state.ordenesPago.filter(function(p){ return p.estado!=='pagada'; }).reduce(function(t,p){ return t+Number(p.monto||0); }, 0);
+    var comprometido = state.ordenesPago.filter(function(p){ return p.estado==='pendiente'; }).reduce(function(t,p){ return t+Number(p.monto||0); }, 0);
     if(comprometido>0) fondos.push({id:'__ops__', nombre:'− Órdenes de pago pendientes', saldo:-comprometido, on:!excl.__ops__});
     return fondos;
   }
   function sugCandidatas(){
     var enOP = {};
-    state.ordenesPago.forEach(function(p){ (p.facturaIds||[]).forEach(function(fid){ enOP[fid] = true; }); });
+    state.ordenesPago.forEach(function(p){ if(noAnulado(p)) (p.facturaIds||[]).forEach(function(fid){ enOP[fid] = true; }); });
     var prio = {};
     state.proveedores.forEach(function(p){ if(p.prioritario) prio[p.id] = true; });
     return state.facturas.filter(function(f){ return f.estado==='pendiente' && !enOP[f.id] && Number(f.monto||0)!==0; })
@@ -4780,14 +4873,16 @@
       centro_costo_id:f.centroCostoId||null, concepto_id:f.conceptoId||null, numero:f.numero||'',
       fecha:f.fecha||'', monto:f.monto||0, estado:f.estado||'pendiente', notas:f.notas||'', archivos:f.archivos||[],
       items:(f.items||[]).map(function(it){ return {centro_costo_id:it.centroCostoId, concepto_id:it.conceptoId, cc_ref:it.ccRef||'', monto:it.monto||0, detalle:it.detalle||''}; })
-    }, state.schemaV3 ? {cc_ref:f.ccRef||'', neto:(f.neto==null ? null : f.neto), regimen_gan:(f.regimenGan||null)} : {})).then(function(res){
+    }, state.schemaV3 ? {cc_ref:f.ccRef||'', neto:(f.neto==null ? null : f.neto), regimen_gan:(f.regimenGan||null)} : {},
+       camposAnulacion(f))).then(function(res){
       if(res.error) showToast('No se pudo guardar la factura: '+res.error.message);
     });
   }
 
   function fillFacturaOCSelect(proveedorId){
     var sel = document.getElementById('fm-oc');
-    var ocs = state.ordenesCompra.filter(function(o){ return o.proveedorId===proveedorId; })
+    var actual = (facturaById(state.editingFacturaId)||{}).ocId;
+    var ocs = state.ordenesCompra.filter(function(o){ return o.proveedorId===proveedorId && (noAnulado(o) || o.id===actual); })
       .sort(function(a,b){ return (b.numero||0)-(a.numero||0); });
     sel.innerHTML = '<option value="">Sin orden de compra</option>';
     ocs.forEach(function(o){
@@ -4990,6 +5085,7 @@
   }
 
   function openFacturaModal(id){
+    marcarModalAnulado('fm-save', 'fm-delete', null);
     state.editingFacturaId = id || null;
     var f = id ? facturaById(id) : null;
     document.getElementById('fm-title').textContent = f ? 'Editar factura' : 'Nueva factura';
@@ -5014,6 +5110,7 @@
     renderAttachList('fm-archivos-list', function(){ return state.editingFacturaArchivos; });
     refreshFacturaReadAvailability();
     renderSplitUI();
+    marcarModalAnulado('fm-save', 'fm-delete', f, 'a');
     document.getElementById('factura-overlay').classList.add('show');
   }
   function closeFacturaModal(){
@@ -5103,17 +5200,19 @@
   });
   document.getElementById('fm-delete').addEventListener('click', function(){
     var id = state.editingFacturaId;
-    if(!id) return;
-    var used = state.ordenesPago.some(function(p){ return (p.facturaIds||[]).indexOf(id)!==-1; });
-    if(used){ showToast('No se puede eliminar: está incluida en una orden de pago.'); return; }
-    state.editingFacturaArchivos.forEach(function(a){ if(!a.pending && a.id) deleteAdjunto(a.id); });
-    state.facturas = state.facturas.filter(function(x){ return x.id!==id; });
-    if(state.sb) state.sb.from('facturas').delete().eq('id', id).then(function(res){
-      if(res.error) showToast('No se pudo eliminar: '+res.error.message);
+    var f = id ? facturaById(id) : null;
+    if(!f || esAnulado(f)) return;
+    var op = state.ordenesPago.find(function(p){ return noAnulado(p) && (p.facturaIds||[]).indexOf(id)!==-1; });
+    if(op){ showToast('No se puede anular: está incluida en la '+pagoNumeroLabel(op.numero)+'. Anulá primero esa orden de pago (o sacala de ahí).', 6000); return; }
+    pedirAnulacion('Anular factura '+(f.numero||''), proveedorNombre(f.proveedorId)+' — '+fmtMoney(f.monto)+'. Queda registrada como anulada (con sus adjuntos) y deja de contar como pendiente y como gasto.', function(motivo){
+      sellarAnulacion(f, motivo);
+      f.estado = 'anulada';
+      writeFactura(f);
+      closeFacturaModal();
+      renderPagos();
+      renderProveedoresList();
+      showToast('Factura anulada.');
     });
-    closeFacturaModal();
-    renderPagos();
-    showToast('Factura eliminada.');
   });
 
   function writePago(p){
@@ -5124,7 +5223,8 @@
       medio_id:p.medioId||null, cheque_ids:p.chequeIds||[],
       estado:p.estado||'pendiente', cuenta_id:p.cuentaId||null, notas:p.notas||'', who:p.who||''
     }, state.schemaV3 ? {retenciones:p.retenciones||[], retenido:p.retenido||0} : {},
-       state.colFormas ? {formas:(p.formas||[]).map(function(f){ return {medio_id:f.medioId, cuenta_id:f.cuentaId, importe:f.importe, cheque_ids:f.chequeIds||[], cheque_numero:f.chequeNumero||'', cheque_fecha:f.chequeFecha||''}; })} : {})).then(function(res){
+       state.colFormas ? {formas:(p.formas||[]).map(function(f){ return {medio_id:f.medioId, cuenta_id:f.cuentaId, importe:f.importe, cheque_ids:f.chequeIds||[], cheque_numero:f.chequeNumero||'', cheque_fecha:f.chequeFecha||''}; })} : {},
+       camposAnulacion(p))).then(function(res){
       if(res.error) showToast('No se pudo guardar la orden de pago: '+res.error.message);
     });
   }
@@ -5320,6 +5420,7 @@
   document.getElementById('pom-fecha').addEventListener('change', updatePagoMontoTotal);
 
   function openPagoModal(id){
+    marcarModalAnulado('pom-save', 'pom-delete', null);
     state.editingPagoId = id || null;
     var p = id ? state.ordenesPago.find(function(x){ return x.id===id; }) : null;
     document.getElementById('pom-title').textContent = p ? 'Editar orden de pago' : 'Nueva orden de pago';
@@ -5333,6 +5434,7 @@
     document.getElementById('pom-delete').style.display = p ? '' : 'none';
     updatePagoMontoTotal();
     renderPomFormas();
+    marcarModalAnulado('pom-save', 'pom-delete', p, 'a');
     document.getElementById('pago-overlay').classList.add('show');
   }
   function closePagoModal(){
@@ -5424,26 +5526,42 @@
     renderTesoreria();
     showToast(retenido>0 ? 'Orden de pago guardada. Se retuvieron '+fmtMoney(retenido)+' de Ganancias: el certificado se imprime desde la orden o desde Pagos → Retenciones.' : 'Orden de pago guardada.', retenido>0 ? 7000 : 2600);
   });
+  // Anular una orden de pago: las facturas vuelven a pendiente, los cheques
+  // de cartera vuelven a la cartera, los cheques/echeqs propios quedan
+  // anulados y los egresos quedan anulados (no suman al saldo). Los
+  // certificados de retención quedan con su número, marcados como anulados.
+  function anularOrdenPago(p, motivo){
+    sellarAnulacion(p, motivo);
+    p.estado = 'anulada';
+    var leyenda = 'Anulado ('+pagoNumeroLabel(p.numero)+')';
+    (p.facturaIds||[]).forEach(function(fid){ setFacturaEstado(fid, 'pendiente'); });
+    state.cheques.filter(function(c){ return c.pagoId===p.id; }).forEach(function(c){
+      if(c.estado==='entregado') chequeVolverACartera(c);
+      else if(c.estado==='emitido') writeCheque(Object.assign({}, c, {estado:'anulado', destino:leyenda+' — '+(c.destino||'')}));
+    });
+    state.movimientos.filter(function(m){ return m.pagoId===p.id && noAnulado(m); }).forEach(function(m){
+      upsertMovimientoLocal(Object.assign({}, m, {anuladoEn:p.anuladoEn, anuladoPor:p.anuladoPor, motivoAnulacion:'Anulación de '+pagoNumeroLabel(p.numero)+': '+motivo}));
+    });
+    writePago(p);
+  }
   document.getElementById('pom-delete').addEventListener('click', function(){
     var id = state.editingPagoId;
-    if(!id) return;
-    var p = state.ordenesPago.find(function(x){ return x.id===id; });
-    if(p) (p.facturaIds||[]).forEach(function(fid){ setFacturaEstado(fid, 'pendiente'); });
-    // Libera los cheques (vuelven a cartera / se borra el propio) y borra el egreso.
-    if(p) syncPagoMovimiento(Object.assign({}, p, {estado:'pendiente'}));
-    state.movimientos.filter(function(m){ return m.pagoId===id; }).forEach(function(m){ deleteMovimiento(m.id); });
-    state.ordenesPago = state.ordenesPago.filter(function(x){ return x.id!==id; });
-    if(state.sb) state.sb.from('ordenes_pago').delete().eq('id', id).then(function(res){
-      if(res.error) showToast('No se pudo eliminar: '+res.error.message);
+    var p = id ? state.ordenesPago.find(function(x){ return x.id===id; }) : null;
+    if(!p || esAnulado(p)) return;
+    var conCert = (p.retenciones||[]).filter(function(e){ return e.importe>0 && e.certificado; }).length;
+    pedirAnulacion('Anular '+pagoNumeroLabel(p.numero), proveedorNombre(p.proveedorId)+' — '+fmtMoney(p.monto)+'. '
+      +(p.estado==='pagada' ? 'Los egresos quedan anulados, los cheques de cartera vuelven a la cartera y los propios quedan anulados. ' : '')
+      +'Las facturas vuelven a pendiente.'+(conCert ? ' El certificado de retención queda anulado (su número no se reutiliza).' : ''), function(motivo){
+      anularOrdenPago(p, motivo);
+      closePagoModal();
+      renderPagos();
+      renderTesoreria();
+      showToast('Orden de pago anulada.');
     });
-    closePagoModal();
-    renderPagos();
-    renderTesoreria();
-    showToast('Orden de pago eliminada.');
   });
 
   function mapFacturaRow(row){
-    return {
+    return leerAnulacion(row, {
       id:row.id, proveedorId:row.proveedor_id||'', ocId:row.oc_id||'',
       centroCostoId:row.centro_costo_id||'', conceptoId:row.concepto_id||'', numero:row.numero||'',
       fecha:row.fecha||'', monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0,
@@ -5456,11 +5574,11 @@
         return {centroCostoId:it.centro_costo_id||'', conceptoId:it.concepto_id||'', ccRef:it.cc_ref||'',
                 monto: typeof it.monto==='number' ? it.monto : parseFloat(it.monto)||0, detalle:it.detalle||''};
       })
-    };
+    });
   }
   function mapPagoRow(row){
     if(row && Object.prototype.hasOwnProperty.call(row, 'formas')) state.colFormas = true;
-    return {
+    return leerAnulacion(row, {
       id:row.id, numero:row.numero||0, proveedorId:row.proveedor_id||'', facturaIds:row.factura_ids||[],
       fecha:row.fecha||'', monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0,
       medioPago:row.medio_pago||'transferencia', estado:row.estado||'pendiente', cuentaId:row.cuenta_id||'',
@@ -5469,7 +5587,7 @@
       formas: (Array.isArray(row.formas) ? row.formas : []).map(function(f){ return {medioId:f.medio_id||'', cuentaId:f.cuenta_id||'', importe:Number(f.importe||0),
         chequeIds:Array.isArray(f.cheque_ids)?f.cheque_ids:[], chequeNumero:f.cheque_numero||'', chequeFecha:f.cheque_fecha||''}; }),
       notas:row.notas||'', who:row.who||''
-    };
+    });
   }
   function fetchFacturasYPagos(){
     if(!state.sb) return;
@@ -5521,7 +5639,7 @@
     var c = cuentaById(cuentaId);
     if(!c) return 0;
     var tope = hasta || todayStr();
-    var neto = state.movimientos.filter(function(m){ return m.cuentaId===cuentaId && (m.fecha||'')<=tope; })
+    var neto = state.movimientos.filter(function(m){ return m.cuentaId===cuentaId && (m.fecha||'')<=tope && noAnulado(m); })
       .reduce(function(s,m){ return s + (m.tipo==='ingreso' ? 1 : -1)*Number(m.monto||0); }, 0);
     return Number(c.saldoInicial||0) + neto;
   }
@@ -5550,7 +5668,7 @@
   }
 
   // ---------- Cheques ----------
-  var CHEQUE_ESTADOS = {cartera:'En cartera', depositado:'Depositado', entregado:'Entregado', rechazado:'Rechazado', recibido:'Recibido', emitido:'Emitido'};
+  var CHEQUE_ESTADOS = {cartera:'En cartera', depositado:'Depositado', entregado:'Entregado', rechazado:'Rechazado', recibido:'Recibido', emitido:'Emitido', anulado:'Anulado'};
   function chequeById(id){ return state.cheques.find(function(x){ return x.id===id; }) || null; }
   function chequesEnCartera(){ return state.cheques.filter(function(c){ return c.estado==='cartera'; }); }
   function newId(prefix){ return prefix+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6); }
@@ -5632,9 +5750,11 @@
       var ing = m.tipo==='ingreso';
       var montoStr = Number(m.monto||0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
       var org = movimientoOrigen(m);
-      var futuro = (m.fecha||'') > todayStr();
+      var anul = esAnulado(m);
+      var futuro = !anul && (m.fecha||'') > todayStr();
       if(futuro) tr.className += ' mov-futuro';
-      tr.innerHTML = '<td class="num">'+esc(m.fecha||'—')+(futuro ? '<div class="mov-pend">'+(ing?'a acreditar':'a debitar')+'</div>' : '')+'</td>'
+      if(anul){ tr.className += ' anulado'; tr.title = anulacionTexto(Object.assign({__genero:'o'}, m)); }
+      tr.innerHTML = '<td class="num">'+esc(m.fecha||'—')+(futuro ? '<div class="mov-pend">'+(ing?'a acreditar':'a debitar')+'</div>' : '')+(anul ? '<div class="mov-pend">anulado</div>' : '')+'</td>'
         +'<td><span class="mov-tipo '+(ing?'ingreso':'egreso')+'">'+(ing?'Entrada':'Salida')+'</span></td>'
         +'<td class="num" title="'+esc(medioLabel(m.medioId))+'">'+esc(medioCodigo(m.medioId)||'—')+'</td>'
         +'<td>'+esc(cuentaNombre(m.cuentaId))+'</td>'
@@ -5642,6 +5762,8 @@
         +'<td><span class="mov-origen-badge'+(org.auto?' auto':'')+'">'+org.label+'</span></td>'
         +'<td class="num'+(ing?' monto-ingreso':'')+'">'+(ing?'+':'−')+'$'+montoStr+'</td>';
       tr.addEventListener('click', function(){
+        if(anul && !m.pagoId && !org.auto){ openMovimientoModal(m.id); return; }
+        if(anul){ showToast(anulacionTexto(Object.assign({__genero:'o'}, m)), 6000); return; }
         if(m.pagoId){ showToast('Este movimiento viene de una orden de pago: se cambia desde Pagos.'); return; }
         if(org.auto){ if((m.chequeIds||[])[0]) openChequeModal(m.chequeIds[0]); return; }
         openMovimientoModal(m.id);
@@ -5750,10 +5872,10 @@
 
   function writeMovimiento(m){
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
-    state.sb.from('movimientos').upsert({
+    state.sb.from('movimientos').upsert(Object.assign({
       id:m.id, cuenta_id:m.cuentaId||null, fecha:m.fecha||null, concepto:m.concepto||'', monto:m.monto||0,
       pago_id:m.pagoId||null, notas:m.notas||'', tipo:m.tipo||'egreso', medio_id:m.medioId||null, cheque_ids:m.chequeIds||[]
-    }).then(function(res){
+    }, camposAnulacion(m))).then(function(res){
       if(res.error) showToast('No se pudo guardar el movimiento: '+res.error.message);
     });
   }
@@ -5900,6 +6022,7 @@
   });
   var MOV_CHQ_FIELDS = {banco:'movm-chq-banco', numero:'movm-chq-numero', sucursal:'movm-chq-sucursal', localidad:'movm-chq-localidad', nroCuenta:'movm-chq-cuenta', fechaCobro:'movm-chq-fecha', titular:'movm-chq-titular'};
   function openMovimientoModal(id, tipoNuevo){
+    marcarModalAnulado('movm-save', 'movm-delete', null);
     fillMovimientoCuentaSelect(document.getElementById('movm-cuenta'));
     state.editingMovimientoId = id || null;
     var m = id ? movimientoById(id) : null;
@@ -5931,6 +6054,7 @@
     document.getElementById('movm-monto').disabled = chqFijo;
     document.getElementById('movm-delete').style.display = m ? '' : 'none';
     setMovTipo(tipo);
+    marcarModalAnulado('movm-save', 'movm-delete', m, 'o');
     document.getElementById('movimiento-overlay').classList.add('show');
   }
   function closeMovimientoModal(){
@@ -6018,20 +6142,22 @@
     var id = state.editingMovimientoId;
     if(!id) return;
     var m = movimientoById(id);
-    if(!m) return;
-    if(m.pagoId){ showToast('Este movimiento viene de una orden de pago y no se puede borrar acá.'); return; }
+    if(!m || esAnulado(m)) return;
+    if(m.pagoId){ showToast('Este movimiento viene de una orden de pago: se anula anulando la orden de pago.'); return; }
     var chqs = (m.chequeIds||[]).map(chequeById).filter(Boolean);
     // Entrada con cheque: solo si el cheque sigue en cartera (o era solo registro).
     var trabado = chqs.find(function(c){ return c.movIngresoId===id && ['cartera','recibido'].indexOf(c.estado)===-1; });
-    if(trabado){ showToast('No se puede borrar: el cheque ya está '+(CHEQUE_ESTADOS[trabado.estado]||trabado.estado).toLowerCase()+'. Deshacé eso primero.'); return; }
-    chqs.forEach(function(c){
-      if(c.movIngresoId===id || c.estado==='emitido') deleteCheque(c.id);
-      else if(c.movSalidaId===id) chequeVolverACartera(c);
+    if(trabado){ showToast('No se puede anular: el cheque ya está '+(CHEQUE_ESTADOS[trabado.estado]||trabado.estado).toLowerCase()+'. Deshacé eso primero.'); return; }
+    pedirAnulacion('Anular '+(m.tipo==='ingreso' ? 'entrada' : 'salida')+' de caja', (m.concepto||'')+' — '+fmtMoney(m.monto)+'. Queda registrado como anulado y deja de sumar al saldo.', function(motivo){
+      chqs.forEach(function(c){
+        if(c.movIngresoId===id || c.estado==='emitido') writeCheque(Object.assign({}, c, {estado:'anulado', destino:'Anulado — '+(c.destino||'')}));
+        else if(c.movSalidaId===id) chequeVolverACartera(c);
+      });
+      upsertMovimientoLocal(sellarAnulacion(Object.assign({}, m), motivo));
+      closeMovimientoModal();
+      renderTesoreria();
+      showToast('Movimiento anulado.');
     });
-    deleteMovimiento(id);
-    closeMovimientoModal();
-    renderTesoreria();
-    showToast('Movimiento eliminado.');
   });
 
   // ---------- Detalle de cheque: depositar / rechazar / deshacer ----------
@@ -6176,11 +6302,11 @@
     };
   }
   function mapMovimientoRow(row){
-    return {
+    return leerAnulacion(row, {
       id:row.id, cuentaId:row.cuenta_id||'', fecha:row.fecha||'', concepto:row.concepto||'',
       monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0, pagoId:row.pago_id||'', notas:row.notas||'',
       tipo:row.tipo||'egreso', medioId:row.medio_id||'', chequeIds:Array.isArray(row.cheque_ids)?row.cheque_ids:[]
-    };
+    });
   }
   function mapChequeRow(r){
     return {

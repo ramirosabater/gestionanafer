@@ -65,6 +65,7 @@
         { t: "En <b>Órdenes de pago</b> abrís cada una, elegís <b>Pagada</b> y cargás cómo se paga: concepto (TR1, CHE, ECS…), cuenta e importe.", ir: '#subtabs-pagos .stabbtn[data-sub="ordenes"]', foco: "#pagos-table" },
         { t: "Se puede pagar <b>mixto</b>: con <b>+ Agregar forma de pago</b> sumás, por ejemplo, cheques de cartera y una transferencia por la diferencia. Entre todas tienen que dar el neto a pagar." },
         { t: "Al marcarla Pagada se calcula sola la <b>retención de Ganancias</b>: ves el detalle y el <b>neto a pagar</b>. En Tesorería sale el neto y queda el certificado para imprimir." },
+        { t: "Si una factura u orden estaba mal, no se borra: se <b>anula</b> con un motivo. Queda tachada con quién y cuándo, las facturas de esa orden vuelven a pendiente y el número no se reutiliza." },
       ] },
       { titulo: "Retenciones del mes", pasos: [
         { t: "En <b>Pagos → Retenciones</b> están todas las retenciones practicadas del mes.", ir: ["#tab-pagos", '#subtabs-pagos .stabbtn[data-sub="retenciones"]'], foco: "#ret-table" },
@@ -81,7 +82,7 @@
         { t: "En <b>Tesorería → Cuentas</b> ves, por cada caja y banco, el <b>saldo hoy</b>, lo que está <b>a debitar</b> y el <b>saldo proyectado</b>.", ir: ["#tab-tesoreria", '#subtabs-tesoreria .stabbtn[data-sub="cuentas"]'], foco: "#cuentas-table" },
         { t: "Si pagás con un cheque o echeq propio a 30 o 60 días, la plata sale del banco el <b>día de cobro</b>: hasta entonces figura \"a debitar\" y solo baja el saldo proyectado. El gasto, en cambio, cuenta en la fecha de la factura." },
         { t: "En <b>Movimientos</b> cargás entradas y salidas con su concepto de caja (CAN, TR1, CHE…).", ir: '#subtabs-tesoreria .stabbtn[data-sub="movimientos"]', foco: "#new-entrada-btn" },
-        { t: "Los pagos de órdenes de pago generan su salida solos; esos se corrigen desde la orden, no desde acá." },
+        { t: "Los pagos de órdenes de pago generan su salida solos; esos se corrigen desde la orden, no desde acá. Un movimiento mal cargado se <b>anula</b>: queda tachado y deja de sumar al saldo." },
         { t: "En <b>Cartera de cheques</b> están los cheques de terceros: tocá uno para depositarlo o marcarlo rechazado. Los que están en fecha dicen AL COBRO.", ir: '#subtabs-tesoreria .stabbtn[data-sub="cheques"]', foco: "#cheques-table" },
       ] },
     ],

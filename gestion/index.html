@@ -615,6 +615,15 @@
   .subsec[hidden]{display:none;}
   tr.mov-futuro td{color:var(--muted);}
   .mov-pend{font-size:10.5px; font-weight:600; color:#b26a00; text-transform:uppercase; letter-spacing:.03em;}
+  /* Comprobantes anulados: quedan a la vista, tachados y apagados */
+  .oc-badge.anulada{background:color-mix(in srgb, var(--danger) 12%, var(--surface)); color:var(--danger);}
+  .chq-estado.anulado{background:color-mix(in srgb, var(--danger) 12%, var(--surface)); color:var(--danger);}
+  tr.day-row.anulado td{opacity:.55; text-decoration:line-through;}
+  tr.day-row.anulado td .oc-badge, tr.day-row.anulado td .mov-pend{text-decoration:none;}
+  tr.day-row.anulado td:last-child{opacity:1;}
+  .anulado-banner{margin:6px 0 10px; padding:8px 12px; border-radius:10px; font-size:13px; font-weight:600;
+    background:color-mix(in srgb, var(--danger) 10%, var(--surface)); color:var(--danger); border:1px solid color-mix(in srgb, var(--danger) 35%, var(--surface));}
+  #anular-overlay{z-index:60;}
   #ccm-ref-field[hidden]{display:none;}
   .subtabs .stabbtn .cnt{font-weight:500; color:var(--muted); margin-left:4px;}
   .subtabs .stabbtn.active .cnt{color:var(--accent);}
@@ -953,6 +962,7 @@
           <option value="pendiente">Pendiente</option>
           <option value="aprobada">Aprobada</option>
           <option value="recibida">Recibida</option>
+          <option value="anulada">Anulada</option>
         </select>
         <button class="btn primary edit-action" id="new-oc-btn">+ Nueva orden de compra</button>
       </div>
@@ -1017,6 +1027,7 @@
           <option value="">Todos los estados</option>
           <option value="pendiente">Pendiente</option>
           <option value="pagada">Pagada</option>
+          <option value="anulada">Anulada</option>
         </select>
         <button class="btn primary edit-action" id="new-factura-btn">+ Nueva factura</button>
       </div>
@@ -1037,6 +1048,7 @@
           <option value="">Todos los estados</option>
           <option value="pendiente">Pendiente</option>
           <option value="pagada">Pagada</option>
+          <option value="anulada">Anulada</option>
         </select>
         <button class="btn primary edit-action" id="new-pago-btn">+ Nueva orden de pago</button>
       </div>
@@ -1104,6 +1116,7 @@
           <option value="rechazado">Rechazados</option>
           <option value="recibido">Recibidos (sin cartera)</option>
           <option value="emitido">Emitidos (propios)</option>
+          <option value="anulado">Anulados</option>
         </select>
       </div>
     </div>
@@ -1576,7 +1589,7 @@
     <div class="modal-actions">
       <div class="left">
         <button class="btn" id="ocm-cancel">Cancelar</button>
-        <button class="btn" id="ocm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+        <button class="btn" id="ocm-delete" style="display:none; color:var(--danger);">Anular</button>
       </div>
       <button class="btn primary" id="ocm-save">Guardar</button>
     </div>
@@ -1663,7 +1676,7 @@
     <div class="modal-actions">
       <div class="left">
         <button class="btn" id="fm-cancel">Cancelar</button>
-        <button class="btn" id="fm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+        <button class="btn" id="fm-delete" style="display:none; color:var(--danger);">Anular</button>
       </div>
       <button class="btn primary" id="fm-save">Guardar</button>
     </div>
@@ -1722,7 +1735,7 @@
     <div class="modal-actions">
       <div class="left">
         <button class="btn" id="pom-cancel">Cancelar</button>
-        <button class="btn" id="pom-delete" style="display:none; color:var(--danger);">Eliminar</button>
+        <button class="btn" id="pom-delete" style="display:none; color:var(--danger);">Anular</button>
       </div>
       <button class="btn primary" id="pom-save">Guardar</button>
     </div>
@@ -1823,7 +1836,7 @@
     <div class="modal-actions">
       <div class="left">
         <button class="btn" id="movm-cancel">Cancelar</button>
-        <button class="btn" id="movm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+        <button class="btn" id="movm-delete" style="display:none; color:var(--danger);">Anular</button>
       </div>
       <button class="btn primary" id="movm-save">Guardar</button>
     </div>
@@ -2019,6 +2032,21 @@
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="config.js"></script>
+<div class="overlay" id="anular-overlay">
+  <div class="modal" style="max-width:440px;">
+    <h3 id="anul-title">Anular comprobante</h3>
+    <div class="sub" id="anul-detalle"></div>
+    <div class="field">
+      <label for="anul-motivo">Motivo de la anulación</label>
+      <textarea id="anul-motivo" placeholder="Ej.: cargada dos veces, importe equivocado, el proveedor la reemplazó por otra..."></textarea>
+      <div class="fm-hint">No se borra: queda guardada como anulada, con tu usuario, la fecha y este motivo.</div>
+    </div>
+    <div class="modal-actions">
+      <div class="left"><button class="btn" id="anul-cancel">Volver</button></div>
+      <button class="btn primary" id="anul-ok" style="background:var(--danger); border-color:var(--danger);">Anular</button>
+    </div>
+  </div>
+</div>
 <script src="app.js"></script>
 <script src="ayuda.js" defer></script>
 </body>

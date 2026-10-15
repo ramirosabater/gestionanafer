@@ -1067,3 +1067,20 @@ alter table centros_costo add column if not exists ref_fijo text not null defaul
 -- Pagos mixtos: una orden de pago con varias formas de pago
 -- [{medio_id, cuenta_id, importe, cheque_ids, cheque_numero, cheque_fecha}]
 alter table ordenes_pago add column if not exists formas jsonb not null default '[]'::jsonb;
+
+-- Anulación de comprobantes (octubre 2026): los comprobantes no se borran,
+-- se anulan. Queda quién, cuándo y por qué; el número no se vuelve a usar.
+-- Facturas, órdenes de pago y órdenes de compra pasan a estado 'anulada';
+-- los movimientos de caja anulados (anulado_en con fecha) no suman al saldo.
+alter table facturas       add column if not exists anulado_en timestamptz;
+alter table facturas       add column if not exists anulado_por text not null default '';
+alter table facturas       add column if not exists motivo_anulacion text not null default '';
+alter table ordenes_pago   add column if not exists anulado_en timestamptz;
+alter table ordenes_pago   add column if not exists anulado_por text not null default '';
+alter table ordenes_pago   add column if not exists motivo_anulacion text not null default '';
+alter table ordenes_compra add column if not exists anulado_en timestamptz;
+alter table ordenes_compra add column if not exists anulado_por text not null default '';
+alter table ordenes_compra add column if not exists motivo_anulacion text not null default '';
+alter table movimientos    add column if not exists anulado_en timestamptz;
+alter table movimientos    add column if not exists anulado_por text not null default '';
+alter table movimientos    add column if not exists motivo_anulacion text not null default '';
