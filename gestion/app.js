@@ -2279,9 +2279,13 @@
     var porArea = sumBy(lineasPeriodo, function(l){ var r = ccRaiz(l.centroCostoId); return r ? r.id : ''; },
       function(id){ var c = centroCostoById(id); return c ? ccNombre(c) : ''; }, function(l){return Number(l.monto||0);}, '(Sin centro de costo)');
     renderMoneyBarList('bar-gastos-area', porArea);
-    var porRef = function(pref){ return sumBy(lineasPeriodo.filter(function(l){ return (l.ccRef||'').indexOf(pref)===0; }),
-      function(l){ return l.ccRef; }, ccRefLabel, function(l){return Number(l.monto||0);}, ''); };
+    var porRef = function(pref){ return sumBy(lineasPeriodo.filter(function(l){ return ccRefEfectiva(l.centroCostoId, l.ccRef).indexOf(pref)===0; }),
+      function(l){ return ccRefEfectiva(l.centroCostoId, l.ccRef); }, ccRefLabel, function(l){return Number(l.monto||0);}, ''); };
     renderMoneyBarList('bar-gastos-movil', porRef('movil:'), {limit:20});
+    // Costo de mantenimiento de cada móvil: solo lo imputado bajo Mantenimiento › Flota.
+    var lineasFlota = lineasPeriodo.filter(function(l){ return ccRuta(l.centroCostoId).some(function(n){ return n.id==='cc_mantenimiento_flota'; }); });
+    renderMoneyBarList('bar-gastos-mant-movil', sumBy(lineasFlota.filter(function(l){ return ccRefEfectiva(l.centroCostoId, l.ccRef).indexOf('movil:')===0; }),
+      function(l){ return ccRefEfectiva(l.centroCostoId, l.ccRef); }, ccRefLabel, function(l){return Number(l.monto||0);}, ''), {limit:20});
     renderMoneyBarList('bar-gastos-sucursal', porRef('suc:'), {limit:20});
     renderMoneyBarList('bar-gastos-concepto', porConcepto);
     renderMoneyBarList('bar-gastos-proveedor', porProveedorGasto, {limit:12});
@@ -3224,6 +3228,9 @@
     sel.value = v || '';
   }
   function ccRequiere(id){ var c = centroCostoById(id); return c ? (c.requiere||'') : ''; }
+  // Camión/sucursal de una línea: el elegido o, si el centro está ligado a uno
+  // (ej. "Logística › Móviles › Móvil 13"), el de ese centro.
+  function ccRefEfectiva(ccId, ref){ if(ref) return ref; var c = centroCostoById(ccId); return c ? (c.refFijo||'') : ''; }
   // Opciones del segundo desplegable (camión o sucursal) según el centro.
   function ccRefOptionsHtml(req, sel){
     if(req==='movil') return '<option value="">Elegir móvil</option>'+state.trucks.filter(function(t){ return t.active!==false || ('movil:'+t.id)===sel; })
@@ -3350,7 +3357,7 @@
       tr.className = 'day-row'+(c.activo===false ? ' inactivo' : '');
       tr.innerHTML = '<td class="ind"><span style="display:inline-block; width:'+(nivel*18)+'px;"></span>'
         +'<span class="'+(hoja?'':'rama')+'">'+esc(ccNombre(c))+'</span></td>'
-        +'<td>'+(c.requiere==='movil' ? 'Móvil' : (c.requiere==='sucursal' ? 'Sucursal' : ''))+'</td>'
+        +'<td>'+(c.requiere==='movil' ? 'Elegir móvil' : (c.requiere==='sucursal' ? 'Elegir sucursal' : (c.refFijo ? '→ '+esc(ccRefLabel(c.refFijo)) : '')))+'</td>'
         +'<td>'+(c.activo===false ? 'Inactivo' : (hoja ? 'Se imputa' : ''))+'</td>';
       tr.addEventListener('click', function(){ openCentroCostoModal(c.id); });
       body.appendChild(tr);
@@ -3384,7 +3391,8 @@
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
     state.sb.from('centros_costo').upsert(Object.assign({
       id:c.id, codigo:c.codigo||'', descripcion:c.descripcion||''
-    }, state.schemaV3 ? {parent_id:c.parentId||null, activo:c.activo!==false, requiere:c.requiere||'', orden:c.orden||0} : {})).then(function(res){
+    }, state.schemaV3 ? {parent_id:c.parentId||null, activo:c.activo!==false, requiere:c.requiere||'', orden:c.orden||0} : {},
+       state.colRefFijo ? {ref_fijo:c.refFijo||''} : {})).then(function(res){
       if(res.error) showToast('No se pudo guardar el centro de costo: '+res.error.message);
     });
   }
@@ -3410,6 +3418,14 @@
     ps.innerHTML = opts;
     ps.value = c ? (c.parentId||'') : '';
     document.getElementById('ccm-requiere').value = c ? (c.requiere||'') : '';
+    var rs = document.getElementById('ccm-ref');
+    var refAct = c ? (c.refFijo||'') : '';
+    rs.innerHTML = '<option value="">— Ninguno —</option>'
+      + '<optgroup label="Camión">'+state.trucks.map(function(t){ var v='movil:'+t.id; return '<option value="'+esc(v)+'">'+esc(t.label)+'</option>'; }).join('')+'</optgroup>'
+      + '<optgroup label="Sucursal">'+state.branches.map(function(b){ var v='suc:'+b.id; return '<option value="'+esc(v)+'">'+esc(b.label)+'</option>'; }).join('')+'</optgroup>';
+    if(refAct && !rs.querySelector('option[value="'+refAct.replace(/"/g,'')+'"]')) rs.insertAdjacentHTML('beforeend', '<option value="'+esc(refAct)+'">'+esc(ccRefLabel(refAct))+'</option>');
+    rs.value = refAct;
+    document.getElementById('ccm-ref-field').hidden = !state.colRefFijo;
     document.getElementById('ccm-activo').checked = c ? c.activo!==false : true;
     document.getElementById('ccm-delete').style.display = c ? '' : 'none';
     document.getElementById('centro-costo-overlay').classList.add('show');
@@ -3434,6 +3450,7 @@
     var hermanos = ccHijos(parentId).filter(function(x){ return x.id!==id; });
     var c = { id:id, codigo:codigo, descripcion:descripcion, parentId:parentId,
       requiere: document.getElementById('ccm-requiere').value || '',
+      refFijo: document.getElementById('ccm-ref').value || '',
       activo: document.getElementById('ccm-activo').checked,
       orden: prev && prev.parentId===parentId ? (prev.orden||0) : (hermanos.reduce(function(m,x){ return Math.max(m, x.orden||0); }, 0)+1) };
     if(isNew) state.centrosCosto.push(c);
@@ -4067,8 +4084,9 @@
   }
   function mapCentroCostoRow(row){
     if(row && Object.prototype.hasOwnProperty.call(row, 'parent_id')) state.schemaV3 = true;
+    if(row && Object.prototype.hasOwnProperty.call(row, 'ref_fijo')) state.colRefFijo = true;
     return { id:row.id, codigo:row.codigo||'', descripcion:row.descripcion||'',
-      parentId:row.parent_id||'', activo:row.activo!==false, requiere:row.requiere||'', orden:row.orden||0 };
+      parentId:row.parent_id||'', activo:row.activo!==false, requiere:row.requiere||'', orden:row.orden||0, refFijo:row.ref_fijo||'' };
   }
   function mapConceptoRow(row){
     return { id:row.id, nombre:row.nombre||'' };
@@ -5023,7 +5041,7 @@
         if(!lineas[i].centroCostoId || !lineas[i].conceptoId){ showToast('Línea '+(i+1)+': elegí centro de costo y concepto.'); return; }
         var reqI = ccRequiere(lineas[i].centroCostoId);
         if(reqI && !lineas[i].ccRef){ showToast('Línea '+(i+1)+': elegí '+(reqI==='movil'?'el móvil':'la sucursal')+'.'); return; }
-        if(!reqI) lineas[i].ccRef = '';
+        if(!reqI) lineas[i].ccRef = ccRefEfectiva(lineas[i].centroCostoId, '');
         if(!(lineas[i].monto>0)){ showToast('Línea '+(i+1)+': ingresá el monto.'); return; }
       }
       if(lineas.length===0){ showToast('Cargá al menos una línea de imputación.'); return; }
@@ -5039,7 +5057,7 @@
       conceptoId = document.getElementById('fm-concepto').value;
       if(!conceptoId){ showToast('Elegí un concepto.'); return; }
       var reqS = ccRequiere(centroCostoId);
-      ccRef = reqS ? (document.getElementById('fm-ccref').value||'') : '';
+      ccRef = reqS ? (document.getElementById('fm-ccref').value||'') : ccRefEfectiva(centroCostoId, '');
       if(reqS && !ccRef){ showToast('Elegí '+(reqS==='movil'?'el móvil':'la sucursal')+' del centro de costo.'); return; }
     }
     var id = state.editingFacturaId;

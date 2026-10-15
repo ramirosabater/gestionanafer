@@ -30,6 +30,8 @@ export const CENTROS = [
   { id: "cc_logistica", codigo: "", descripcion: "Logística", parent_id: null, activo: true, requiere: "", orden: 1 },
   { id: "cc_logistica_deposito", codigo: "", descripcion: "Depósito", parent_id: "cc_logistica", activo: true, requiere: "", orden: 1 },
   { id: "cc_logistica_moviles", codigo: "", descripcion: "Móviles", parent_id: "cc_logistica", activo: true, requiere: "movil", orden: 2 },
+  { id: "cc_logistica_impuestos", codigo: "", descripcion: "Impuestos", parent_id: "cc_logistica", activo: true, requiere: "", orden: 3, ref_fijo: "" },
+  { id: "cc_logistica_impuestos_movil_13", codigo: "", descripcion: "Móvil 13", parent_id: "cc_logistica_impuestos", activo: true, requiere: "", orden: 1, ref_fijo: "movil:13" },
   { id: "imp_general", codigo: "", descripcion: "General", parent_id: null, activo: false, requiere: "", orden: 0 },
 ];
 export const CUENTAS = [

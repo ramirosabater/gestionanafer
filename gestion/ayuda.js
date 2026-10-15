@@ -52,7 +52,7 @@
       { titulo: "Cargar una factura de proveedor", pasos: [
         { t: "Las facturas se cargan en <b>Pagos → Facturas</b>.", ir: ["#tab-pagos", '#subtabs-pagos .stabbtn[data-sub="facturas"]'], foco: "#new-factura-btn" },
         { t: "Con <b>+ Nueva factura</b> buscás el proveedor por nombre. Si tiene una imputación habitual, el centro de costo y el concepto se completan solos." },
-        { t: "El <b>centro de costo</b> está agrupado por área. Si elegís uno de flota o de sucursales, te pide además el <b>móvil</b> o la <b>sucursal</b>." },
+        { t: "El <b>centro de costo</b> está agrupado por área. Los de Logística y de Mantenimiento › Flota vienen abiertos por <b>móvil</b>, y los de Mantenimiento › Instalaciones por <b>sucursal</b>: así se sabe cuánto cuesta cada camión y cada local. Lo ves en el Dashboard." },
         { t: "Si una factura va a varias imputaciones, usá <b>Repartir esta factura</b> y cargá una línea por cada una." },
         { t: "<b>Neto gravado</b>: si lo dejás vacío se calcula solo (total ÷ 1,21 para Responsables Inscriptos). Es la base de la retención de Ganancias." },
         { t: "También podés <b>📄 Leer desde archivo</b> el PDF o la foto: completa los datos y vos los revisás antes de guardar." },

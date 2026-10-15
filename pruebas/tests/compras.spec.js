@@ -9,7 +9,7 @@ test("factura: centros agrupados por área, pide el móvil y lo guarda", async (
   await page.click('#subtabs-pagos .stabbtn[data-sub="facturas"]');
   await page.click("#new-factura-btn");
   const grupos = await page.locator("#fm-centro-costo optgroup").evaluateAll((g) => g.map((x) => x.label + ": " + [...x.children].map((o) => o.textContent).join(", ")));
-  expect(grupos).toEqual(["Logística: Depósito, Móviles"]); // el centro viejo inactivo no aparece
+  expect(grupos).toEqual(["Logística: Depósito, Móviles, Impuestos › Móvil 13"]); // el centro viejo inactivo no aparece
   await page.fill("#fm-proveedor-input", "Transp");
   await page.locator("#fm-proveedor-menu .combo-item").first().click();
   await page.selectOption("#fm-centro-costo", "cc_logistica_moviles");
@@ -58,4 +58,45 @@ test("ninguna pestaña de Administración tira errores de JavaScript", async ({ 
     for (const sub of await page.locator(".subtabs:visible .stabbtn").all()) await sub.click();
   }
   expect(errores).toEqual([]);
+});
+
+test("factura a un centro ligado a un camión: no pide móvil y lo guarda solo", async ({ page }) => {
+  await abrirGestion(page, baseDePrueba(datosCompras()), { email: "compras@anafer.test" });
+  await page.click("#tab-pagos");
+  await page.click('#subtabs-pagos .stabbtn[data-sub="facturas"]');
+  await page.click("#new-factura-btn");
+  await page.fill("#fm-proveedor-input", "Transp");
+  await page.locator("#fm-proveedor-menu .combo-item").first().click();
+  await page.selectOption("#fm-centro-costo", "cc_logistica_impuestos_movil_13");
+  await page.dispatchEvent("#fm-centro-costo", "change");
+  await expect(page.locator("#fm-ccref-field")).toBeHidden();
+  await page.selectOption("#fm-concepto", "gasoil");
+  await page.fill("#fm-numero", "PAT-1");
+  await page.fill("#fm-monto", "50.000");
+  await page.click("#fm-save");
+  const f = (await escrituras(page, "facturas")).map((x) => x[2]).find((x) => x.numero === "PAT-1");
+  expect(f.cc_ref).toBe("movil:13");
+});
+
+test("dashboard: mantenimiento de flota por móvil suma solo lo de Mantenimiento › Flota", async ({ page }) => {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const centros = [
+    { id: "cc_mantenimiento", descripcion: "Mantenimiento", parent_id: null, activo: true, orden: 1 },
+    { id: "cc_mantenimiento_flota", descripcion: "Flota", parent_id: "cc_mantenimiento", activo: true, orden: 1 },
+    { id: "cc_mantenimiento_flota_insumos", descripcion: "Insumos", parent_id: "cc_mantenimiento_flota", activo: true, orden: 1 },
+    { id: "cc_mantenimiento_flota_insumos_movil_13", descripcion: "Móvil 13", parent_id: "cc_mantenimiento_flota_insumos", activo: true, orden: 1, ref_fijo: "movil:13" },
+    { id: "cc_logistica", descripcion: "Logística", parent_id: null, activo: true, orden: 2 },
+    { id: "cc_logistica_moviles", descripcion: "Móviles", parent_id: "cc_logistica", activo: true, orden: 1 },
+    { id: "cc_logistica_moviles_movil_13", descripcion: "Móvil 13", parent_id: "cc_logistica_moviles", activo: true, orden: 1, ref_fijo: "movil:13" },
+  ];
+  const facturas = [
+    { id: "r1", proveedor_id: "trans", numero: "R-1", fecha: hoy, monto: 1000, estado: "pendiente", centro_costo_id: "cc_mantenimiento_flota_insumos_movil_13", concepto_id: "gasoil" },
+    { id: "g1", proveedor_id: "trans", numero: "G-1", fecha: hoy, monto: 5000, estado: "pendiente", centro_costo_id: "cc_logistica_moviles_movil_13", concepto_id: "gasoil" },
+  ];
+  await abrirGestion(page, baseDePrueba(datosCompras({ centros_costo: centros, facturas })), { email: "admin@anafer.test" });
+  await page.locator("#home-grid .area-card", { hasText: "Administración" }).click();
+  await page.click("#tab-dashboard");
+  await expect(page.locator("#bar-gastos-mant-movil")).toContainText("1.000");
+  await expect(page.locator("#bar-gastos-mant-movil")).not.toContainText("6.000");
+  await expect(page.locator("#bar-gastos-movil")).toContainText("6.000");
 });

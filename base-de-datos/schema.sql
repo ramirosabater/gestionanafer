@@ -1060,3 +1060,6 @@ begin
     end if;
   end if;
 end $$;
+
+-- Centro de costo ligado a un camión ("movil:13") o una sucursal ("suc:km12")
+alter table centros_costo add column if not exists ref_fijo text not null default '';

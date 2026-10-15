@@ -598,6 +598,7 @@
   .settings-subtabs[hidden]{display:none;}
   /* Submenús dentro de Compras / Pagos / Tesorería */
   .subsec[hidden]{display:none;}
+  #ccm-ref-field[hidden]{display:none;}
   .subtabs .stabbtn .cnt{font-weight:500; color:var(--muted); margin-left:4px;}
   .subtabs .stabbtn.active .cnt{color:var(--accent);}
   .subsec .compras-section-head:first-child{margin-top:0;}
@@ -819,6 +820,7 @@
       <div class="panel panel-gastos"><h4>Gasto por área</h4><div id="bar-gastos-area"></div></div>
       <div class="panel panel-gastos"><h4>Gasto por centro de costo</h4><div id="bar-gastos-centro"></div></div>
       <div class="panel panel-gastos"><h4>Gasto por móvil</h4><div id="bar-gastos-movil"></div></div>
+      <div class="panel panel-gastos"><h4>Mantenimiento de flota por móvil</h4><div id="bar-gastos-mant-movil"></div></div>
       <div class="panel panel-gastos"><h4>Gasto por sucursal</h4><div id="bar-gastos-sucursal"></div></div>
       <div class="panel panel-gastos"><h4>Gasto por concepto</h4><div id="bar-gastos-concepto"></div></div>
       <div class="panel panel-gastos panel-wide"><h4>Gasto por proveedor</h4><div id="bar-gastos-proveedor"></div></div>
@@ -1424,6 +1426,7 @@
         <select id="ccm-requiere"><option value="">Nada más</option><option value="movil">N° de móvil (camión)</option><option value="sucursal">Sucursal</option></select></div>
       <div class="field"><label>&nbsp;</label><label class="sug-prio-check" style="margin:6px 0;"><input type="checkbox" id="ccm-activo"> Activo (aparece para imputar)</label></div>
     </div>
+    <div class="field" id="ccm-ref-field"><label for="ccm-ref">Ligado a (para sumar gastos por móvil o sucursal)</label><select id="ccm-ref"></select></div>
     <div class="modal-actions">
       <div class="left">
         <button class="btn" id="ccm-cancel">Cancelar</button>
@@ -1903,7 +1906,7 @@
           <div class="sub" style="margin-bottom:10px;">Árbol de centros de costo. Las facturas se imputan a las ramas finales (sin subdivisiones). Los inactivos no aparecen para cargar, pero las facturas viejas los conservan.</div>
           <div class="day-wrap">
             <table class="day-table cc-tree" id="centros-costo-table">
-              <thead><tr><th>Centro de costo</th><th>Pide</th><th>Estado</th></tr></thead>
+              <thead><tr><th>Centro de costo</th><th>Móvil / sucursal</th><th>Estado</th></tr></thead>
               <tbody id="centros-costo-body"></tbody>
             </table>
           </div>
