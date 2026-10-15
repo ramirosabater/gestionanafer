@@ -1,10 +1,14 @@
-// Conexión a Supabase. La key publishable es pública (va en el navegador),
-// así que no hay problema en que esté acá.
-// Se pueden cambiar sin tocar el código con las variables de entorno de
-// Netlify VITE_SUPABASE_URL y VITE_SUPABASE_KEY (Site configuration →
-// Environment variables). Sirve para pasar a la base única de Gestión.
-export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://mufkcgikyksuaoujicxl.supabase.co";
-export const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || "sb_publishable_fwAvWdIclQ_1a35-o46k8w_sMkhqeau";
+// Conexión a Supabase. La key publishable es pública (va en el navegador).
+// La base es SIEMPRE la misma que usa Gestión: se toma del config.js del
+// sitio (window.SUPABASE_URL / window.SUPABASE_ANON_KEY, que se carga antes
+// de la app desde ../config.js). Si no está (por ejemplo, corriendo la app
+// sola en desarrollo), se usan las variables VITE_SUPABASE_URL/KEY.
+// Ya NO hay valores fijos de la base vieja de Fichajes: así nunca se ficha
+// por error en otra base.
+const W = typeof window !== "undefined" ? window : {};
+export const SUPABASE_URL = W.SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL || "";
+export const SUPABASE_KEY = W.SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_KEY || "";
+if (!SUPABASE_URL || !SUPABASE_KEY) console.error("Fichaje: falta la configuración de Supabase (config.js del sitio).");
 
 const baseHeaders = () => ({
   apikey: SUPABASE_KEY,
