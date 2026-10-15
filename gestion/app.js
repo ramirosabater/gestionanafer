@@ -4598,7 +4598,7 @@
     var excl = sugLeerLS('sug_excl', {});
     var fondos = state.cuentas.filter(function(c){ return c.tipo!=='cartera'; })
       .sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); })
-      .map(function(c){ return {id:c.id, nombre:c.nombre, saldo:cuentaSaldoActual(c.id), on:!excl[c.id]}; });
+      .map(function(c){ return {id:c.id, nombre:c.nombre, saldo:cuentaSaldoProyectado(c.id), on:!excl[c.id]}; }); // descuenta cheques propios a debitar
     var cartera = chequesEnCartera().reduce(function(t,c){ return t+Number(c.importe||0); }, 0);
     if(cartera>0 || state.cheques.length) fondos.push({id:'__cheques__', nombre:'Cheques en cartera', saldo:cartera, on:!excl.__cheques__});
     // Lo ya comprometido en órdenes de pago pendientes (todavía no salió de
@@ -5452,12 +5452,23 @@
   function movimientoIdForPago(pagoId){ return 'mov_op_'+pagoId; }
   function cuentaTipoLabelFull(t){ return t==='banco' ? 'Banco' : (t==='cartera' ? 'Cartera de cheques' : 'Caja'); }
   // Saldo: saldo inicial + entradas − salidas.
-  function cuentaSaldoActual(cuentaId){
+  // Saldo HOY: saldo inicial + entradas − salidas con fecha hasta hoy. Los
+  // movimientos con fecha futura (cheques/echeqs propios diferidos, que se
+  // debitan cuando se cobran) solo cuentan en el saldo PROYECTADO.
+  function cuentaSaldoActual(cuentaId, hasta){
     var c = cuentaById(cuentaId);
     if(!c) return 0;
-    var neto = state.movimientos.filter(function(m){ return m.cuentaId===cuentaId; })
+    var tope = hasta || todayStr();
+    var neto = state.movimientos.filter(function(m){ return m.cuentaId===cuentaId && (m.fecha||'')<=tope; })
       .reduce(function(s,m){ return s + (m.tipo==='ingreso' ? 1 : -1)*Number(m.monto||0); }, 0);
     return Number(c.saldoInicial||0) + neto;
+  }
+  function cuentaSaldoProyectado(cuentaId){ return cuentaSaldoActual(cuentaId, '9999-12-31'); }
+  // Fecha en que el pago o cobro mueve la plata: la de la operación o, si el
+  // cheque/echeq es diferido, la de cobro (la que sea posterior).
+  function fechaImpacto(fechaOperacion, fechaCobro){
+    var f = fechaOperacion || todayStr();
+    return (fechaCobro && fechaCobro > f) ? fechaCobro : f;
   }
 
   // ---------- Conceptos de caja (CHE, TR1, EF2...) ----------
@@ -5498,7 +5509,7 @@
     if(!body) return;
     body.innerHTML = '';
     if(state.cuentas.length===0){
-      body.innerHTML = '<tr class="day-row empty"><td colspan="5">Todavía no hay cuentas cargadas.</td></tr>';
+      body.innerHTML = '<tr class="day-row empty"><td colspan="7">Todavía no hay cuentas cargadas.</td></tr>';
       return;
     }
     state.cuentas.slice().sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); }).forEach(function(c){
@@ -5506,11 +5517,14 @@
       tr.className = 'day-row';
       var inicialStr = Number(c.saldoInicial||0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
       var actual = cuentaSaldoActual(c.id);
-      var actualStr = actual.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+      var proy = cuentaSaldoProyectado(c.id);
+      var futuro = proy - actual;
       tr.innerHTML = '<td class="day-route">'+esc(c.nombre)+'</td>'
         +'<td>'+cuentaTipoLabelFull(c.tipo)+'</td>'
         +'<td class="num">$'+inicialStr+'</td>'
-        +'<td class="num'+(actual<0?' cuenta-saldo-neg':'')+'">$'+actualStr+'</td>'
+        +'<td class="num'+(actual<0?' cuenta-saldo-neg':'')+'">'+fmtMoney(actual)+'</td>'
+        +'<td class="num'+(futuro<0?' cuenta-saldo-neg':'')+'">'+(Math.abs(futuro)>=0.005 ? (futuro>0?'+':'−')+fmtMoney(Math.abs(futuro)) : '—')+'</td>'
+        +'<td class="num'+(proy<0?' cuenta-saldo-neg':'')+'">'+fmtMoney(proy)+'</td>'
         +'<td class="day-note">'+esc(c.notas||'—')+'</td>';
       tr.addEventListener('click', function(){ openCuentaModal(c.id); });
       body.appendChild(tr);
@@ -5556,7 +5570,9 @@
       var ing = m.tipo==='ingreso';
       var montoStr = Number(m.monto||0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
       var org = movimientoOrigen(m);
-      tr.innerHTML = '<td class="num">'+esc(m.fecha||'—')+'</td>'
+      var futuro = (m.fecha||'') > todayStr();
+      if(futuro) tr.className += ' mov-futuro';
+      tr.innerHTML = '<td class="num">'+esc(m.fecha||'—')+(futuro ? '<div class="mov-pend">'+(ing?'a acreditar':'a debitar')+'</div>' : '')+'</td>'
         +'<td><span class="mov-tipo '+(ing?'ingreso':'egreso')+'">'+(ing?'Entrada':'Salida')+'</span></td>'
         +'<td class="num" title="'+esc(medioLabel(m.medioId))+'">'+esc(medioCodigo(m.medioId)||'—')+'</td>'
         +'<td>'+esc(cuentaNombre(m.cuentaId))+'</td>'
@@ -5596,7 +5612,7 @@
         +'<td class="num">'+esc(c.numero||'—')+'</td>'
         +'<td>'+esc(c.titular||'—')+'</td>'
         +'<td class="num">'+fmtMoney(c.importe)+'</td>'
-        +'<td><span class="chq-estado '+esc(c.estado)+'">'+(CHEQUE_ESTADOS[c.estado]||c.estado)+'</span></td>'
+        +'<td><span class="chq-estado '+esc(c.estado)+'">'+(c.estado==='emitido' ? (c.fechaCobro && c.fechaCobro>hoy ? 'Emitido · a debitar' : 'Emitido · debitado') : (CHEQUE_ESTADOS[c.estado]||c.estado))+'</span></td>'
         +'<td class="day-note">'+esc(c.destino||'—')+'</td>';
       tr.addEventListener('click', function(){ openChequeModal(c.id); });
       body.appendChild(tr);
@@ -5746,8 +5762,11 @@
     } else if(chequeById(chqPropioId)) deleteCheque(chqPropioId);
 
     if(pagada){
+      // Cheque/echeq propio diferido: la plata sale del banco el día de cobro.
+      var chqP = modo==='datos' ? chequeById(chqPropioId) : null;
+      var fechaMov = modo==='datos' ? fechaImpacto(pago.fecha, pago.chequeFecha || (chqP && chqP.fechaCobro)) : (pago.fecha||todayStr());
       upsertMovimientoLocal({
-        id:movId, cuentaId:pago.cuentaId, fecha:pago.fecha||todayStr(), tipo:'egreso', medioId:pago.medioId||'',
+        id:movId, cuentaId:pago.cuentaId, fecha:fechaMov, tipo:'egreso', medioId:pago.medioId||'',
         concepto:'Pago '+pagoNumeroLabel(pago.numero)+' — '+proveedorNombre(pago.proveedorId),
         monto:r2((pago.monto||0)-(pago.retenido||0)), pagoId:pago.id, notas:(pago.retenido ? 'Retención Ganancias '+fmtMoney(pago.retenido) : ''),
         chequeIds: modo==='cartera' ? quedan.slice() : (modo==='datos' ? [chqPropioId] : [])
@@ -5918,6 +5937,8 @@
         writeCheque(Object.assign({}, c, {estado:'entregado', fechaSalida:fecha, movSalidaId:id, destino:'Salida: '+detalle}));
       });
     }
+    // Cheque/echeq propio (o recibido que se acredita directo): impacta en la cuenta el día de cobro.
+    if(modo==='datos' && datos.fechaCobro) fecha = fechaImpacto(fecha, datos.fechaCobro);
     var m = {
       id:id, cuentaId:cuentaId, fecha:fecha, concepto:detalle, monto:monto, pagoId:'',
       notas: document.getElementById('movm-notas').value.trim(), tipo:tipo, medioId:medioId, chequeIds:chequeIds

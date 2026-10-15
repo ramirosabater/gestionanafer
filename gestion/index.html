@@ -598,6 +598,8 @@
   .settings-subtabs[hidden]{display:none;}
   /* Submenús dentro de Compras / Pagos / Tesorería */
   .subsec[hidden]{display:none;}
+  tr.mov-futuro td{color:var(--muted);}
+  .mov-pend{font-size:10.5px; font-weight:600; color:#b26a00; text-transform:uppercase; letter-spacing:.03em;}
   #ccm-ref-field[hidden]{display:none;}
   .subtabs .stabbtn .cnt{font-weight:500; color:var(--muted); margin-left:4px;}
   .subtabs .stabbtn.active .cnt{color:var(--accent);}
@@ -1069,7 +1071,7 @@
     </div>
     <div class="day-wrap">
       <table class="day-table" id="cuentas-table">
-        <thead><tr><th>Cuenta</th><th>Tipo</th><th>Saldo inicial</th><th>Saldo actual</th><th>Notas</th></tr></thead>
+        <thead><tr><th>Cuenta</th><th>Tipo</th><th>Saldo inicial</th><th>Saldo hoy</th><th>A debitar / acreditar</th><th>Saldo proyectado</th><th>Notas</th></tr></thead>
         <tbody id="cuentas-body"></tbody>
       </table>
     </div>
@@ -1118,7 +1120,7 @@
     </section>
 
     <div class="legend">
-      <div class="item">El saldo actual de cada cuenta es el saldo inicial más sus entradas y menos sus salidas</div>
+      <div class="item">Saldo hoy: saldo inicial más entradas y menos salidas hasta hoy. Los cheques y echeqs propios diferidos salen del banco el día de cobro: hasta entonces figuran "a debitar" y solo cuentan en el saldo proyectado</div>
       <div class="item">Los cheques de terceros que entran (concepto CHE) quedan en la cartera hasta que se depositan, se entregan a un proveedor en una orden de pago o se marcan como rechazados</div>
       <div class="item">Al marcar una orden de pago como Pagada se elige la cuenta y se genera el egreso automáticamente — esos movimientos no se pueden editar ni borrar desde acá, solo cambiando la orden de pago</div>
       <div class="item">Los movimientos cargados a mano (no ligados a una orden de pago) sí se pueden editar o borrar</div>

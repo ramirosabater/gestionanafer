@@ -77,7 +77,8 @@
         { t: "En <b>Órdenes de compra</b> registrás lo que se pide; después la factura se puede asociar a la orden.", ir: '#subtabs-compras .stabbtn[data-sub="ocs"]', foco: "#new-oc-btn" },
       ] },
       { titulo: "Caja, bancos y cheques", pasos: [
-        { t: "En <b>Tesorería → Cuentas</b> ves el saldo de cada caja y banco.", ir: ["#tab-tesoreria", '#subtabs-tesoreria .stabbtn[data-sub="cuentas"]'], foco: "#cuentas-table" },
+        { t: "En <b>Tesorería → Cuentas</b> ves, por cada caja y banco, el <b>saldo hoy</b>, lo que está <b>a debitar</b> y el <b>saldo proyectado</b>.", ir: ["#tab-tesoreria", '#subtabs-tesoreria .stabbtn[data-sub="cuentas"]'], foco: "#cuentas-table" },
+        { t: "Si pagás con un cheque o echeq propio a 30 o 60 días, la plata sale del banco el <b>día de cobro</b>: hasta entonces figura \"a debitar\" y solo baja el saldo proyectado. El gasto, en cambio, cuenta en la fecha de la factura." },
         { t: "En <b>Movimientos</b> cargás entradas y salidas con su concepto de caja (CAN, TR1, CHE…).", ir: '#subtabs-tesoreria .stabbtn[data-sub="movimientos"]', foco: "#new-entrada-btn" },
         { t: "Los pagos de órdenes de pago generan su salida solos; esos se corrigen desde la orden, no desde acá." },
         { t: "En <b>Cartera de cheques</b> están los cheques de terceros: tocá uno para depositarlo o marcarlo rechazado. Los que están en fecha dicen AL COBRO.", ir: '#subtabs-tesoreria .stabbtn[data-sub="cheques"]', foco: "#cheques-table" },

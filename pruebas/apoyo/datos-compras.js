@@ -38,7 +38,10 @@ export const CUENTAS = [
   { id: "bco", nombre: "Banco Santander", tipo: "banco", saldo_inicial: 2000000 },
   { id: "caja", nombre: "Caja", tipo: "caja", saldo_inicial: 50000 },
 ];
-export const MEDIOS = [{ id: "tr1", codigo: "TR1", nombre: "Transferencia", cuenta_id: "bco", cheque: "no", activo: true }];
+export const MEDIOS = [
+  { id: "tr1", codigo: "TR1", nombre: "Transferencia", cuenta_id: "bco", cheque: "no", activo: true },
+  { id: "ecs", codigo: "ECS", nombre: "Echeq Santander", cuenta_id: "bco", cheque: "datos", activo: true },
+];
 
 export function datosCompras(extra = {}) {
   return {
