@@ -268,6 +268,21 @@
   .fm-hint{font-weight:400; color:var(--muted); font-size:11.5px; text-transform:none; letter-spacing:0;}
   .ret-box{border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin:6px 0 12px; background:var(--surface-2);}
   .ret-box[hidden]{display:none;}
+  .formas-box{border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin:6px 0 12px;}
+  .formas-box[hidden]{display:none;}
+  .formas-head{display:flex; justify-content:space-between; gap:8px; font-weight:600; font-size:13px; margin-bottom:8px;}
+  .formas-estado{font-weight:600; font-size:12.5px; color:#15803d;}
+  .formas-estado.bad{color:var(--danger);}
+  .forma{border:1px dashed var(--border); border-radius:8px; padding:8px; margin-bottom:8px;}
+  .forma-fila{display:grid; grid-template-columns:1.3fr 1.1fr .9fr auto; gap:6px; align-items:center;}
+  .forma-fila select, .forma-fila input{width:100%; min-width:0;}
+  .forma-fila .quitar{border:none; background:none; color:var(--muted); font-size:16px; cursor:pointer; padding:4px 6px;}
+  .forma-chq{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px;}
+  .forma-cartera{margin-top:6px; max-height:170px; overflow:auto; border:1px solid var(--border); border-radius:6px; padding:4px 6px;}
+  .forma-cartera label{display:flex; gap:6px; align-items:center; font-size:12.5px; padding:3px 0;}
+  .forma-cartera label .imp{margin-left:auto; font-variant-numeric:tabular-nums;}
+  .forma-cartera .empty{font-size:12px; color:var(--muted); padding:4px;}
+  @media (max-width:560px){ .forma-fila{grid-template-columns:1fr 1fr;} }
   .ret-head{font-weight:600; font-size:13px; margin-bottom:6px;}
   .ret-line{display:flex; justify-content:space-between; gap:10px; font-size:12.5px; padding:3px 0; border-bottom:1px dashed var(--border);}
   .ret-line .det{color:var(--ink-2);}
@@ -1681,21 +1696,11 @@
     <div class="crew-fields">
       <div class="field"><label for="pom-fecha">Fecha</label><input type="date" id="pom-fecha"></div>
       <div class="field">
-        <label for="pom-medio">Concepto de pago</label>
-        <select id="pom-medio"></select>
-      </div>
-    </div>
-    <div class="crew-fields">
-      <div class="field">
         <label for="pom-estado">Estado</label>
         <select id="pom-estado">
           <option value="pendiente">Pendiente</option>
           <option value="pagada">Pagada</option>
         </select>
-      </div>
-      <div class="field" id="pom-cuenta-field" style="display:none;">
-        <label for="pom-cuenta">Cuenta de pago</label>
-        <select id="pom-cuenta"></select>
       </div>
     </div>
     <div class="ret-box" id="pom-ret-box" hidden>
@@ -1704,15 +1709,10 @@
       <div class="ret-total"><span>Neto a pagar</span><b id="pom-neto">$0,00</b></div>
       <div id="pom-ret-certs"></div>
     </div>
-    <div class="field" id="pom-cartera-field" hidden>
-      <label>Cheques de la cartera que se entregan <span class="pom-chq-total" id="pom-cartera-total"></span></label>
-      <div class="cargo-table-wrap chq-pick" id="pom-cartera-list"></div>
-    </div>
-    <div id="pom-chqdatos-field" hidden>
-      <div class="crew-fields">
-        <div class="field"><label for="pom-chq-numero">N° cheque / echeq</label><input type="text" id="pom-chq-numero" maxlength="20"></div>
-        <div class="field"><label for="pom-chq-fecha">Fecha de cobro</label><input type="date" id="pom-chq-fecha"></div>
-      </div>
+    <div class="formas-box" id="pom-formas-box" hidden>
+      <div class="formas-head"><span>Formas de pago</span><span class="formas-estado" id="pom-formas-estado"></span></div>
+      <div id="pom-formas"></div>
+      <button type="button" class="btn" id="pom-forma-add">+ Agregar forma de pago</button>
     </div>
     <div class="field">
       <label for="pom-notas">Notas (opcional)</label>

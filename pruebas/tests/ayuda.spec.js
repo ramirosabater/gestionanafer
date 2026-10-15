@@ -24,7 +24,7 @@ test("en Administración se viste de administración y lleva a cada pantalla", a
   await expect(page.locator("#sug-box")).toHaveClass(/ayuda-foco/);           // fue a Pagos → Sugerencia
   for (let i = 0; i < 4; i++) await page.click('#ayuda-panel [data-acc="sig"]');
   await expect(page.locator("#pagos-table")).toHaveClass(/ayuda-foco/);       // fue a Órdenes de pago
-  await page.click('#ayuda-panel [data-acc="sig"]');
+  while (await page.locator('#ayuda-panel [data-acc="sig"]').count()) await page.click('#ayuda-panel [data-acc="sig"]');
   await page.click('#ayuda-panel [data-acc="fin"]');
   await expect(page.locator("#ayuda-panel")).toBeHidden();
   await expect(page.locator(".ayuda-foco")).toHaveCount(0);

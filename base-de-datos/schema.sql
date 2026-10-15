@@ -1063,3 +1063,7 @@ end $$;
 
 -- Centro de costo ligado a un camión ("movil:13") o una sucursal ("suc:km12")
 alter table centros_costo add column if not exists ref_fijo text not null default '';
+
+-- Pagos mixtos: una orden de pago con varias formas de pago
+-- [{medio_id, cuenta_id, importe, cheque_ids, cheque_numero, cheque_fecha}]
+alter table ordenes_pago add column if not exists formas jsonb not null default '[]'::jsonb;

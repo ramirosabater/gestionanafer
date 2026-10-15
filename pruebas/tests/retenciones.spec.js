@@ -19,8 +19,7 @@ async function nuevaOP(page, proveedor, { cuantas = null, pagar = false } = {}) 
   await page.dispatchEvent("#pom-fecha", "change");
   if (pagar) {
     await page.selectOption("#pom-estado", "pagada");
-    await page.selectOption("#pom-medio", "tr1");
-    await page.dispatchEvent("#pom-medio", "change");
+    await page.selectOption("#pom-formas .forma >> nth=0 >> .f-medio", "tr1");
   }
 }
 const importeRet = (page) => page.locator("#pom-ret-lines .ret-line b").first().textContent();

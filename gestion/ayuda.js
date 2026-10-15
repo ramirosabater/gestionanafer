@@ -62,7 +62,8 @@
         { t: "Arriba ves los saldos de cada cuenta y los cheques en cartera; lo ya comprometido en órdenes pendientes se resta. Podés cambiar el <b>monto a destinar</b>.", foco: "#sug-fondos" },
         { t: "Propone primero los proveedores ★ prioritarios y después las facturas más viejas. Tildá o destildá lo que quieras.", foco: "#sug-tbody" },
         { t: "<b>Crear órdenes de pago</b> arma una orden pendiente por proveedor.", foco: "#sug-crear" },
-        { t: "En <b>Órdenes de pago</b> abrís cada una, elegís <b>Pagada</b>, el concepto (TR1, CHE, ECS…) y la cuenta.", ir: '#subtabs-pagos .stabbtn[data-sub="ordenes"]', foco: "#pagos-table" },
+        { t: "En <b>Órdenes de pago</b> abrís cada una, elegís <b>Pagada</b> y cargás cómo se paga: concepto (TR1, CHE, ECS…), cuenta e importe.", ir: '#subtabs-pagos .stabbtn[data-sub="ordenes"]', foco: "#pagos-table" },
+        { t: "Se puede pagar <b>mixto</b>: con <b>+ Agregar forma de pago</b> sumás, por ejemplo, cheques de cartera y una transferencia por la diferencia. Entre todas tienen que dar el neto a pagar." },
         { t: "Al marcarla Pagada se calcula sola la <b>retención de Ganancias</b>: ves el detalle y el <b>neto a pagar</b>. En Tesorería sale el neto y queda el certificado para imprimir." },
       ] },
       { titulo: "Retenciones del mes", pasos: [
