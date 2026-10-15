@@ -51,10 +51,14 @@ test("habla cada paso y, en modo automático, avanza recién cuando termina de h
   await page.click("#ayuda-btn");
   await page.getByRole("button", { name: /Cómo moverse/ }).click();
   await expect.poll(() => page.evaluate(() => window.__dichos.length)).toBeGreaterThanOrEqual(2); // saludo + paso 1
-  const t0 = Date.now();
-  await expect(page.locator("#ayuda-panel .ayuda-puntos i.on")).toHaveCount(1);
   await expect(page.locator("#ayuda-panel .ayuda-puntos i").nth(1)).toHaveClass(/on/, { timeout: 8000 });
-  expect(Date.now() - t0).toBeGreaterThan(1500); // espera a que termine de hablar + pausa
+  // Se mide dentro de la página, desde que empezó a decir el paso 1 hasta que se
+  // ve el paso 2: tiene que haber esperado que termine de hablar (800 ms) + la pausa.
+  const espera = await page.evaluate(() => {
+    const paso1 = window.__dichos.find((d) => d.t.includes("Te voy a mostrar cómo se usa el sistema"));
+    return Date.now() - paso1.en;
+  });
+  expect(espera).toBeGreaterThan(1800);
   const dichos = await page.evaluate(() => window.__dichos.map((d) => d.t));
   expect(dichos.some((t) => t.includes("Te voy a mostrar cómo se usa el sistema"))).toBe(true);
   expect(dichos.join(" ")).not.toMatch(/<b>|🫧/); // sin HTML ni emojis
