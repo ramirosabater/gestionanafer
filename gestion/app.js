@@ -6473,6 +6473,7 @@
   }
   function showHome(){
     state.area = null;
+    document.body.dataset.area = ''; // para la ayuda (ayuda.js)
     try{ localStorage.removeItem('hdr_area'); }catch(e){}
     ['grid','day','dashboard','branches','company','occasional','compras','pagos','tesoreria'].forEach(function(v){
       document.getElementById('view-'+v).hidden = true;
@@ -6487,6 +6488,7 @@
     if(!a || !areaVisible(a)) return;
     if(a.href){ window.location.href = a.href; return; }
     state.area = id;
+    document.body.dataset.area = id; // para la ayuda (ayuda.js)
     try{ localStorage.setItem('hdr_area', id); }catch(e){}
     var prev = state.view;
     setView(a.tabs.indexOf(prev)!==-1 ? prev : null);
