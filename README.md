@@ -42,3 +42,15 @@ ver `base-de-datos/MUDANZA-FICHAJES.md`. Hasta que se haga la mudanza, el panel 
 RR.HH. sigue pidiendo su propio login.
 
 El detalle de cada parte está en `gestion/readme.md` (Gestión y Comercial).
+
+## Pruebas automáticas (`pruebas/`)
+Corren solas en GitHub en cada cambio (`.github/workflows/pruebas.yml`), con
+Playwright y una **base simulada** (nunca la real). Cubren ingreso y permisos,
+factura con centro de costo y móvil, retención de Ganancias (casos calculados a
+mano), sugerencia de pagos, que no haya errores en Administración y que el
+fichaje use la base del `config.js`. Si alguna falla, GitHub avisa por mail y
+deja el informe en "Artifacts". Netlify publica igual.
+
+Para correrlas en una computadora: en la raíz `npm run build` (con un
+`gestion/config.js` de prueba), y en `pruebas/`: `npm install`,
+`npx playwright install chromium` y `npm test`.
