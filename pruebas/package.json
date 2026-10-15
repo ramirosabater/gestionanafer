@@ -1,0 +1,12 @@
+{
+  "name": "anafer-pruebas",
+  "private": true,
+  "type": "module",
+  "description": "Pruebas automáticas del sitio (Playwright) con una base simulada: nunca tocan la base real.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.0"
+  }
+}
