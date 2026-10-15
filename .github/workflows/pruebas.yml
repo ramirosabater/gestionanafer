@@ -1,0 +1,57 @@
+# Pruebas automáticas: corren solas en GitHub cada vez que se sube algo.
+# Usan una base SIMULADA (nunca la real). Si alguna falla, GitHub avisa por
+# mail y marca el cambio con una cruz roja; Netlify publica igual.
+name: Pruebas
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # A propósito, una base DISTINTA de la del config.js de prueba: la prueba
+      # del fichaje verifica que el sitio use siempre la del config.js.
+      VITE_SUPABASE_URL: https://otra-base.supabase.co
+      VITE_SUPABASE_KEY: clave-de-prueba
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Armar el sitio con la base simulada
+        run: |
+          rm -f config.js
+          cat > gestion/config.js <<'CFG'
+          window.SUPABASE_URL = "https://mock.supabase.co";
+          window.SUPABASE_ANON_KEY = "clave-de-prueba";
+          window.ANTHROPIC_API_KEY = "";
+          window.GOOGLE_DRIVE_CLIENT_ID = "";
+          window.GOOGLE_DRIVE_ROOT_FOLDER_ID = "";
+          CFG
+          npm run build
+
+      - name: Instalar Playwright
+        working-directory: pruebas
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Correr las pruebas
+        working-directory: pruebas
+        run: npx playwright test
+
+      - name: Guardar el informe si algo falló
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-pruebas
+          path: |
+            pruebas/playwright-report
+            pruebas/test-results
+          retention-days: 14
