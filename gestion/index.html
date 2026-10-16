@@ -713,6 +713,33 @@
   .tb-lect li.mal{background:color-mix(in srgb, #e1251b 7%, #fff);} .tb-lect li.bien{background:color-mix(in srgb, #16a34a 7%, #fff);}
   .tb-lect li > span{flex:none;}
   .tb-mod{display:inline-block; font-size:11px; font-weight:700; color:var(--cq-ink2); background:#fff; border:1px solid var(--cq-line); border-radius:999px; padding:1px 8px; margin-right:4px;}
+  /* Sifoncito explicando: camina por la pantalla y señala con el puntero */
+  .tb-btn-on{background:#e1251b; color:#fff; border-color:transparent;} .tb-btn-on:hover{filter:brightness(1.08); border-color:transparent;}
+  .tb-sif.tb-narrando .tb-sif-av .sif-svg{opacity:0; transition:opacity .2s;}
+  .tb-lect li{transition:box-shadow .25s, transform .25s;}
+  .tb-lect li.tb-leyendo{box-shadow:0 0 0 2px #0d9488, 0 6px 16px rgba(13,148,136,.18); transform:translateX(4px);}
+  .tb-senalado{position:relative; animation:tbSenal 1.4s ease-in-out infinite; z-index:2;}
+  @keyframes tbSenal{0%,100%{box-shadow:0 0 0 3px rgba(13,148,136,.85), 0 10px 26px rgba(13,148,136,.18);} 50%{box-shadow:0 0 0 6px rgba(13,148,136,.35), 0 10px 26px rgba(13,148,136,.25);}}
+  .tb-actor{position:absolute; z-index:60; width:70px; pointer-events:none; transition:left .75s cubic-bezier(.45,.05,.3,1), top .75s cubic-bezier(.45,.05,.3,1), opacity .25s; filter:drop-shadow(0 8px 10px rgba(16,40,70,.22));}
+  .tb-actor .sif-svg{display:block; transform-origin:50% 100%; animation:tbFlota 2.6s ease-in-out infinite;}
+  .tb-actor.espejo .sif-svg{transform:scaleX(-1);}
+  .tb-actor.camina .sif-svg{animation:tbSalta .75s ease-in-out 1, tbFlota 2.6s ease-in-out .75s infinite;}
+  .tb-actor.espejo.camina .sif-svg{animation:tbSaltaE .75s ease-in-out 1, tbFlotaE 2.6s ease-in-out .75s infinite;}
+  .tb-actor.espejo:not(.camina) .sif-svg{animation:tbFlotaE 2.6s ease-in-out infinite;}
+  .tb-actor .sif-brazo-puntero{transform-box:view-box; transform-origin:88px 116px;}
+  .tb-actor.habla .sif-brazo-puntero{animation:tbPuntero .9s ease-in-out infinite;}
+  .tb-actor.habla .sif-boca{transform-box:fill-box; transform-origin:center top; animation:sifHabla .22s ease-in-out infinite alternate;}
+  .tb-actor.chau{opacity:0;}
+  .tb-globo{display:none; position:absolute; bottom:calc(100% - 4px); left:-6px; width:max-content; max-width:min(320px, 80vw); background:#fff; color:#1b2733; border:1px solid #cfe5e2; border-radius:14px; padding:9px 12px; font-size:13px; line-height:1.4; box-shadow:0 10px 26px rgba(16,40,70,.18);}
+  .tb-globo::after{content:""; position:absolute; top:100%; left:var(--cola, 26px); border:8px solid transparent; border-top-color:#fff;}
+  .tb-actor.con-globo .tb-globo{display:block; animation:tbGlobo .3s ease-out;}
+  @keyframes tbFlota{0%,100%{transform:translateY(0) rotate(-2deg);} 50%{transform:translateY(-6px) rotate(2deg);}}
+  @keyframes tbFlotaE{0%,100%{transform:scaleX(-1) translateY(0) rotate(-2deg);} 50%{transform:scaleX(-1) translateY(-6px) rotate(2deg);}}
+  @keyframes tbSalta{0%{transform:translateY(0) rotate(0);} 25%{transform:translateY(-16px) rotate(-8deg);} 50%{transform:translateY(0) rotate(0) scaleY(.92);} 75%{transform:translateY(-10px) rotate(6deg);} 100%{transform:translateY(0) rotate(0);}}
+  @keyframes tbSaltaE{0%{transform:scaleX(-1) translateY(0);} 25%{transform:scaleX(-1) translateY(-16px) rotate(-8deg);} 50%{transform:scaleX(-1) translateY(0) scaleY(.92);} 75%{transform:scaleX(-1) translateY(-10px) rotate(6deg);} 100%{transform:scaleX(-1) translateY(0);}}
+  @keyframes tbPuntero{0%,100%{transform:rotate(0);} 50%{transform:rotate(-7deg);}}
+  @keyframes tbGlobo{from{opacity:0; transform:translateY(6px) scale(.96);} to{opacity:1; transform:none;}}
+  @media (prefers-reduced-motion: reduce){ .tb-actor{transition:none;} .tb-actor .sif-svg, .tb-actor .sif-brazo-puntero, .tb-senalado{animation:none !important;} }
   .tb-sif-nota{font-size:11px; color:var(--cq-muted); margin-top:10px;}
   .tb-ia-box{margin-top:12px; border:1px solid color-mix(in srgb, #2c7fcf 30%, #fff); background:color-mix(in srgb, #2c7fcf 5%, #fff); border-radius:12px; padding:12px 14px; font-size:13.5px; line-height:1.5;}
   .tb-ia-box h4{margin:10px 0 4px; font-size:13.5px; color:var(--cq-navy);} .tb-ia-box p{margin:4px 0;} .tb-ia-box ul{margin:4px 0; padding-left:20px;}

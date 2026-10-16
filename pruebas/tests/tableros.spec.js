@@ -102,3 +102,72 @@ test("Sifoncito se viste de gerente en Dashboards", async ({ page }) => {
   await page.click('#ayuda-panel [data-acc="fin"]');
   await expect(page.locator("#ayuda-panel")).toBeHidden();
 });
+
+// Voz simulada: cada frase "dura" poco; cancel() la corta como lo hace el navegador.
+async function vozFalsa(page, ms = 350) {
+  await page.addInitScript((ms) => {
+    window.__dichos = []; window.__cancelados = 0;
+    let actual = null, timer = null;
+    Object.defineProperty(window, "SpeechSynthesisUtterance", { configurable: true, writable: true, value: function (t) { this.text = t; } });
+    Object.defineProperty(window, "speechSynthesis", { configurable: true, value: {
+      getVoices: () => [], addEventListener() {},
+      speak(u) { actual = u; window.__dichos.push(u.text); timer = setTimeout(() => { if (actual === u) { actual = null; u.onend && u.onend(); } }, ms); },
+      cancel() { window.__cancelados++; clearTimeout(timer); const u = actual; actual = null; if (u && u.onerror) u.onerror({ error: "interrupted" }); },
+    } });
+  }, ms);
+}
+
+test("Escuchar: Sifoncito de Dashboards sale a señalar y 'Detener' lo calla", async ({ page }) => {
+  await vozFalsa(page, 1500);
+  const errores = await abrirGestion(page, datos(), { email: "admin@anafer.test" });
+  await entrar(page);
+  await expect(page.locator(".tb-kpis-resumen .cq-kpi")).toHaveCount(5);
+  // la ropa de Dashboards: gorra verde agua con visera
+  await expect(page.locator('.tb-sif-av svg path[fill="#0d9488"]').first()).toBeAttached();
+  const btn = page.locator('.tb-btn-escuchar[data-modulo="resumen"]');
+  await btn.click();
+  await expect(btn).toHaveText("⏹ Detener");
+  await expect(page.locator(".tb-actor .sif-brazo-puntero")).toBeAttached();
+  const estado = (await page.locator('.tb-sif[data-modulo="resumen"] .tb-sif-estado').textContent()).replace(/\.$/, "");
+  await expect.poll(() => page.evaluate(() => window.__dichos[0] || "")).toContain(estado);
+  // en la primera línea de la lectura señala la tarjeta del módulo y muestra el globo
+  await expect(page.locator(".tb-kpis-resumen .cq-kpi.tb-senalado")).toHaveCount(1, { timeout: 5000 });
+  await expect(page.locator(".tb-actor .tb-globo")).toBeVisible();
+  await expect(page.locator(".tb-lect li.tb-leyendo")).toHaveCount(1);
+  await btn.click();
+  await expect(btn).toHaveText("🔊 Escuchar");
+  await expect(page.locator(".tb-actor")).toHaveCount(0);
+  await expect(page.locator(".tb-senalado, .tb-leyendo")).toHaveCount(0);
+  const dichos = await page.evaluate(() => window.__dichos.length);
+  await page.waitForTimeout(2500);
+  expect(await page.evaluate(() => window.__dichos.length)).toBe(dichos);      // no sigue hablando
+  expect(errores).toEqual([]);
+});
+
+test("Escuchar en Logística: recorre los gráficos que corresponden y vuelve a su lugar", async ({ page }) => {
+  await vozFalsa(page, 250);
+  await abrirGestion(page, datos(), { email: "admin@anafer.test" });
+  await entrar(page);
+  await page.click('#subtabs-tableros [data-tb="logistica"]');
+  await expect(page.locator(".tb-sif .tb-lect")).toContainText("Camión 99");
+  const items = await page.locator(".tb-sif .tb-lect li").count();
+  await page.evaluate(() => {
+    window.__senalados = [];
+    new MutationObserver((ms) => ms.forEach((m) => { const el = m.target;
+      if (el.classList && el.classList.contains("tb-senalado")) { const t = el.querySelector("h2, .lab"); window.__senalados.push(t ? t.textContent : ""); } }))
+      .observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class"] });
+  });
+  await page.click('.tb-btn-escuchar[data-modulo="logistica"]');
+  await expect(page.locator(".tb-actor")).toHaveCount(1);
+  await expect(page.locator(".tb-actor")).toHaveCount(0, { timeout: 25000 });
+  const senalados = await page.evaluate(() => [...new Set(window.__senalados)]);
+  expect(senalados).toContain("Viajes por mes");
+  expect(senalados.some((t) => t.startsWith("Camiones sin viajes"))).toBe(true);
+  await expect(page.locator('.tb-btn-escuchar[data-modulo="logistica"]')).toHaveText("🔊 Escuchar");
+  expect(await page.evaluate(() => window.__dichos.length)).toBe(1 + items);
+  // cambiar de pestaña también lo corta
+  await page.click('.tb-btn-escuchar[data-modulo="logistica"]');
+  await expect(page.locator(".tb-actor")).toHaveCount(1);
+  await page.click('#subtabs-tableros [data-tb="resumen"]');
+  await expect(page.locator(".tb-actor")).toHaveCount(0);
+});

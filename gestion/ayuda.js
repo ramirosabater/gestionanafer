@@ -125,7 +125,7 @@
         { t: "Acá están los tableros de todos los módulos. Arriba elegís <b>Resumen</b> o el tablero de cada área.", foco: "#subtabs-tableros" },
         { t: "En el <b>Resumen</b> hay una tarjeta por módulo con su número clave y cuántas alertas tiene. Tocá una tarjeta para ir a su tablero." },
         { t: "En cada tablero leo los indicadores y los comparo con <b>toda la historia</b>: el promedio de los 6 meses anteriores, el mismo mes del año pasado, las tendencias y los récords." },
-        { t: "Arriba ves mi conclusión: ✅ lo que va bien, ⚠️ lo que conviene mirar e ℹ️ el contexto. Con <b>🔊 Escuchar</b> te lo leo en voz alta." },
+        { t: "Arriba ves mi conclusión: ✅ lo que va bien, ⚠️ lo que conviene mirar e ℹ️ el contexto. Con <b>🔊 Escuchar</b> te lo explico en voz alta: salgo a caminar por la pantalla y te señalo cada gráfico o tarjeta. Con <b>⏹ Detener</b> me callo." },
         { t: "Con <b>✨ Pedile una opinión con IA</b> escribo un análisis completo de lo que está pasando, con lo bueno, lo que preocupa y qué haría. Queda guardado con la fecha." },
         { t: "El mes en curso aparece más claro en los gráficos porque todavía no terminó. <b>↻ Actualizar</b> vuelve a leer los datos." },
       ] },
@@ -167,8 +167,10 @@
 
   // ---------------- El sifón ----------------
   var sifN = 0;
-  function sifon(traje, tam) {
+  // opts.senala: el brazo derecho estirado con un puntero (para señalar en pantalla).
+  function sifon(traje, tam, opts) {
     var t = traje || "inicio";
+    var senala = !!(opts && opts.senala);
     var u = "sif" + (++sifN); // ids únicos: un degradado dentro de algo oculto no se dibuja
     var accesorios = "";
     if (t === "logistica") accesorios =
@@ -217,16 +219,23 @@
       '<path d="M32 112 Q32 103 44 101 L54 101 L50 170 L36 170 Q32 170 32 164 Z" fill="#1e3a7b"/>' +
       '<path d="M88 112 Q88 103 76 101 L66 101 L70 170 L84 170 Q88 170 88 164 Z" fill="#1e3a7b"/>' +
       '<path d="M56 104 L64 104 L62 112 L65 140 L60 147 L55 140 L58 112 Z" fill="#0d9488"/>' +
+      // gorra de analista con visera y credencial "DATA"
+      '<path d="M39 24 Q60 6 81 24 Z" fill="#0d9488" stroke="#0a6e66" stroke-width="1.5"/><path d="M78 23 Q92 22 98 27 L80 27 Z" fill="#0a6e66"/><circle cx="60" cy="10" r="2.6" fill="#0a6e66"/>' +
+      (senala ? '' :
       '<g transform="translate(90 98)"><rect x="0" y="0" width="28" height="22" rx="3" fill="#fff" stroke="#9aa3ad" stroke-width="1.5"/>' +
-      '<rect x="5" y="12" width="4" height="6" fill="#2ba9e0"/><rect x="12" y="8" width="4" height="10" fill="#0d9488"/><rect x="19" y="4" width="4" height="14" fill="#e1251b"/></g>';
+      '<rect x="5" y="12" width="4" height="6" fill="#2ba9e0"/><rect x="12" y="8" width="4" height="10" fill="#0d9488"/><rect x="19" y="4" width="4" height="14" fill="#e1251b"/></g>');
     var saluda = !(t === "administracion" || t === "comercial" || t === "rrhh" || t === "calidad" || t === "tableros");
-    return '<svg class="sif-svg" viewBox="0 0 120 190" width="' + (tam || 110) + '" height="' + Math.round((tam || 110) * 190 / 120) + '" aria-hidden="true">' +
+    return '<svg class="sif-svg' + (senala ? ' sif-senalando' : '') + '" viewBox="0 0 120 190" width="' + (tam || 110) + '" height="' + Math.round((tam || 110) * 190 / 120) + '" aria-hidden="true" style="overflow:visible">' +
       '<defs><linearGradient id="' + u + 'M" x1="0" x2="1"><stop offset="0" stop-color="#8e969e"/><stop offset=".45" stop-color="#eef1f4"/><stop offset="1" stop-color="#7d858d"/></linearGradient>' +
       '<linearGradient id="' + u + 'V" x1="0" x2="1"><stop offset="0" stop-color="#7fc3dc"/><stop offset=".35" stop-color="#cdeef8"/><stop offset="1" stop-color="#5fa9c6"/></linearGradient></defs>' +
       // brazo izquierdo
       '<path d="M32 118 Q16 128 18 146" fill="none" stroke="#7d858d" stroke-width="5" stroke-linecap="round"/><circle cx="18" cy="148" r="6" fill="#eef1f4" stroke="#7d858d" stroke-width="2"/>' +
       // brazo derecho (saluda o sostiene)
-      (saluda
+      (senala
+        ? '<g class="sif-brazo-puntero"><path d="M88 116 Q102 112 110 104" fill="none" stroke="#7d858d" stroke-width="5" stroke-linecap="round"/>' +
+          '<path d="M110 104 L150 84" stroke="#6b4a2b" stroke-width="3.2" stroke-linecap="round"/><circle cx="151" cy="83.5" r="3.6" fill="#e1251b"/>' +
+          '<circle cx="110" cy="104" r="6" fill="#eef1f4" stroke="#7d858d" stroke-width="2"/></g>'
+        : saluda
         ? '<g class="sif-saludo"><path d="M88 118 Q104 106 104 90" fill="none" stroke="#7d858d" stroke-width="5" stroke-linecap="round"/><circle cx="104" cy="87" r="6" fill="#eef1f4" stroke="#7d858d" stroke-width="2"/></g>'
         : '<path d="M88 118 Q100 124 98 134" fill="none" stroke="#7d858d" stroke-width="5" stroke-linecap="round"/>') +
       // botella
@@ -351,7 +360,7 @@
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   var vozOn = ls("ayuda_voz", "1") === "1";
   var lento = ls("ayuda_lento", "0") === "1";
-  var vozElegida = null, timers = [], hablando = false;
+  var vozElegida = null, timers = [], hablando = false, finHablar = null;
   var hayVoz = typeof window.speechSynthesis !== "undefined" && typeof window.SpeechSynthesisUtterance !== "undefined";
   function elegirVoz() {
     if (!hayVoz) return null;
@@ -378,6 +387,7 @@
     limpiarTimers();
     if (hayVoz) { try { window.speechSynthesis.cancel(); } catch (e) {} }
     hablando = false; if (panel) panel.classList.remove("hablando");
+    var f = finHablar; finHablar = null; if (f) f(false);   // quien pidió hablar() se entera de que lo cortaron
   }
   function esperar(ms, fn) { timers.push(setTimeout(fn, ms)); }
   function tiempoLectura(txt) { return Math.max(4500, txt.length * (lento ? 85 : 65)); }
@@ -573,15 +583,24 @@
   }
 
   // Leer un texto en voz alta a pedido (botón 🔊 de los Dashboards), aunque la voz automática esté apagada.
-  function hablar(texto) {
+  // fin(ok) se llama una sola vez: ok=true cuando terminó de hablar, false si lo cortaron (callar).
+  // Devuelve false si el navegador no puede hablar (y entonces no llama a fin).
+  function hablar(texto, fin) {
     if (!hayVoz) return false;
     callar();
     try {
-      var u = new SpeechSynthesisUtterance(texto);
+      var u = new SpeechSynthesisUtterance(textoPlano(texto));
       if (vozElegida) u.voice = vozElegida;
       u.lang = vozElegida ? vozElegida.lang : "es-AR";
       u.rate = lento ? 0.82 : 0.95; u.pitch = 1.15;
-      setTimeout(function () { window.speechSynthesis.speak(u); }, 120);
+      var listo = false;
+      var terminar = function (ok) { if (listo) return; listo = true; if (finHablar === terminar) finHablar = null; if (fin) fin(ok); };
+      finHablar = terminar;
+      u.onend = function () { terminar(true); };
+      u.onerror = function (ev) { var e = ev && ev.error; terminar(!(e === "interrupted" || e === "canceled")); };
+      esperar(120, function () { window.speechSynthesis.speak(u); });
+      // Seguro: si el navegador no avisa que terminó, sigue igual.
+      esperar(tiempoLectura(texto) + 6000, function () { terminar(true); });
       return true;
     } catch (e) { return false; }
   }

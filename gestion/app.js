@@ -771,6 +771,7 @@
   function setView(v){
     if(!v || tabPermiso(v)==='oculta' || areaTabs().indexOf(v)===-1) v = firstAccessibleTab() || 'day'; // no navega a pestañas sin permiso
     state.view = v;
+    if(v!=='tableros' && window.Tableros && window.Tableros.detener) window.Tableros.detener(); // Sifoncito deja de explicar
     document.getElementById('view-home').hidden = true;
     // Dashboard: cada área ve solo su parte (Logística → Viajes, Administración → Gastos).
     var areaD = state.area ? areaById(state.area) : null;
@@ -7231,6 +7232,7 @@
   }
   function showHome(){
     state.area = null;
+    if(window.Tableros && window.Tableros.detener) window.Tableros.detener();
     document.body.dataset.area = ''; // para la ayuda (ayuda.js)
     try{ localStorage.removeItem('hdr_area'); }catch(e){}
     ['grid','day','dashboard','branches','company','occasional','compras','pagos','tesoreria'].forEach(function(v){

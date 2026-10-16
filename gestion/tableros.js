@@ -21,7 +21,7 @@
   var MES_LARGO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
   var MODULOS = [
-    { id: 'resumen', label: 'Resumen', icono: '🏠', traje: 'inicio', tabs: null },
+    { id: 'resumen', label: 'Resumen', icono: '🏠', traje: 'tableros', tabs: null },
     { id: 'logistica', label: 'Logística', icono: '🚛', traje: 'logistica', tabs: ['grid', 'branches', 'company', 'occasional', 'day', 'dashboard'] },
     { id: 'administracion', label: 'Administración', icono: '🧾', traje: 'administracion', tabs: ['compras', 'pagos', 'tesoreria'] },
     { id: 'calidad', label: 'Calidad', icono: '🔬', traje: 'calidad', tabs: ['reclamos', 'ncpac', 'calidash'] },
@@ -124,6 +124,8 @@
     }
     return out;
   }
+  // Le dice a Sifoncito qué señalar en pantalla al leer esa línea: 'p:<título del gráfico>' o 'k:<título de la tarjeta>'.
+  function con(ver, arr) { (arr || []).forEach(function (x) { if (!x.ver) x.ver = ver; }); return arr; }
   function concentracion(nombre, ranking, umbral, tonoAlto, que) {
     var tot = ranking.reduce(function (t, x) { return t + x.v; }, 0);
     if (!tot || !ranking.length) return [];
@@ -189,10 +191,10 @@
       var quietos = trucks.filter(function (t) { return !usados30[t.id]; }).map(function (t) { return t.label || ('Camión ' + t.id); });
       var futuros = trips.filter(function (t) { return t.date > hoy; }).length;
       var L = [].concat(
-        leerSerie({ nombre: 'Viajes de FlotaPesada', serie: sv, subirEsBueno: null }),
-        leerSerie({ nombre: 'Envíos a sucursales', serie: se, subirEsBueno: null }).slice(0, 2),
-        concentracion('camiones', porCamion, 0.35, 'info', 'de los viajes de los últimos 90 días: mucha carga para un solo camión'),
-        quietos.length ? [{ tono: 'mal', peso: 0.8, texto: 'Sin viajes en los últimos 30 días: <b>' + esc(quietos.slice(0, 5).join(', ')) + (quietos.length > 5 ? ' y ' + (quietos.length - 5) + ' más' : '') + '</b>. ¿Están en el taller o se pueden usar?' }] : [],
+        con('p:Viajes por mes', leerSerie({ nombre: 'Viajes de FlotaPesada', serie: sv, subirEsBueno: null })),
+        con('p:Envíos a sucursales por mes', leerSerie({ nombre: 'Envíos a sucursales', serie: se, subirEsBueno: null }).slice(0, 2)),
+        con('p:Viajes por camión', concentracion('camiones', porCamion, 0.35, 'info', 'de los viajes de los últimos 90 días: mucha carga para un solo camión')),
+        quietos.length ? [{ ver: 'k:Camiones sin viajes', tono: 'mal', peso: 0.8, texto: 'Sin viajes en los últimos 30 días: <b>' + esc(quietos.slice(0, 5).join(', ')) + (quietos.length > 5 ? ' y ' + (quietos.length - 5) + ' más' : '') + '</b>. ¿Están en el taller o se pueden usar?' }] : [],
         futuros ? [{ tono: 'bien', peso: 0.2, texto: 'Ya hay <b>' + fmtN(futuros) + ' viajes planificados</b> a futuro.' }] : [{ tono: 'info', peso: 0.3, texto: 'No hay viajes cargados a futuro: conviene planificar (✨ Planificar automáticamente).' }]
       );
       var iAct = sv.length - 2;
@@ -232,11 +234,11 @@
       var saldoProy = cuentas.reduce(function (t, c) { return t + G.cuentaSaldoProyectado(c.id); }, 0);
       var subas = porAreaR.filter(function (x) { return x.antes > 0 && x.v / x.antes - 1 >= 0.3 && x.v > 0.05 * ult.reduce(function (t, f) { return t + n(f.monto); }, 0); });
       var L = [].concat(
-        leerSerie({ nombre: 'El gasto (facturas de proveedores)', serie: sg, subirEsBueno: false, fmt: fmtPlata }),
-        subas.slice(0, 2).map(function (x) { return { tono: 'mal', peso: Math.min(x.v / x.antes - 1, 2), texto: 'El gasto de <b>' + esc(x.label) + '</b> en los últimos 90 días subió un <b>' + fmtPct(x.v / x.antes - 1) + '</b> contra los 90 anteriores (' + fmtPlata(x.antes) + ' → ' + fmtPlata(x.v) + ').' }; }),
-        concentracion('proveedores', porProv, 0.3, 'info', 'del gasto de los últimos 90 días'),
-        viejas.length ? [{ tono: 'mal', peso: 0.9, texto: 'Hay <b>' + viejas.length + ' factura' + (viejas.length > 1 ? 's' : '') + ' pendiente' + (viejas.length > 1 ? 's' : '') + ' de más de 60 días</b> (' + fmtPlata(viejas.reduce(function (t, f) { return t + n(f.monto); }, 0)) + '). Revisá la Sugerencia de pagos.' }] : (pend.length ? [{ tono: 'bien', peso: 0.3, texto: 'Ninguna factura pendiente tiene más de 60 días.' }] : []),
-        cuentas.length && saldoProy < 0 ? [{ tono: 'mal', peso: 1.2, texto: 'El <b>saldo proyectado</b> de cajas y bancos da negativo (' + fmtPlata(saldoProy) + ') cuando se debiten los cheques emitidos.' }] : []
+        con('p:Gasto por mes', leerSerie({ nombre: 'El gasto (facturas de proveedores)', serie: sg, subirEsBueno: false, fmt: fmtPlata })),
+        subas.slice(0, 2).map(function (x) { return { ver: 'p:Gasto por área', tono: 'mal', peso: Math.min(x.v / x.antes - 1, 2), texto: 'El gasto de <b>' + esc(x.label) + '</b> en los últimos 90 días subió un <b>' + fmtPct(x.v / x.antes - 1) + '</b> contra los 90 anteriores (' + fmtPlata(x.antes) + ' → ' + fmtPlata(x.v) + ').' }; }),
+        con('p:Principales proveedores', concentracion('proveedores', porProv, 0.3, 'info', 'del gasto de los últimos 90 días')),
+        viejas.length ? [{ ver: 'k:Facturas pendientes', tono: 'mal', peso: 0.9, texto: 'Hay <b>' + viejas.length + ' factura' + (viejas.length > 1 ? 's' : '') + ' pendiente' + (viejas.length > 1 ? 's' : '') + ' de más de 60 días</b> (' + fmtPlata(viejas.reduce(function (t, f) { return t + n(f.monto); }, 0)) + '). Revisá la Sugerencia de pagos.' }] : (pend.length ? [{ ver: 'k:Facturas pendientes', tono: 'bien', peso: 0.3, texto: 'Ninguna factura pendiente tiene más de 60 días.' }] : []),
+        cuentas.length && saldoProy < 0 ? [{ ver: 'k:Saldo de cajas', tono: 'mal', peso: 1.2, texto: 'El <b>saldo proyectado</b> de cajas y bancos da negativo (' + fmtPlata(saldoProy) + ') cuando se debiten los cheques emitidos.' }] : []
       );
       var iAct = sg.length - 2;
       return { serieGasto: sg, seriePagado: pagado, porArea: porAreaR, porProv: porProv, pendientes: pend.length, pendTot: pendTot, viejas: viejas.length, saldoHoy: saldoHoy, saldoProy: saldoProy, hayCuentas: !!cuentas.length, lecturas: L,
@@ -265,12 +267,12 @@
       var conEf = pac.filter(function (p) { return p.eficacia_resultado === 'Efectiva' || p.eficacia_resultado === 'No efectiva'; });
       var recAbiertos = rec.filter(function (r) { return r.estado === 'Abierto' && diasDesde(r.fecha) > 7; });
       var L = [].concat(
-        leerSerie({ nombre: 'Los reclamos de producto', serie: sr, subirEsBueno: false }),
-        pj != null && pjA != null && Math.abs(pj - pjA) >= 0.08 ? [{ tono: pj > pjA ? 'mal' : 'bien', peso: Math.abs(pj - pjA) * 3,
+        con('p:Reclamos por mes', leerSerie({ nombre: 'Los reclamos de producto', serie: sr, subirEsBueno: false })),
+        pj != null && pjA != null && Math.abs(pj - pjA) >= 0.08 ? [{ ver: 'k:Justificados', tono: pj > pjA ? 'mal' : 'bien', peso: Math.abs(pj - pjA) * 3,
           texto: 'De los reclamos controlados en los últimos 90 días, el <b>' + fmtPct(pj) + '</b> resultó justificado (antes era ' + fmtPct(pjA) + ').' }] : [],
-        concentracion('envase', porEnvase, 0.45, 'mal', 'de los reclamos justificados de los últimos 90 días (proveedor de envase)'),
-        porDesvio.length ? [{ tono: 'info', peso: 0.3, texto: 'El desvío más confirmado en los últimos 90 días es <b>' + esc(porDesvio[0].label) + '</b> (' + porDesvio[0].v + ' casos).' }] : [],
-        vencidas.length ? [{ tono: 'mal', peso: 1 + vencidas.length * 0.1, texto: '<b>' + vencidas.length + ' NC / PAC</b> tienen la acción vencida y siguen sin cerrar.' }] : (abiertas.length ? [{ tono: 'bien', peso: 0.3, texto: 'Las ' + abiertas.length + ' NC / PAC abiertas están dentro de sus plazos.' }] : []),
+        con('p:Justificados por proveedor de envase', concentracion('envase', porEnvase, 0.45, 'mal', 'de los reclamos justificados de los últimos 90 días (proveedor de envase)')),
+        porDesvio.length ? [{ ver: 'p:Desvío confirmado', tono: 'info', peso: 0.3, texto: 'El desvío más confirmado en los últimos 90 días es <b>' + esc(porDesvio[0].label) + '</b> (' + porDesvio[0].v + ' casos).' }] : [],
+        vencidas.length ? [{ ver: 'k:Con acción vencida', tono: 'mal', peso: 1 + vencidas.length * 0.1, texto: '<b>' + vencidas.length + ' NC / PAC</b> tienen la acción vencida y siguen sin cerrar.' }] : (abiertas.length ? [{ ver: 'k:NC / PAC abiertas', tono: 'bien', peso: 0.3, texto: 'Las ' + abiertas.length + ' NC / PAC abiertas están dentro de sus plazos.' }] : []),
         recAbiertos.length ? [{ tono: 'mal', peso: 0.6, texto: '<b>' + recAbiertos.length + ' reclamos</b> siguen abiertos hace más de una semana.' }] : [],
         conEf.length >= 3 ? [{ tono: conEf.every(function (p) { return p.eficacia_resultado === 'Efectiva'; }) ? 'bien' : 'info', peso: 0.3,
           texto: 'De las acciones verificadas, el <b>' + fmtPct(conEf.filter(function (p) { return p.eficacia_resultado === 'Efectiva'; }).length / conEf.length) + '</b> fueron efectivas.' }] : []
@@ -312,13 +314,13 @@
       var altas = ab.reduce(function (t, r) { return t + n(r.altas); }, 0), bajas = ab.reduce(function (t, r) { return t + n(r.bajas); }, 0);
       var flojas = porUnidad.filter(function (u) { return u.presu > 0 && u.v / u.presu < 0.9; });
       var L = [].concat(
-        cumpl != null ? [{ tono: cumpl >= 1 ? 'bien' : (cumpl >= 0.95 ? 'info' : 'mal'), peso: Math.abs(1 - cumpl) * 3 + 0.5,
+        cumpl != null ? [{ ver: 'k:Cumplimiento', tono: cumpl >= 1 ? 'bien' : (cumpl >= 0.95 ? 'info' : 'mal'), peso: Math.abs(1 - cumpl) * 3 + 0.5,
           texto: 'En ' + uAnio + ' (enero a ' + MES_LARGO[uMes - 1] + ') se facturó <b>' + fmtPlata(realAc) + '</b>: el <b>' + fmtPct(cumpl, 1) + '</b> del presupuesto.' }] : [],
-        crec != null ? [{ tono: crec >= 0 ? 'bien' : 'mal', peso: Math.abs(crec) * 2 + 0.3, texto: 'Contra el mismo período de ' + (uAnio - 1) + ', la facturación ' + (crec >= 0 ? 'creció' : 'cayó') + ' un <b>' + fmtPct(Math.abs(crec), 1) + '</b>. (Ojo: es en pesos, sin descontar inflación.)' }] : [],
-        ultP ? [{ tono: ultR >= ultP ? 'bien' : 'mal', peso: Math.abs(ultR / ultP - 1) * 2, texto: 'En ' + MES_LARGO[uMes - 1] + ' se llegó al <b>' + fmtPct(ultR / ultP) + '</b> del objetivo del mes.' }] : [],
-        leerSerie({ nombre: 'La facturación', serie: real, subirEsBueno: true, fmt: fmtPlata, mesEnCurso: false }).filter(function (x) { return !/promedio/.test(x.texto) || x.tono !== 'info'; }),
-        flojas.slice(0, 2).map(function (u) { return { tono: 'mal', peso: (1 - u.v / u.presu) * 2, texto: '<b>' + esc(u.label) + '</b> va al ' + fmtPct(u.v / u.presu) + ' de su presupuesto del año.' }; }),
-        ab.length ? [{ tono: altas - bajas >= 0 ? 'bien' : 'mal', peso: 0.5, texto: 'Clientes en los últimos 3 meses: <b>' + altas + ' altas y ' + bajas + ' bajas</b> (neto ' + (altas - bajas >= 0 ? '+' : '') + (altas - bajas) + ').' }] : []
+        crec != null ? [{ ver: 'k:Crecimiento', tono: crec >= 0 ? 'bien' : 'mal', peso: Math.abs(crec) * 2 + 0.3, texto: 'Contra el mismo período de ' + (uAnio - 1) + ', la facturación ' + (crec >= 0 ? 'creció' : 'cayó') + ' un <b>' + fmtPct(Math.abs(crec), 1) + '</b>. (Ojo: es en pesos, sin descontar inflación.)' }] : [],
+        ultP ? [{ ver: 'p:Facturación por mes', tono: ultR >= ultP ? 'bien' : 'mal', peso: Math.abs(ultR / ultP - 1) * 2, texto: 'En ' + MES_LARGO[uMes - 1] + ' se llegó al <b>' + fmtPct(ultR / ultP) + '</b> del objetivo del mes.' }] : [],
+        con('p:Facturación por mes', leerSerie({ nombre: 'La facturación', serie: real, subirEsBueno: true, fmt: fmtPlata, mesEnCurso: false }).filter(function (x) { return !/promedio/.test(x.texto) || x.tono !== 'info'; })),
+        flojas.slice(0, 2).map(function (u) { return { ver: 'p:Unidades de negocio', tono: 'mal', peso: (1 - u.v / u.presu) * 2, texto: '<b>' + esc(u.label) + '</b> va al ' + fmtPct(u.v / u.presu) + ' de su presupuesto del año.' }; }),
+        ab.length ? [{ ver: 'k:Altas / bajas', tono: altas - bajas >= 0 ? 'bien' : 'mal', peso: 0.5, texto: 'Clientes en los últimos 3 meses: <b>' + altas + ' altas y ' + bajas + ' bajas</b> (neto ' + (altas - bajas >= 0 ? '+' : '') + (altas - bajas) + ').' }] : []
       );
       return { serieReal: real, seriePresu: presu, porUnidad: porUnidad, cumpl: cumpl, crec: crec, realAc: realAc, presuAc: presuAc, ultimoYm: hastaYm, altas: altas, bajas: bajas, hayAB: !!ab.length, lecturas: L };
     });
@@ -358,10 +360,10 @@
       });
       var fmtP = function (v) { return v.toFixed(1).replace('.', ',') + '%'; };
       var L = [].concat(
-        leerSerie({ nombre: 'Las llegadas tarde (% de las entradas)', serie: sPct, subirEsBueno: false, fmt: fmtP }).filter(function (x) { return !/cerraría/.test(x.texto); }),
-        leerSerie({ nombre: 'Las entradas fichadas', serie: sEnt, subirEsBueno: null }).slice(0, 1),
-        sectorPct.length && sectorPct[0].pct >= 0.15 && sectorPct[0].total >= 10 ? [{ tono: 'mal', peso: sectorPct[0].pct * 2, texto: 'En los últimos 30 días, <b>' + esc(sectorPct[0].label) + '</b> llegó tarde en el <b>' + fmtPct(sectorPct[0].pct) + '</b> de sus entradas.' }] : [],
-        sinSalida ? [{ tono: 'mal', peso: 0.6, texto: '<b>' + sinSalida + ' turnos</b> de la última semana quedaron sin fichar la salida.' }] : [{ tono: 'bien', peso: 0.2, texto: 'La última semana no quedaron turnos sin fichar la salida.' }]
+        con('p:Llegadas tarde por mes', leerSerie({ nombre: 'Las llegadas tarde (% de las entradas)', serie: sPct, subirEsBueno: false, fmt: fmtP }).filter(function (x) { return !/cerraría/.test(x.texto); })),
+        con('p:Entradas fichadas por mes', leerSerie({ nombre: 'Las entradas fichadas', serie: sEnt, subirEsBueno: null }).slice(0, 1)),
+        sectorPct.length && sectorPct[0].pct >= 0.15 && sectorPct[0].total >= 10 ? [{ ver: 'p:Puntualidad por sector', tono: 'mal', peso: sectorPct[0].pct * 2, texto: 'En los últimos 30 días, <b>' + esc(sectorPct[0].label) + '</b> llegó tarde en el <b>' + fmtPct(sectorPct[0].pct) + '</b> de sus entradas.' }] : [],
+        sinSalida ? [{ ver: 'k:Turnos sin salida', tono: 'mal', peso: 0.6, texto: '<b>' + sinSalida + ' turnos</b> de la última semana quedaron sin fichar la salida.' }] : [{ ver: 'k:Turnos sin salida', tono: 'bien', peso: 0.2, texto: 'La última semana no quedaron turnos sin fichar la salida.' }]
       );
       var iAct = sPct.length - 2;
       return { serieEnt: sEnt, serieTarde: sTar, seriePct: sPct, serieMin: sMin, porSector: sectorPct, activos: Object.keys(act).length, sinSalida: sinSalida, lecturas: L,
@@ -431,19 +433,19 @@
     opts = opts || {};
     var L = ordenarLecturas(lecturas), est = estadoGeneral(L);
     var icono = { bien: '✅', mal: '⚠️', info: 'ℹ️' };
-    var traje = (MODULOS.find(function (m) { return m.id === modulo; }) || {}).traje || 'inicio';
-    var avatar = window.AyudaAnafer && window.AyudaAnafer.sifon ? window.AyudaAnafer.sifon(traje, 92) : '';
+    // En Dashboards, Sifoncito siempre lleva su ropa de analista (gorra, saco y gráfico).
+    var avatar = window.AyudaAnafer && window.AyudaAnafer.sifon ? window.AyudaAnafer.sifon('tableros', 92) : '';
     var lista = L.slice(0, opts.max || 7);
     S.leer = S.leer || {};
-    S.leer[modulo] = est.txt + '. ' + lista.map(function (x) { return textoPlano(x.texto); }).join(' ');
+    S.leer[modulo] = { estado: est.txt, items: lista.map(function (x) { return { texto: x.texto, ver: x.ver }; }) };
     var op = S.opiniones[modulo];
     return '<section class="cq-card tb-sif tb-sif-' + est.tono + '" data-modulo="' + modulo + '">' +
       '<div class="tb-sif-av">' + avatar + '</div>' +
       '<div class="tb-sif-cuerpo">' +
         '<div class="tb-sif-head"><div><div class="tb-sif-tit">La lectura de Sifoncito</div><div class="tb-sif-estado">' + esc(est.txt) + '</div></div>' +
-          '<div class="tb-sif-btns"><button type="button" class="tb-btn" data-acc="escuchar" data-modulo="' + modulo + '">🔊 Escuchar</button>' +
+          '<div class="tb-sif-btns"><button type="button" class="tb-btn tb-btn-escuchar" data-acc="escuchar" data-modulo="' + modulo + '">🔊 Escuchar</button>' +
           '<button type="button" class="tb-btn tb-btn-ia" data-acc="ia" data-modulo="' + modulo + '">✨ Pedile una opinión con IA</button></div></div>' +
-        (lista.length ? '<ul class="tb-lect">' + lista.map(function (x) { return '<li class="' + x.tono + '"><span>' + icono[x.tono] + '</span><div>' + x.texto + '</div></li>'; }).join('') + '</ul>'
+        (lista.length ? '<ul class="tb-lect">' + lista.map(function (x, i) { return '<li class="' + x.tono + '" data-i="' + i + '"><span>' + icono[x.tono] + '</span><div>' + x.texto + '</div></li>'; }).join('') + '</ul>'
           : '<div class="cq-empty">Todavía no hay datos suficientes para leer.</div>') +
         '<div class="tb-ia" id="tb-ia-' + modulo + '">' + (op ? opinionHtml(op) : '') + '</div>' +
         '<div class="tb-sif-nota">Comparo cada indicador con toda la historia cargada: el promedio de los 6 meses anteriores, el mismo mes del año pasado, las tendencias y los récords.' + (opts.nota ? ' ' + opts.nota : '') + '</div>' +
@@ -607,7 +609,7 @@
       mods.forEach(function (m) {
         var d = S.cache[m.id];
         if (!d || d.error) { tarjetas += kpiCard({ c: GRIS, ico: m.icono, lab: m.label, val: '—', sub: d && d.error ? esc(d.error) : 'sin datos', ir: m.id, irLabel: m.label }); return; }
-        (d.lecturas || []).forEach(function (x) { todas.push({ tono: x.tono, peso: x.peso, texto: '<span class="tb-mod">' + m.icono + ' ' + m.label + '</span> ' + x.texto }); });
+        (d.lecturas || []).forEach(function (x) { todas.push({ ver: 'm:' + m.id, tono: x.tono, peso: x.peso, texto: '<span class="tb-mod">' + m.icono + ' ' + m.label + '</span> ' + x.texto }); });
         var mal = (d.lecturas || []).filter(function (x) { return x.tono === 'mal'; }).length;
         var sem = mal >= 2 ? MAL : (mal ? AMBAR : OK);
         var val, sub;
@@ -661,6 +663,7 @@
     }).join('');
   }
   function ir(id) {
+    detener();
     if (!MODULOS.some(function (m) { return m.id === id && visible(m); })) id = 'resumen';
     S.actual = id;
     armarSubmenu();
@@ -671,10 +674,143 @@
     var t = e.target.closest('[data-ir]'); if (t) { ir(t.dataset.ir); return; }
     var b = e.target.closest('[data-acc]'); if (!b) return;
     if (b.dataset.acc === 'recargar') { S.cache = {}; S.opiniones = {}; ir(S.actual); }
-    if (b.dataset.acc === 'escuchar') { var txt = (S.leer || {})[b.dataset.modulo]; if (txt && window.AyudaAnafer && window.AyudaAnafer.hablar) window.AyudaAnafer.hablar(txt); else G.showToast('Este navegador no puede hablar.'); }
+    if (b.dataset.acc === 'escuchar') { if (N && N.modulo === b.dataset.modulo) detener(); else explicar(b.dataset.modulo); }
     if (b.dataset.acc === 'ia') pedirIA(b.dataset.modulo, b);
   });
 
+
+  // =====================================================================
+  // Sifoncito explica: sale del recuadro, camina por la pantalla y señala
+  // con su puntero cada cosa que va diciendo (el gráfico, la tarjeta o la
+  // línea de la lectura). "⏹ Detener" lo corta en cualquier momento.
+  // =====================================================================
+  var N = null; // explicación en curso
+  var esperaPaso = function (txt) { return Math.max(2600, textoPlano(txt).length * 58); };
+  function buscarVer(ver) {
+    if (!ver) return null;
+    var cont = $('tb-contenido'), tipo = ver.slice(0, 2), val = ver.slice(2), hit = null;
+    var empieza = function (el) { return (el.textContent || '').trim().toLowerCase().indexOf(val.toLowerCase()) === 0; };
+    if (tipo === 'p:') { Array.prototype.some.call(cont.querySelectorAll('.cq-panel h2'), function (h) { if (empieza(h)) { hit = { caja: h.closest('.cq-panel'), ancla: h }; return true; } }); }
+    if (tipo === 'k:') { Array.prototype.some.call(cont.querySelectorAll('.cq-kpi .lab'), function (l) { if (empieza(l)) { hit = { caja: l.closest('.cq-kpi'), ancla: l }; return true; } }); }
+    if (tipo === 'm:') { var k = cont.querySelector('.cq-kpi[data-ir="' + val + '"]'); if (k) hit = { caja: k, ancla: k.querySelector('.lab') || k }; }
+    return hit && hit.caja.offsetParent ? hit : null;
+  }
+  function rectTexto(el) {
+    try { var r = document.createRange(); r.selectNodeContents(el); var b = r.getBoundingClientRect(); if (b.width) return b; } catch (e) {}
+    return el.getBoundingClientRect();
+  }
+  function botonEscuchar(modulo, hablando) {
+    Array.prototype.forEach.call(document.querySelectorAll('.tb-btn-escuchar'), function (b) {
+      var on = hablando && b.dataset.modulo === modulo;
+      b.textContent = on ? '⏹ Detener' : '🔊 Escuchar';
+      b.classList.toggle('tb-btn-on', on);
+    });
+  }
+  function limpiarMarcas() {
+    Array.prototype.forEach.call(document.querySelectorAll('.tb-leyendo, .tb-senalado'), function (el) { el.classList.remove('tb-leyendo', 'tb-senalado'); });
+  }
+  // Lleva al muñeco a señalar "ancla": la punta del puntero queda pegada al texto.
+  function ubicar(n, ancla, conGlobo) {
+    var a = n.actor, r = rectTexto(ancla), W = a.offsetWidth, sx = window.scrollX, sy = window.scrollY;
+    var punta = { x: W * 151 / 120, y: W * 83.5 / 120 };          // punta del puntero dentro del dibujo
+    var izq = r.left - punta.x - 6 >= 4;                              // ¿entra a la izquierda del texto?
+    var x = izq ? r.left - punta.x - 6 : r.right + punta.x - W + 6;
+    x = Math.min(Math.max(4, x), document.documentElement.clientWidth - W - 4);
+    var y = r.top + r.height / 2 - punta.y;
+    var antes = parseFloat(a.style.left) || 0;
+    a.classList.toggle('espejo', !izq);
+    a.classList.toggle('a-la-izq', x + sx < antes);
+    a.classList.remove('camina'); void a.offsetWidth; a.classList.add('camina');
+    a.style.left = (x + sx) + 'px'; a.style.top = (y + sy) + 'px';
+    a.classList.remove('con-globo');
+    n.globo = conGlobo ? x : null; // el globo aparece cuando llega, no mientras camina
+  }
+  function mostrarGlobo(n) {
+    if (n.globo == null) return;
+    var a = n.actor, x = n.globo, W = a.offsetWidth;
+    a.classList.add('con-globo');
+    // arriba de la cabeza, sin salirse de la pantalla y con la colita apuntándole
+    var g = a.querySelector('.tb-globo'), vw = document.documentElement.clientWidth;
+    var gw = Math.min(g.offsetWidth || 320, vw - 16);
+    var off = Math.min(Math.max(8 - x, W / 2 - 40), vw - 8 - x - gw);
+    g.style.left = off + 'px'; g.style.setProperty('--cola', Math.min(Math.max(W / 2 - off - 8, 14), gw - 30) + 'px');
+  }
+  function explicar(modulo) {
+    detener();
+    var info = (S.leer || {})[modulo], card = document.querySelector('.tb-sif[data-modulo="' + modulo + '"]');
+    if (!info || !card) return;
+    var pasos = [{ texto: /[.!?]$/.test(info.estado) ? info.estado : info.estado + '.', li: null, ancla: card.querySelector('.tb-sif-estado') }].concat(info.items.map(function (x, i) {
+      return { texto: x.texto, ver: x.ver, li: card.querySelector('.tb-lect li[data-i="' + i + '"]') };
+    }));
+    var A = window.AyudaAnafer;
+    var actor = document.createElement('div');
+    actor.className = 'tb-actor'; actor.setAttribute('aria-hidden', 'true');
+    actor.innerHTML = (A && A.sifon ? A.sifon('tableros', 70, { senala: true }) : '') + '<div class="tb-globo"></div>';
+    document.body.appendChild(actor);
+    // arranca desde donde está el Sifoncito quieto del recuadro
+    var av = card.querySelector('.tb-sif-av').getBoundingClientRect();
+    actor.style.left = (av.left + window.scrollX + 10) + 'px'; actor.style.top = (av.top + window.scrollY + 10) + 'px';
+    card.classList.add('tb-narrando');
+    N = { modulo: modulo, card: card, actor: actor, pasos: pasos, i: -1, t: null };
+    botonEscuchar(modulo, true);
+    N.t = setTimeout(siguiente, 60);
+  }
+  function siguiente() {
+    var n = N; if (!n) return;
+    if (!document.body.contains(n.card) || !n.card.offsetParent) { detener(); return; }
+    n.i++;
+    limpiarMarcas();
+    if (n.i >= n.pasos.length) { // vuelve a su lugar y se queda quieto
+      var av = n.card.querySelector('.tb-sif-av');
+      n.card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      var r = av.getBoundingClientRect();
+      n.actor.classList.remove('espejo', 'con-globo', 'habla'); n.actor.classList.add('camina', 'volviendo');
+      n.actor.style.left = (r.left + window.scrollX + 10) + 'px'; n.actor.style.top = (r.top + window.scrollY + 10) + 'px';
+      n.t = setTimeout(detener, 900);
+      return;
+    }
+    var p = n.pasos[n.i], v = buscarVer(p.ver);
+    if (p.li) p.li.classList.add('tb-leyendo');
+    var caja = v ? v.caja : (p.li || p.ancla), ancla = v ? v.ancla : (p.li ? (p.li.lastElementChild || p.li) : p.ancla);
+    if (v) v.caja.classList.add('tb-senalado');
+    var g = n.actor.querySelector('.tb-globo');
+    g.innerHTML = v ? p.texto : '';
+    var r = caja.getBoundingClientRect();
+    var fuera = r.top < 70 || r.bottom > window.innerHeight - 20;
+    if (fuera) caja.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    n.t = setTimeout(function () {
+      if (N !== n) return;
+      ubicar(n, ancla, !!v);
+      n.t = setTimeout(function () { hablarPaso(n, p); }, 700);
+    }, fuera ? 520 : 40);
+  }
+  function hablarPaso(n, p) {
+    if (N !== n) return;
+    mostrarGlobo(n);
+    n.actor.classList.add('habla');
+    var hecho = function (ok) {
+      if (N !== n) return;
+      n.actor.classList.remove('habla');
+      if (!ok) { detener(); return; }
+      n.t = setTimeout(siguiente, 450);
+    };
+    var A = window.AyudaAnafer;
+    var habla = A && A.hablar ? A.hablar(p.texto, hecho) : false;
+    if (!habla) n.t = setTimeout(function () { hecho(true); }, esperaPaso(p.texto)); // sin voz: lo muestra el tiempo de leerlo
+  }
+  function detener() {
+    var n = N; if (!n) return;
+    N = null;
+    clearTimeout(n.t);
+    if (window.AyudaAnafer && window.AyudaAnafer.callar) window.AyudaAnafer.callar();
+    limpiarMarcas();
+    n.card.classList.remove('tb-narrando');
+    n.actor.classList.add('chau');
+    setTimeout(function () { if (n.actor.parentNode) n.actor.parentNode.removeChild(n.actor); }, 260);
+    botonEscuchar(n.modulo, false);
+  }
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && N) detener(); });
+
   function mostrar() { ir(S.actual); }
-  window.Tableros = { mostrar: mostrar, ir: ir, _leerSerie: leerSerie, _serie: serie };
+  window.Tableros = { mostrar: mostrar, ir: ir, detener: detener, _leerSerie: leerSerie, _serie: serie };
 })();
