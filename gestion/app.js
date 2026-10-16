@@ -202,6 +202,7 @@
     {id:'reclamos',   label:'Reclamos de PT'},
     {id:'ncpac',      label:'NC y PAC'},
     {id:'calidash',   label:'Indicadores de calidad'},
+    {id:'tableros',   label:'Dashboards (todos los módulos)'},
     {id:'comercial',  label:'Tablero comercial', noTab:true},
     {id:'rrhh',       label:'Panel RR.HH.', noTab:true}
   ];
@@ -219,6 +220,9 @@
     {id:'calidad', label:'Calidad', icon:'🔬', color:'#7c3aed',
      desc:'Reclamos de producto terminado (RG-0802), no conformidades y planes de acción (RG-0801) e indicadores.',
      tabs:['reclamos','ncpac','calidash']},
+    {id:'tableros', label:'Dashboards', icon:'📈', color:'#0d9488',
+     desc:'Los tableros de todos los módulos en un solo lugar, con la lectura de Sifoncito sobre lo que está pasando en la empresa.',
+     tabs:['tableros']},
     {id:'comercial', label:'Comercial', icon:'📊', color:'#2ba9e0', href:'comercial-dashboard.html',
      desc:'Cumplimiento presupuestario, facturación por unidad de negocio, clientes y altas/bajas.',
      tabs:['comercial']},
@@ -260,7 +264,7 @@
   function isLoggedIn(){ return !!currentRole(); }
   // Pestañas que se agregaron después de crear los perfiles: si el perfil no
   // dice nada, la ve (y edita) quien administra accesos; el resto, no.
-  var PERMISOS_NUEVOS = ['comercial','rrhh','reclamos','ncpac','calidash'];
+  var PERMISOS_NUEVOS = ['comercial','rrhh','reclamos','ncpac','calidash','tableros'];
   function tabPermiso(tabId){
     var r = currentRole();
     if(!r) return 'oculta';
@@ -806,10 +810,12 @@
       document.getElementById('view-'+c).hidden = (v!==c);
       document.getElementById('tab-'+c).classList.toggle('active', v===c);
     });
-    if((VISTAS_CALIDAD||[]).indexOf(v)!==-1 && window.Calidad) window.Calidad.mostrar(v);
+    if(v==='tableros'){ if(window.Tableros) window.Tableros.mostrar(); }
+    else if((VISTAS_CALIDAD||[]).indexOf(v)!==-1 && window.Calidad) window.Calidad.mostrar(v);
     if(v==='day') fetchDay(state.day);
     if(v==='dashboard') fetchDashboard();
     actualizarMenuSub(v);
+    setTimeout(marcarFiltros, 0);
   }
   document.getElementById('tab-grid').addEventListener('click', function(){ setView('grid'); });
   document.getElementById('tab-day').addEventListener('click', function(){ setView('day'); });
@@ -820,7 +826,7 @@
   document.getElementById('tab-compras').addEventListener('click', function(){ setView('compras'); });
   document.getElementById('tab-pagos').addEventListener('click', function(){ setView('pagos'); });
   document.getElementById('tab-tesoreria').addEventListener('click', function(){ setView('tesoreria'); });
-  var VISTAS_CALIDAD = ['reclamos','ncpac','calidash'];
+  var VISTAS_CALIDAD = ['reclamos','ncpac','calidash','tableros'];
   VISTAS_CALIDAD.forEach(function(c){ document.getElementById('tab-'+c).addEventListener('click', function(){ setView(c); }); });
 
   // ---------- Rendering: grid view ----------
@@ -4679,13 +4685,13 @@
     mostrarSubtab(view, subtabActual(view));
   }
   // El submenú de cada pestaña vive en la segunda fila del menú (estilo RR.HH.).
-  ['compras','pagos','tesoreria'].forEach(function(v){
+  ['compras','pagos','tesoreria','tableros'].forEach(function(v){
     var bar = document.getElementById('subtabs-'+v);
     if(bar){ bar.hidden = true; document.getElementById('menu-sub').appendChild(bar); }
   });
   function actualizarMenuSub(v){
     var algun = false;
-    ['compras','pagos','tesoreria'].forEach(function(x){
+    ['compras','pagos','tesoreria','tableros'].forEach(function(x){
       var bar = document.getElementById('subtabs-'+x);
       if(!bar) return;
       bar.hidden = (x!==v) || !bar.children.length;
@@ -6581,6 +6587,23 @@
   }
   function listaNatural(xs){ return xs.length<=1 ? (xs[0]||'') : xs.slice(0,-1).join(', ')+' y '+xs[xs.length-1]; }
 
+  // ---------- Filtros: marcar los que están en uso ----------
+  // Un filtro "en uso" (un desplegable que no está en su primera opción, o
+  // una búsqueda con texto) se tiñe con el color del área; en las barras de
+  // filtros aparece "✕ Limpiar" solo si hay alguno en uso.
+  var SEL_FILTROS = '.toolbar select.scope-select, .compras-section-head select.scope-select, .fbar select.scope-select, .prov-search';
+  function filtroActivo(el){ return el.tagName==='SELECT' ? el.selectedIndex>0 : !!String(el.value||'').trim(); }
+  function marcarFiltros(){
+    Array.prototype.forEach.call(document.querySelectorAll(SEL_FILTROS), function(el){ el.classList.toggle('f-activo', filtroActivo(el)); });
+    Array.prototype.forEach.call(document.querySelectorAll('.fbar-limpiar[data-fbar]'), function(b){
+      var bar = document.getElementById(b.dataset.fbar);
+      b.hidden = !bar || !Array.prototype.some.call(bar.querySelectorAll('select.scope-select, .prov-search'), filtroActivo);
+    });
+  }
+  ['change','input'].forEach(function(ev){
+    document.addEventListener(ev, function(e){ if(e.target && e.target.matches && e.target.matches(SEL_FILTROS)) marcarFiltros(); }, true);
+  });
+
   // ---------- API para los módulos que viven en otro archivo (calidad.js) ----------
   window.GestionAnafer = {
     sb: function(){ return state.sb; },
@@ -6593,7 +6616,13 @@
     pedirMotivo: function(titulo, detalle, cb){ pedirAnulacion(titulo, detalle, cb, true); },
     anulacionTexto: anulacionTexto,
     memListo: memListo, memPuede: memPuede, memGuardar: memGuardar, sumarDias: sumarDias, difDias: difDias,
-    sugerir: sifSugerir, conMemoria: conMemoria, cerrarSugerenciaSi: sifCerrarSi
+    sugerir: sifSugerir, conMemoria: conMemoria, cerrarSugerenciaSi: sifCerrarSi, marcarFiltros: marcarFiltros,
+    // Para los Dashboards: lo que Gestión ya tiene cargado y cómo leerlo
+    datos: function(){ return { facturas: state.facturas, ordenesPago: state.ordenesPago, proveedores: state.proveedores, cuentas: state.cuentas,
+      movimientos: state.movimientos, cheques: state.cheques, routes: state.routes, trucks: state.trucks, branches: state.branches, facturasCargadas: !!state.facturasCargadas }; },
+    esAnulado: esAnulado, facturaLineas: facturaLineas, ccRaiz: ccRaiz, ccNombre: ccNombre, ccRuta: ccRuta, proveedorNombre: proveedorNombre,
+    labelForRoute: labelForRoute, branchLabel: branchLabel, cuentaSaldoActual: cuentaSaldoActual, cuentaSaldoProyectado: cuentaSaldoProyectado,
+    fmtMoney: fmtMoney, AREAS: AREAS
   };
 
   // ---------- 1) Viajes y envíos que se repiten ----------

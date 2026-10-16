@@ -42,6 +42,12 @@ test("Calidad aparece como área nueva para el administrador y muestra los recla
   await expect(page.locator("#rq-count")).toHaveText("(4)");
   await page.fill("#rq-f-buscar", "350");
   await expect(page.locator("#rq-body tr")).toHaveCount(1);
+  await expect(page.locator("#rq-f-buscar")).toHaveClass(/f-activo/);
+  await page.click('[data-limpiar="rq"]');
+  await expect(page.locator("#rq-f-buscar")).toHaveValue("");
+  await expect(page.locator("#rq-body tr")).toHaveCount(4);
+  await expect(page.locator('[data-limpiar="rq"]')).toBeHidden();
+  await page.fill("#rq-f-buscar", "350");
   // volver al inicio no deja la pantalla de Calidad abierta
   await page.click("#home-btn");
   await expect(page.locator("#view-reclamos")).toBeHidden();

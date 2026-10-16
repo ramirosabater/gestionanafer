@@ -167,6 +167,7 @@
     return '<span class="cal-badge ' + cls + '">' + esc(r.estado || 'Abierto') + '</span>';
   }
   function renderReclamos() {
+    setTimeout(G.marcarFiltros, 0);
     var tb = $('rq-body');
     if (!S.cargado || S.sinTablas) { mensajeSinTablas(tb, 12); return; }
     var l = reclamosFiltrados();
@@ -310,6 +311,7 @@
     return '<span class="cal-badge ' + cls + '">' + esc(p.estado || 'Abierta') + '</span>';
   }
   function renderPacs() {
+    setTimeout(G.marcarFiltros, 0);
     var tb = $('pq-body');
     if (!S.cargado || S.sinTablas) { mensajeSinTablas(tb, 11); return; }
     var l = pacsFiltradas();
@@ -726,9 +728,18 @@
       G.sugerir(G.conMemoria({ id: 'cal-rq-abiertos', titulo: 'Sifoncito: reclamos sin cerrar',
         texto: 'Hay <b>' + ab.length + ' reclamo' + (ab.length > 1 ? 's' : '') + '</b> abierto' + (ab.length > 1 ? 's' : '') + ' hace más de una semana (el más viejo, Nº ' + ab.sort(function (a, b) { return a.fecha.localeCompare(b.fecha); })[0].numero + ' del ' + fmtFecha(ab[0].fecha) + '). ¿Los vemos?',
         textoAhoraNo: 'Mañana me recordás', textoNunca: 'No me avises más de esto',
-        botones: [{ texto: 'Ver los abiertos', pri: true, accion: function () { F.estado = 'Abierto'; F.anio = Number(ab[0].anio || anioDe(ab[0].fecha)); F.mes = ''; armarFiltrosReclamos(); renderReclamos(); } }] }, 'cal-rq-abiertos', 1));
+        botones: [{ texto: 'Ver los abiertos', pri: true, accion: function () { F.estado = 'Abierto'; F.anio = Number(ab[0].anio || anioDe(ab[0].fecha)); F.mes = ''; armarFiltrosReclamos(); renderReclamos(); G.marcarFiltros(); } }] }, 'cal-rq-abiertos', 1));
     });
   }
+
+  // ✕ Limpiar: vuelve a los filtros de entrada
+  document.querySelectorAll('.fbar-limpiar[data-limpiar]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (b.dataset.limpiar === 'rq') { F = { anio: null, mes: '', producto: '', desvio: '', estado: '', buscar: '' }; $('rq-f-buscar').value = ''; armarFiltrosReclamos(); renderReclamos(); }
+      if (b.dataset.limpiar === 'pq') { FP = { anio: null, estado: '__pendientes', clasif: '', proceso: '', origen: '', buscar: '' }; $('pq-f-buscar').value = ''; armarFiltrosPac(); renderPacs(); }
+      G.marcarFiltros();
+    });
+  });
 
   // ---------------- Entrada a cada pestaña ----------------
   function mostrar(v) {
@@ -738,6 +749,7 @@
       if (G.vista() !== v) return;
       if (v === 'reclamos') { armarFiltrosReclamos(); renderReclamos(); if (!S.sinTablas) revisarReclamosAbiertos(); }
       if (v === 'ncpac') { armarFiltrosPac(); renderPacs(); if (!S.sinTablas) revisarPacsPendientes(); }
+      G.marcarFiltros();
       if (v === 'calidash') { armarFiltrosDash(); renderDash(); }
     });
   }

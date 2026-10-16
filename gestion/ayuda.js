@@ -120,6 +120,16 @@
         { t: "Si sacás una opción de una lista, los registros que ya la tenían no cambian." },
       ] },
     ],
+    tableros: [
+      { titulo: "Usar los Dashboards", pasos: [
+        { t: "Acá están los tableros de todos los módulos. Arriba elegís <b>Resumen</b> o el tablero de cada área.", foco: "#subtabs-tableros" },
+        { t: "En el <b>Resumen</b> hay una tarjeta por módulo con su número clave y cuántas alertas tiene. Tocá una tarjeta para ir a su tablero." },
+        { t: "En cada tablero leo los indicadores y los comparo con <b>toda la historia</b>: el promedio de los 6 meses anteriores, el mismo mes del año pasado, las tendencias y los récords." },
+        { t: "Arriba ves mi conclusión: ✅ lo que va bien, ⚠️ lo que conviene mirar e ℹ️ el contexto. Con <b>🔊 Escuchar</b> te lo leo en voz alta." },
+        { t: "Con <b>✨ Pedile una opinión con IA</b> escribo un análisis completo de lo que está pasando, con lo bueno, lo que preocupa y qué haría. Queda guardado con la fecha." },
+        { t: "El mes en curso aparece más claro en los gráficos porque todavía no terminó. <b>↻ Actualizar</b> vuelve a leer los datos." },
+      ] },
+    ],
     comercial: [
       { titulo: "Leer el tablero comercial", pasos: [
         { t: "Arriba elegís qué mirar: <b>$ Facturación</b> o <b>Unidades</b>.", foco: "#medida" },
@@ -153,7 +163,7 @@
       ] },
     ],
   };
-  var NOMBRES = { inicio: "Inicio", logistica: "Logística", administracion: "Administración", calidad: "Calidad", comercial: "Comercial", rrhh: "Recursos Humanos" };
+  var NOMBRES = { inicio: "Inicio", logistica: "Logística", administracion: "Administración", calidad: "Calidad", tableros: "Dashboards", comercial: "Comercial", rrhh: "Recursos Humanos" };
 
   // ---------------- El sifón ----------------
   var sifN = 0;
@@ -202,7 +212,14 @@
       // lupa en la mano
       '<g transform="translate(92 110)"><path d="M17 18 L28 31" stroke="#7a4a24" stroke-width="5" stroke-linecap="round"/><circle cx="10" cy="10" r="9.5" fill="rgba(190,225,255,.55)" stroke="#5b6670" stroke-width="3"/>' +
       '<path d="M5 7 Q8 3 12 3" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></g>';
-    var saluda = !(t === "administracion" || t === "comercial" || t === "rrhh" || t === "calidad");
+    if (t === "tableros") accesorios =
+      // saco azul con corbata y un puntero señalando un gráfico
+      '<path d="M32 112 Q32 103 44 101 L54 101 L50 170 L36 170 Q32 170 32 164 Z" fill="#1e3a7b"/>' +
+      '<path d="M88 112 Q88 103 76 101 L66 101 L70 170 L84 170 Q88 170 88 164 Z" fill="#1e3a7b"/>' +
+      '<path d="M56 104 L64 104 L62 112 L65 140 L60 147 L55 140 L58 112 Z" fill="#0d9488"/>' +
+      '<g transform="translate(90 98)"><rect x="0" y="0" width="28" height="22" rx="3" fill="#fff" stroke="#9aa3ad" stroke-width="1.5"/>' +
+      '<rect x="5" y="12" width="4" height="6" fill="#2ba9e0"/><rect x="12" y="8" width="4" height="10" fill="#0d9488"/><rect x="19" y="4" width="4" height="14" fill="#e1251b"/></g>';
+    var saluda = !(t === "administracion" || t === "comercial" || t === "rrhh" || t === "calidad" || t === "tableros");
     return '<svg class="sif-svg" viewBox="0 0 120 190" width="' + (tam || 110) + '" height="' + Math.round((tam || 110) * 190 / 120) + '" aria-hidden="true">' +
       '<defs><linearGradient id="' + u + 'M" x1="0" x2="1"><stop offset="0" stop-color="#8e969e"/><stop offset=".45" stop-color="#eef1f4"/><stop offset="1" stop-color="#7d858d"/></linearGradient>' +
       '<linearGradient id="' + u + 'V" x1="0" x2="1"><stop offset="0" stop-color="#7fc3dc"/><stop offset=".35" stop-color="#cdeef8"/><stop offset="1" stop-color="#5fa9c6"/></linearGradient></defs>' +
@@ -555,7 +572,20 @@
     document.body.appendChild(sugEl);
   }
 
-  window.AyudaAnafer = { sifon: sifon, circuitos: CIRCUITOS, abrir: function () { abrir(); }, sugerir: sugerir,
+  // Leer un texto en voz alta a pedido (botón 🔊 de los Dashboards), aunque la voz automática esté apagada.
+  function hablar(texto) {
+    if (!hayVoz) return false;
+    callar();
+    try {
+      var u = new SpeechSynthesisUtterance(texto);
+      if (vozElegida) u.voice = vozElegida;
+      u.lang = vozElegida ? vozElegida.lang : "es-AR";
+      u.rate = lento ? 0.82 : 0.95; u.pitch = 1.15;
+      setTimeout(function () { window.speechSynthesis.speak(u); }, 120);
+      return true;
+    } catch (e) { return false; }
+  }
+  window.AyudaAnafer = { sifon: sifon, circuitos: CIRCUITOS, abrir: function () { abrir(); }, sugerir: sugerir, hablar: hablar, callar: callar,
     cerrarSugerencia: function () { if (sugActual) cerrarSug(); }, sugerenciaActual: function () { return sugActual ? sugActual.id : null; } };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", iniciar); else iniciar();
 })();

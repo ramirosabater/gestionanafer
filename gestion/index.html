@@ -183,8 +183,8 @@
 
   .toolbar{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px;}
   .monthnav{display:flex; align-items:center; gap:10px;}
-  .monthnav button{width:32px; height:32px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--ink); font-size:15px; cursor:pointer;}
-  .monthnav button:hover{border-color:var(--border-strong);}
+  .monthnav button{width:36px; height:36px; border-radius:10px; border:1px solid var(--menu-line); background:var(--surface); color:var(--menu-ink2); font-size:16px; cursor:pointer; box-shadow:0 1px 2px rgba(31,45,56,.05);}
+  .monthnav button:hover{border-color:var(--area-color, #223c7e); color:var(--area-color, #223c7e);}
   .monthnav .label{font-size:16px; font-weight:600; min-width:190px; text-align:center; text-transform:capitalize;}
   .btn{font-family:inherit; font-size:13px; font-weight:600; border-radius:8px; border:1px solid var(--border-strong); background:var(--surface); color:var(--ink); padding:8px 13px; cursor:pointer; display:inline-flex; align-items:center; gap:7px;}
   .btn:hover{border-color:var(--accent);}
@@ -468,8 +468,8 @@
   .settings-nav .scatbtn.active{background:var(--menu-navy) !important; color:#fff !important; box-shadow:none !important;}
 
   .dash-toolbar{display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:14px; flex-wrap:wrap;}
-  .dash-toolbar label{font-size:12.5px; color:var(--ink-2);}
-  .dash-toolbar input[type=date]{font-family:inherit; font-size:13px; border:1px solid var(--border); background:var(--surface); color:var(--ink); border-radius:8px; padding:6px 9px;}
+  .dash-toolbar label{font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--muted);}
+
   .dash-toolbar .dash-sep{color:var(--muted); font-size:12.5px;}
   .dash-loading{font-size:12.5px; color:var(--ink-2); margin-bottom:12px;}
 
@@ -521,7 +521,36 @@
   .combo{position:relative;}
   /* Imputaciones contables por proveedor */
   #proveedor-modal{max-height:calc(100vh - 32px); overflow-y:auto;}
-  .prov-search{font-family:inherit; font-size:13.5px; border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:8px; padding:7px 10px; width:260px; max-width:100%;}
+  /* ---- Filtros: un solo diseño para todos los módulos ---- */
+  .prov-search, :is(.toolbar, .compras-section-head, .fbar, .dash-toolbar) :is(select.scope-select, input.scope-select, input[type=date], input[type=month]){
+    font-family:inherit; font-size:13.5px; font-weight:500; color:var(--ink); height:38px; box-sizing:border-box;
+    background-color:var(--surface); border:1px solid var(--menu-line); border-radius:10px; padding:0 12px;
+    box-shadow:0 1px 2px rgba(31,45,56,.05); outline:none; transition:border-color .15s, box-shadow .15s, background-color .15s; max-width:100%;}
+  :is(.toolbar, .compras-section-head, .fbar) select.scope-select{
+    appearance:none; -webkit-appearance:none; padding-right:34px; min-width:140px; cursor:pointer;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1.5l5 5 5-5' stroke='%235c6b78' stroke-width='1.7' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 12px center;}
+  .prov-search{width:260px; padding-left:36px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Ccircle cx='7' cy='7' r='5.2' stroke='%2394a1ab' stroke-width='1.8' fill='none'/%3E%3Cpath d='M11 11l3.5 3.5' stroke='%2394a1ab' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:12px center;}
+  .prov-search::placeholder{color:var(--muted); font-weight:400;}
+  :is(.prov-search, .toolbar .scope-select, .compras-section-head .scope-select, .fbar .scope-select, .dash-toolbar input):hover{border-color:color-mix(in srgb, var(--area-color, #223c7e) 35%, var(--menu-line));}
+  :is(.prov-search, .toolbar .scope-select, .compras-section-head .scope-select, .fbar .scope-select, .dash-toolbar input):focus{border-color:var(--area-color, #223c7e); box-shadow:0 0 0 3px color-mix(in srgb, var(--area-color, #223c7e) 18%, transparent);}
+  /* Filtro en uso: se tiñe con el color del área para que se note que está filtrando */
+  :is(.toolbar, .compras-section-head, .fbar) select.scope-select.f-activo, .prov-search.f-activo{border-color:color-mix(in srgb, var(--area-color, #223c7e) 55%, var(--menu-line));
+    background-color:color-mix(in srgb, var(--area-color, #223c7e) 7%, var(--surface)); color:var(--menu-navy); font-weight:600;}
+  .fbar{display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px 12px; background:var(--surface); border:1px solid var(--menu-line); border-radius:14px;
+    padding:12px 14px; margin:0 0 14px; box-shadow:0 1px 3px rgba(31,45,56,.05);}
+  .fbar-f{display:flex; flex-direction:column; gap:5px; min-width:0; margin:0;}
+  .fbar-f > span{font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); padding-left:2px;}
+  .fbar-f select.scope-select{min-width:130px; max-width:240px; text-overflow:ellipsis;}
+  .fbar-buscar{flex:1 1 170px;}
+  .fbar-buscar .prov-search{width:100%;}
+  .fbar-limpiar{height:38px; border:none; background:transparent; color:var(--muted); font-family:inherit; font-size:12.5px; font-weight:600; padding:0 10px; cursor:pointer; border-radius:10px;}
+  .fbar-limpiar:hover{color:var(--danger); background:color-mix(in srgb, var(--danger) 8%, transparent);}
+  .fbar-limpiar[hidden]{display:none;}
+  .cal-acciones{display:flex; gap:8px; align-items:center;}
+  @media (max-width:640px){ .fbar-f{flex:1 1 45%;} .fbar-f select.scope-select{min-width:0; width:100%;} .prov-search{width:100%;} }
   .prov-count{font-weight:500; text-transform:none; letter-spacing:0; color:var(--muted); font-size:12.5px; margin-left:4px;}
   .prov-wrap{max-height:62vh; overflow:auto;}
   .prov-more{padding:10px; font-size:12.5px; color:var(--muted); text-align:center;}
@@ -659,11 +688,46 @@
   .anulado-banner{margin:6px 0 10px; padding:8px 12px; border-radius:10px; font-size:13px; font-weight:600;
     background:color-mix(in srgb, var(--danger) 10%, var(--surface)); color:var(--danger); border:1px solid color-mix(in srgb, var(--danger) 35%, var(--surface));}
   #anular-overlay{z-index:60;}
+  /* ---------- Dashboards ---------- */
+  .tb-vbar{width:56%; max-width:46px; border-radius:5px 5px 0 0;}
+  #view-tableros .cq-vlab{white-space:nowrap; font-size:10.5px;}
+  .tb-vbar-sobre{position:absolute; bottom:0; left:50%; transform:translateX(-50%);}
+  .tb-vobj{position:absolute; left:8%; right:8%; border-top:2px dashed var(--cq-ink); z-index:1;}
+  .cq-kpi.tb-ir{cursor:pointer; transition:transform .15s, box-shadow .15s;}
+  .cq-kpi.tb-ir:hover{transform:translateY(-2px); box-shadow:0 10px 24px rgba(31,45,56,.12);}
+  .tb-kpis-resumen .val{font-size:22px;}
+  .tb-sif{display:flex; gap:16px; padding:18px 20px; margin:6px 0 16px; border-left:5px solid var(--c, #0d9488); align-items:flex-start;}
+  .tb-sif-bien{--c:#16a34a;} .tb-sif-aviso{--c:#d48f00;} .tb-sif-mal{--c:#e1251b;} .tb-sif-info{--c:#3456a8;}
+  .tb-sif-av{flex:none; width:92px;} .tb-sif-av .sif-svg{animation:sifFlota 4.5s ease-in-out infinite;}
+  .tb-sif-cuerpo{flex:1; min-width:0;}
+  .tb-sif-head{display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:flex-start; margin-bottom:8px;}
+  .tb-sif-tit{font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--cq-muted);}
+  .tb-sif-estado{font-size:18px; font-weight:800; color:var(--c); margin-top:2px;}
+  .tb-sif-btns{display:flex; gap:8px; flex-wrap:wrap;}
+  .tb-btn{font-family:inherit; font-size:12.5px; font-weight:700; border-radius:10px; padding:8px 12px; cursor:pointer; background:#fff; color:var(--cq-navy); border:1px solid var(--cq-line);}
+  .tb-btn:hover{border-color:var(--cq-navy);}
+  .tb-btn-ia{background:linear-gradient(115deg,#1e3a7b,#2c7fcf); color:#fff; border-color:transparent;}
+  .tb-btn-ia:hover{filter:brightness(1.08);} .tb-btn:disabled{opacity:.6; cursor:default;}
+  .tb-lect{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px;}
+  .tb-lect li{display:flex; gap:9px; align-items:flex-start; font-size:13.5px; line-height:1.45; padding:8px 10px; border-radius:10px; background:var(--cq-soft);}
+  .tb-lect li.mal{background:color-mix(in srgb, #e1251b 7%, #fff);} .tb-lect li.bien{background:color-mix(in srgb, #16a34a 7%, #fff);}
+  .tb-lect li > span{flex:none;}
+  .tb-mod{display:inline-block; font-size:11px; font-weight:700; color:var(--cq-ink2); background:#fff; border:1px solid var(--cq-line); border-radius:999px; padding:1px 8px; margin-right:4px;}
+  .tb-sif-nota{font-size:11px; color:var(--cq-muted); margin-top:10px;}
+  .tb-ia-box{margin-top:12px; border:1px solid color-mix(in srgb, #2c7fcf 30%, #fff); background:color-mix(in srgb, #2c7fcf 5%, #fff); border-radius:12px; padding:12px 14px; font-size:13.5px; line-height:1.5;}
+  .tb-ia-box h4{margin:10px 0 4px; font-size:13.5px; color:var(--cq-navy);} .tb-ia-box p{margin:4px 0;} .tb-ia-box ul{margin:4px 0; padding-left:20px;}
+  .tb-ia-tit{font-weight:800; color:var(--cq-navy); margin-bottom:4px;} .tb-ia-tit span{font-weight:500; font-size:11.5px; color:var(--cq-muted); margin-left:6px;}
+  .tb-ia-pensando{color:var(--cq-ink2); animation:ayudaPulsoTxt 1.4s ease-in-out infinite;}
+  @keyframes ayudaPulsoTxt{0%,100%{opacity:1}50%{opacity:.5}}
+  .tb-link{margin:-4px 0 16px; text-align:right;}
+  .tb-chip-claro{color:var(--cq-navy); background:#fff; border:1px solid var(--cq-line); text-decoration:none; display:inline-block;}
+  @media(max-width:640px){ .tb-sif{flex-direction:column;} .tb-sif-av{width:70px;} }
   /* ---------- Calidad ---------- */
   /* Tablero de Calidad: mismo estilo que los tableros de Comercial y RR.HH. */
   .cq{--cq-navy:#223c7e;--cq-ink:#1f2d38;--cq-ink2:#5c6b78;--cq-muted:#94a1ab;--cq-line:#e3e8ed;--cq-soft:#f1f4f7;--cq-track:#eef1f4;color:var(--cq-ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
   .cq-card{background:#fff;border:1px solid var(--cq-line);border-radius:16px;box-shadow:0 6px 20px rgba(31,45,56,.06);}
   .cq-hero{background:linear-gradient(115deg,#1e3a7b 0%,#2c4f9e 55%,#2c7fcf 100%);color:#fff;border-radius:18px;padding:20px 22px 18px;box-shadow:0 10px 28px rgba(34,60,126,.28);margin:4px 0 14px;}
+  .cq-hero-top{display:flex; align-items:center; gap:14px; flex-wrap:wrap;} .cq-hero-title{flex:1; min-width:200px;}
   .cq-hero h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-.01em;color:#fff;}
   .cq-hero p{margin:3px 0 0;font-size:13px;color:rgba(255,255,255,.78);}
   .cq-filters{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:16px;}
@@ -729,7 +793,6 @@
   @media(max-width:980px){ .cq-kpis{grid-template-columns:repeat(2,1fr);} .cq-g32,.cq-g11{grid-template-columns:1fr;} }
   @media(max-width:640px){ .cq-hero{padding:16px;} .cq-hero h1{font-size:20px;} .cq-hf{flex:1 1 45%;} .cq-hf select{width:100%;min-width:0;} .cq-kpi{padding:12px 13px;} .cq-kpi .val{font-size:20px;} .cq-panel{padding:14px;} .cq-hrow{grid-template-columns:minmax(70px,110px) 1fr auto;} }
   .cal-filtros{display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:flex-end;}
-  .cal-filtros .scope-select{max-width:170px;}
   .cal-wrap{max-height:calc(100vh - 290px); overflow:auto;}
   .cal-table th{position:sticky; top:0; z-index:1;}
   .cal-table td{font-size:12.5px;}
@@ -826,6 +889,7 @@
     <button class="viewtab" id="tab-reclamos"><span class="vt-ico" aria-hidden="true">🧴</span>Reclamos de PT</button>
     <button class="viewtab" id="tab-ncpac"><span class="vt-ico" aria-hidden="true">📋</span>NC y PAC</button>
     <button class="viewtab" id="tab-calidash"><span class="vt-ico" aria-hidden="true">📈</span>Indicadores</button>
+    <button class="viewtab" id="tab-tableros"><span class="vt-ico" aria-hidden="true">📈</span>Dashboards</button>
   </div>
   <div class="menu-sub" id="menu-sub" hidden></div>
   </div>
@@ -1101,7 +1165,7 @@
     <div class="compras-section-head">
       <h3>Órdenes de compra</h3>
       <div style="display:flex; gap:8px; align-items:center;">
-        <select id="oc-filter-estado" class="scope-select" style="max-width:170px;">
+        <select id="oc-filter-estado" class="scope-select">
           <option value="">Todos los estados</option>
           <option value="pendiente">Pendiente</option>
           <option value="aprobada">Aprobada</option>
@@ -1167,7 +1231,7 @@
     <div class="compras-section-head">
       <h3>Facturas</h3>
       <div style="display:flex; gap:8px; align-items:center;">
-        <select id="factura-filter-estado" class="scope-select" style="max-width:170px;">
+        <select id="factura-filter-estado" class="scope-select">
           <option value="">Todos los estados</option>
           <option value="pendiente">Pendiente</option>
           <option value="pagada">Pagada</option>
@@ -1188,7 +1252,7 @@
     <div class="compras-section-head">
       <h3>Órdenes de pago</h3>
       <div style="display:flex; gap:8px; align-items:center;">
-        <select id="pago-filter-estado" class="scope-select" style="max-width:170px;">
+        <select id="pago-filter-estado" class="scope-select">
           <option value="">Todos los estados</option>
           <option value="pendiente">Pendiente</option>
           <option value="pagada">Pagada</option>
@@ -1209,7 +1273,7 @@
     <div class="compras-section-head">
       <h3>Retenciones practicadas <span class="prov-count" id="ret-resumen"></span></h3>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <input type="month" id="ret-mes" class="scope-select" style="max-width:170px;">
+        <input type="month" id="ret-mes" class="scope-select">
         <button class="btn" id="ret-csv">Descargar CSV</button>
       </div>
     </div>
@@ -1252,7 +1316,7 @@
     <div class="compras-section-head">
       <h3>Cartera de cheques <span class="prov-count" id="cheques-resumen"></span></h3>
       <div style="display:flex; gap:8px; align-items:center;">
-        <select id="cheque-filter-estado" class="scope-select" style="max-width:190px;">
+        <select id="cheque-filter-estado" class="scope-select">
           <option value="cartera">En cartera</option>
           <option value="">Todos</option>
           <option value="depositado">Depositados</option>
@@ -1276,7 +1340,7 @@
     <div class="compras-section-head">
       <h3>Movimientos</h3>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <select id="mov-filter-cuenta" class="scope-select" style="max-width:200px;">
+        <select id="mov-filter-cuenta" class="scope-select">
           <option value="">Todas las cuentas</option>
         </select>
         <button class="btn primary edit-action" id="new-entrada-btn">+ Entrada</button>
@@ -1299,6 +1363,12 @@
     </div>
   </div>
 
+  <!-- ===================== DASHBOARDS (tableros.js) ===================== -->
+  <div id="view-tableros" class="cq" hidden>
+    <div class="settings-tabs subtabs" id="subtabs-tableros"></div>
+    <div id="tb-contenido"></div>
+  </div>
+
   <!-- ===================== CALIDAD (calidad.js) ===================== -->
   <div id="view-reclamos" hidden>
     <div class="toolbar">
@@ -1306,16 +1376,19 @@
     </div>
     <div class="compras-section-head">
       <h3>Reclamos de producto terminado <span class="prov-count" id="rq-count"></span></h3>
-      <div class="cal-filtros">
-        <select id="rq-f-anio" class="scope-select" title="Año"></select>
-        <select id="rq-f-mes" class="scope-select" title="Mes"></select>
-        <select id="rq-f-producto" class="scope-select" title="Producto"></select>
-        <select id="rq-f-desvio" class="scope-select" title="Desvío real"></select>
-        <select id="rq-f-estado" class="scope-select" title="Estado"></select>
-        <input type="search" id="rq-f-buscar" class="prov-search" placeholder="Buscar lote, envase, observación…" style="width:220px;">
+      <div class="cal-acciones">
+        <button type="button" class="fbar-limpiar" data-limpiar="rq" data-fbar="rq-fbar" title="Volver a los filtros de entrada" hidden>✕ Limpiar filtros</button>
         <button class="btn" id="rq-csv" title="Descargar lo filtrado">⬇ CSV</button>
         <button class="btn primary edit-action" id="rq-nuevo">+ Nuevo reclamo</button>
       </div>
+    </div>
+    <div class="fbar" id="rq-fbar">
+      <label class="fbar-f"><span>Año</span><select id="rq-f-anio" class="scope-select"></select></label>
+      <label class="fbar-f"><span>Mes</span><select id="rq-f-mes" class="scope-select"></select></label>
+      <label class="fbar-f"><span>Producto</span><select id="rq-f-producto" class="scope-select"></select></label>
+      <label class="fbar-f"><span>Desvío real</span><select id="rq-f-desvio" class="scope-select"></select></label>
+      <label class="fbar-f"><span>Estado</span><select id="rq-f-estado" class="scope-select"></select></label>
+      <label class="fbar-f fbar-buscar"><span>Buscar</span><input type="search" id="rq-f-buscar" class="prov-search" placeholder="Lote, envase, observación…"></label>
     </div>
     <div class="day-wrap cal-wrap">
       <table class="day-table cal-table" id="rq-table">
@@ -1331,16 +1404,19 @@
     </div>
     <div class="compras-section-head">
       <h3>NC y PAC <span class="prov-count" id="pq-count"></span></h3>
-      <div class="cal-filtros">
-        <select id="pq-f-anio" class="scope-select" title="Año"></select>
-        <select id="pq-f-estado" class="scope-select" title="Estado"></select>
-        <select id="pq-f-clasif" class="scope-select" title="Clasificación"></select>
-        <select id="pq-f-proceso" class="scope-select" title="Proceso"></select>
-        <select id="pq-f-origen" class="scope-select" title="Origen"></select>
-        <input type="search" id="pq-f-buscar" class="prov-search" placeholder="Buscar en hallazgo, causa, acción…" style="width:220px;">
+      <div class="cal-acciones">
+        <button type="button" class="fbar-limpiar" data-limpiar="pq" data-fbar="pq-fbar" title="Volver a los filtros de entrada" hidden>✕ Limpiar filtros</button>
         <button class="btn" id="pq-csv" title="Descargar lo filtrado">⬇ CSV</button>
         <button class="btn primary edit-action" id="pq-nuevo">+ Nueva NC / PAC</button>
       </div>
+    </div>
+    <div class="fbar" id="pq-fbar">
+      <label class="fbar-f"><span>Año</span><select id="pq-f-anio" class="scope-select"></select></label>
+      <label class="fbar-f"><span>Estado</span><select id="pq-f-estado" class="scope-select"></select></label>
+      <label class="fbar-f"><span>Clasificación</span><select id="pq-f-clasif" class="scope-select"></select></label>
+      <label class="fbar-f"><span>Proceso</span><select id="pq-f-proceso" class="scope-select"></select></label>
+      <label class="fbar-f"><span>Origen</span><select id="pq-f-origen" class="scope-select"></select></label>
+      <label class="fbar-f fbar-buscar"><span>Buscar</span><input type="search" id="pq-f-buscar" class="prov-search" placeholder="Hallazgo, causa, acción…"></label>
     </div>
     <div class="day-wrap cal-wrap">
       <table class="day-table cal-table" id="pq-table">
@@ -2434,6 +2510,7 @@
 
 <script src="app.js"></script>
 <script src="calidad.js"></script>
+<script src="tableros.js"></script>
 <script src="ayuda.js" defer></script>
 </body>
 </html>
