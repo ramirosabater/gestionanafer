@@ -199,6 +199,9 @@
     {id:'tesoreria',  label:'Tesorería'},
     {id:'day',        label:'Día'},
     {id:'dashboard',  label:'Dashboard'},
+    {id:'reclamos',   label:'Reclamos de PT'},
+    {id:'ncpac',      label:'NC y PAC'},
+    {id:'calidash',   label:'Indicadores de calidad'},
     {id:'comercial',  label:'Tablero comercial', noTab:true},
     {id:'rrhh',       label:'Panel RR.HH.', noTab:true}
   ];
@@ -213,6 +216,9 @@
     {id:'administracion', label:'Administración', icon:'🧾', color:'#16a34a', dash:'gastos',
      desc:'Proveedores, compras, facturas, órdenes de pago, tesorería y dashboard de gastos.',
      tabs:['compras','pagos','tesoreria','dashboard']},
+    {id:'calidad', label:'Calidad', icon:'🔬', color:'#7c3aed',
+     desc:'Reclamos de producto terminado (RG-0802), no conformidades y planes de acción (RG-0801) e indicadores.',
+     tabs:['reclamos','ncpac','calidash']},
     {id:'comercial', label:'Comercial', icon:'📊', color:'#2ba9e0', href:'comercial-dashboard.html',
      desc:'Cumplimiento presupuestario, facturación por unidad de negocio, clientes y altas/bajas.',
      tabs:['comercial']},
@@ -252,19 +258,22 @@
     return (state.auth.roles||[]).find(function(r){ return r.id===state.roleId; }) || null;
   }
   function isLoggedIn(){ return !!currentRole(); }
+  // Pestañas que se agregaron después de crear los perfiles: si el perfil no
+  // dice nada, la ve (y edita) quien administra accesos; el resto, no.
+  var PERMISOS_NUEVOS = ['comercial','rrhh','reclamos','ncpac','calidash'];
   function tabPermiso(tabId){
     var r = currentRole();
     if(!r) return 'oculta';
     // Perfiles creados antes de que existiera el permiso "comercial": los
     // que administran accesos lo ven, el resto no (se ajusta en ⚙ → Acceso).
-    if((tabId==='comercial' || tabId==='rrhh') && !(r.permisos && r.permisos[tabId])) return r.manageAccess ? 'editar' : 'oculta';
+    if(PERMISOS_NUEVOS.indexOf(tabId)!==-1 && !(r.permisos && r.permisos[tabId])) return r.manageAccess ? 'editar' : 'oculta';
     return (r.permisos && r.permisos[tabId]) || 'oculta';
   }
   function canEdit(tabId){ return tabPermiso(tabId)==='editar'; }
   function canEditAnything(){ return TAB_DEFS.some(function(t){ return canEdit(t.id); }); }
   function canManageAccess(){ var r = currentRole(); return !!(r && r.manageAccess); }
   function canOpenSettings(){
-    return canManageAccess() || canEdit('grid') || canEdit('branches') || canEdit('company') || canEdit('occasional') || canEdit('compras');
+    return canManageAccess() || canEdit('grid') || canEdit('branches') || canEdit('company') || canEdit('occasional') || canEdit('compras') || canEdit('reclamos') || canEdit('ncpac');
   }
   function areaTabs(){
     var a = state.area ? areaById(state.area) : null;
@@ -295,7 +304,7 @@
     if(homeBtn) homeBtn.hidden = !state.area || visibleAreas().length<=1;
     var area = state.area ? areaById(state.area) : null;
     var tag = document.getElementById('brand-tag');
-    if(tag) tag.textContent = area ? area.label : 'Logística, administración y comercial en un solo lugar';
+    if(tag) tag.textContent = area ? area.label : 'Logística, administración, calidad y comercial en un solo lugar';
     var settingsBtn = document.getElementById('settings-btn');
     if(settingsBtn) settingsBtn.hidden = !canOpenSettings();
   }
@@ -303,10 +312,11 @@
     routes:'grid', trucks:'grid', drivers:'grid', helpers:'grid', cargo:'grid',
     branches:'branches', companies:'company', occasionals:'occasional',
     'centros-costo':'compras', conceptos:'compras', rubros:'compras',
-    'medios-caja':'tesoreria', retenciones:'pagos'
+    'medios-caja':'tesoreria', retenciones:'pagos', 'calidad-listas':'reclamos'
   };
   function settingsTabVisible(t){
     if(t==='auth') return canManageAccess();
+    if(t==='calidad-listas') return canEdit('reclamos') || canEdit('ncpac');
     return canEdit(SETTINGS_TAB_PERMISOS[t]);
   }
   // Categorías del engranaje (⚙): agrupan las pestañas de siempre en 4
@@ -319,6 +329,7 @@
     {id:'sucursales',  label:'Sucursales y empresas',     tabs:['branches','companies','occasionals']},
     {id:'compras',     label:'Compras',                   tabs:['centros-costo','conceptos','rubros']},
     {id:'tesoreria',   label:'Tesorería',                 tabs:['medios-caja','retenciones']},
+    {id:'calidad',     label:'Calidad',                   tabs:['calidad-listas']},
     {id:'acceso',      label:'Acceso',                     tabs:['auth']}
   ];
   function settingsCategoryVisible(catId){
@@ -350,7 +361,7 @@
     });
   }
   function firstVisibleSettingsTab(){
-    var order = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','medios-caja','retenciones','auth'];
+    var order = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','medios-caja','retenciones','calidad-listas','auth'];
     for(var i=0;i<order.length;i++){ if(settingsTabVisible(order[i])) return order[i]; }
     return 'auth';
   }
@@ -789,6 +800,11 @@
     document.getElementById('toolbar-compras').hidden = (v!=='compras');
     document.getElementById('toolbar-pagos').hidden = (v!=='pagos');
     document.getElementById('toolbar-tesoreria').hidden = (v!=='tesoreria');
+    (VISTAS_CALIDAD||[]).forEach(function(c){
+      document.getElementById('view-'+c).hidden = (v!==c);
+      document.getElementById('tab-'+c).classList.toggle('active', v===c);
+    });
+    if((VISTAS_CALIDAD||[]).indexOf(v)!==-1 && window.Calidad) window.Calidad.mostrar(v);
     if(v==='day') fetchDay(state.day);
     if(v==='dashboard') fetchDashboard();
   }
@@ -801,6 +817,8 @@
   document.getElementById('tab-compras').addEventListener('click', function(){ setView('compras'); });
   document.getElementById('tab-pagos').addEventListener('click', function(){ setView('pagos'); });
   document.getElementById('tab-tesoreria').addEventListener('click', function(){ setView('tesoreria'); });
+  var VISTAS_CALIDAD = ['reclamos','ncpac','calidash'];
+  VISTAS_CALIDAD.forEach(function(c){ document.getElementById('tab-'+c).addEventListener('click', function(){ setView(c); }); });
 
   // ---------- Rendering: grid view ----------
   function monthLabel(){ return MONTH_NAMES[state.month] + ' de ' + state.year; }
@@ -2338,7 +2356,7 @@
   }
 
   // ---------- Settings (ABM: rutas, camiones, choferes, ayudantes, etc.) ----------
-  var SETTINGS_ALL_TABS = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','medios-caja','retenciones','auth'];
+  var SETTINGS_ALL_TABS = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','medios-caja','retenciones','calidad-listas','auth'];
   function switchSettingsTab(tab){
     refreshSettingsTabsVisibility();
     if(!settingsTabVisible(tab)) tab = firstVisibleSettingsTab();
@@ -2361,6 +2379,7 @@
     });
     if(tab==='auth') renderAccesoSettings();
     if(tab==='retenciones') renderRetencionesSettings();
+    if(tab==='calidad-listas' && window.Calidad) window.Calidad.renderListas();
   }
   function switchSettingsCategory(cat){
     refreshSettingsTabsVisibility();
@@ -4179,8 +4198,8 @@
       +(x.motivoAnulacion ? '. Motivo: '+x.motivoAnulacion : '');
   }
   // Pide el motivo en un cuadro propio (no window.prompt) y llama a cb(motivo).
-  function pedirAnulacion(titulo, detalle, cb){
-    if(!state.colAnulacion){ showToast('Para anular comprobantes falta correr base-de-datos/anulacion-comprobantes.sql en Supabase.', 7000); return; }
+  function pedirAnulacion(titulo, detalle, cb, sinChequeo){
+    if(!sinChequeo && !state.colAnulacion){ showToast('Para anular comprobantes falta correr base-de-datos/anulacion-comprobantes.sql en Supabase.', 7000); return; }
     var ov = document.getElementById('anular-overlay');
     document.getElementById('anul-title').textContent = titulo;
     document.getElementById('anul-detalle').textContent = detalle || '';
@@ -6543,6 +6562,21 @@
     return op;
   }
   function listaNatural(xs){ return xs.length<=1 ? (xs[0]||'') : xs.slice(0,-1).join(', ')+' y '+xs[xs.length-1]; }
+
+  // ---------- API para los módulos que viven en otro archivo (calidad.js) ----------
+  window.GestionAnafer = {
+    sb: function(){ return state.sb; },
+    usuario: function(){ return state.sessionEmail || whoName(); },
+    area: function(){ return state.area; },
+    irA: function(v){ setView(v); },
+    vista: function(){ return state.view; },
+    canEdit: canEdit, tabPermiso: tabPermiso, showToast: showToast, esc: esc, todayStr: todayStr,
+    fetchAllRows: fetchAllRows, renderBarList: renderBarList, tally: tally, MESES: MONTH_NAMES,
+    pedirMotivo: function(titulo, detalle, cb){ pedirAnulacion(titulo, detalle, cb, true); },
+    anulacionTexto: anulacionTexto,
+    memListo: memListo, memPuede: memPuede, memGuardar: memGuardar, sumarDias: sumarDias, difDias: difDias,
+    sugerir: sifSugerir, conMemoria: conMemoria, cerrarSugerenciaSi: sifCerrarSi
+  };
 
   // ---------- 1) Viajes y envíos que se repiten ----------
   var DIAS_PLURAL = ['lunes','martes','miércoles','jueves','viernes','sábados','domingos'];

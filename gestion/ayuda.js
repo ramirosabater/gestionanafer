@@ -2,7 +2,8 @@
    Ayuda de Gestión Anafer: "Sifoncito", un sifón de soda que muestra los
    circuitos del sistema paso a paso, vestido según el área:
    logística (casco y chaleco), administración (anteojos y calculadora),
-   comercial (corbata y maletín) y RR.HH. (credencial y planilla).
+   comercial (corbata y maletín), RR.HH. (credencial y planilla) y calidad
+   (guardapolvo, cofia y lupa).
 
    Se usa con <script src="ayuda.js" defer></script>. El área se toma de
    document.body.dataset.area (Gestión la actualiza al cambiar de área) o del
@@ -26,7 +27,7 @@
     inicio: [
       { titulo: "Cómo moverse en el sistema", pasos: [
         { t: "¡Hola! Soy Sifoncito 🫧. Te voy a mostrar cómo se usa el sistema. Tocá <b>Siguiente</b>." },
-        { t: "Acá elegís el área: Logística, Administración, Comercial o Recursos Humanos. Solo ves las que tu perfil tiene habilitadas.", foco: "#home-grid" },
+        { t: "Acá elegís el área: Logística, Administración, Calidad, Comercial o Recursos Humanos. Solo ves las que tu perfil tiene habilitadas.", foco: "#home-grid" },
         { t: "Desde cualquier área, <b>⌂ Inicio</b> te trae de vuelta a esta pantalla.", foco: "#home-btn" },
         { t: "El <b>⚙</b> abre la configuración: listas, perfiles y usuarios (si tu perfil lo permite).", foco: "#settings-btn" },
         { t: "Mientras trabajás, a veces aparezco solo con una <b>sugerencia</b>: un viaje que se repite, una factura que no llegó o que parece repetida, cómo le pagás siempre a un proveedor. Me acuerdo de lo que me contestás: si me decís <b>No me lo preguntes más</b>, no insisto." },
@@ -92,6 +93,33 @@
         { t: "En <b>Cartera de cheques</b> están los cheques de terceros: tocá uno para depositarlo o marcarlo rechazado. Los que están en fecha dicen AL COBRO.", ir: '#subtabs-tesoreria .stabbtn[data-sub="cheques"]', foco: "#cheques-table" },
       ] },
     ],
+    calidad: [
+      { titulo: "Cargar un reclamo de producto", pasos: [
+        { t: "Los reclamos de producto terminado (la planilla RG-0802) se cargan en <b>Reclamos de PT</b>.", ir: "#tab-reclamos", foco: "#rq-nuevo" },
+        { t: "Con <b>+ Nuevo reclamo</b> cargás la fecha, el producto, el <b>lote</b> y el vencimiento. Si el vencimiento no se lee, tildá <b>Ilegible / borroso</b>." },
+        { t: "<b>Reclamo del cliente</b> es lo que dice el cliente; <b>Desvío real</b> es lo que se comprobó al controlar el envase, por ejemplo SIN GUSTO o MG: plástico." },
+        { t: "Cargá también el proveedor y el lote del <b>envase</b>, la <b>tapa</b> y a dónde va el envase. Con eso se sabe qué proveedor trae más problemas." },
+        { t: "Al terminar, el estado queda <b>Cerrado justificado</b> si el desvío se confirmó, o <b>Cerrado No justificado</b> si no. Mientras tanto queda Abierto." },
+        { t: "Arriba filtrás por año, mes, producto, desvío o estado, o buscás un lote. <b>⬇ CSV</b> descarga lo filtrado.", foco: "#rq-f-buscar" },
+        { t: "Si un lote junta 3 reclamos o más, aparezco y te propongo abrir una <b>NC / PAC</b> con todo armado." },
+      ] },
+      { titulo: "Seguir una NC / PAC", pasos: [
+        { t: "Las no conformidades y planes de acción (la planilla RG-0801) están en <b>NC y PAC</b>. De entrada ves las pendientes.", ir: "#tab-ncpac", foco: "#pq-f-estado" },
+        { t: "Con <b>+ Nueva NC / PAC</b> cargás el hallazgo con su origen, clasificación y proceso. El número (ej. 12-26) se pone solo al guardar.", foco: "#pq-nuevo" },
+        { t: "La ficha sigue los pasos de la planilla: riesgo y causa, corrección, acción correctiva con responsable y fecha límite, seguimiento y verificación de eficacia." },
+        { t: "Las fechas límite vencidas se ven en rojo con ⚠. Para pasarla a <b>Cerrada</b> hay que cargar el resultado de la eficacia (o \"No aplica\")." },
+        { t: "Desde la ficha la podés <b>🖨 Imprimir</b>. Si se cargó mal, no se borra: se <b>anula</b> con un motivo." },
+      ] },
+      { titulo: "Indicadores de calidad", pasos: [
+        { t: "En <b>Indicadores</b> elegís el año y los meses.", ir: "#tab-calidash", foco: "#cd-anio" },
+        { t: "Ves los reclamos por mes, el desvío real, qué reclama el cliente, por producto, y los justificados por proveedor de envase y de tapa." },
+        { t: "Más abajo, las NC / PAC por clasificación, estado, proceso y origen, cuántas tienen la acción vencida y qué porcentaje resultó efectivo." },
+      ] },
+      { titulo: "Listas de calidad", pasos: [
+        { t: "Los desplegables (productos, desvíos, proveedores de envase y tapa, procesos, responsables…) se cambian en <b>⚙ → Calidad → Listas de calidad</b>.", foco: "#settings-btn" },
+        { t: "Si sacás una opción de una lista, los registros que ya la tenían no cambian." },
+      ] },
+    ],
     comercial: [
       { titulo: "Leer el tablero comercial", pasos: [
         { t: "Arriba elegís qué mirar: <b>$ Facturación</b> o <b>Unidades</b>.", foco: "#medida" },
@@ -125,7 +153,7 @@
       ] },
     ],
   };
-  var NOMBRES = { inicio: "Inicio", logistica: "Logística", administracion: "Administración", comercial: "Comercial", rrhh: "Recursos Humanos" };
+  var NOMBRES = { inicio: "Inicio", logistica: "Logística", administracion: "Administración", calidad: "Calidad", comercial: "Comercial", rrhh: "Recursos Humanos" };
 
   // ---------------- El sifón ----------------
   var sifN = 0;
@@ -162,7 +190,19 @@
       // planilla
       '<g transform="translate(92 118) rotate(6)"><rect x="0" y="0" width="22" height="28" rx="2" fill="#f5e6c8" stroke="#a88b55" stroke-width="1.5"/><rect x="7" y="-3" width="8" height="5" rx="1" fill="#8d8f93"/>' +
       '<path d="M4 9 H18 M4 14 H18 M4 19 H14" stroke="#a88b55" stroke-width="1.5"/><path d="M4 23 l2 2 l4 -4" stroke="#16a34a" stroke-width="2" fill="none"/></g>';
-    var saluda = !(t === "administracion" || t === "comercial" || t === "rrhh");
+    if (t === "calidad") accesorios =
+      // guardapolvo blanco con solapas y bolsillo con lapicera
+      '<path d="M32 112 Q32 103 44 101 L54 101 L50 170 L36 170 Q32 170 32 164 Z" fill="#fbfdff" stroke="#c9d3dc" stroke-width="1.5"/>' +
+      '<path d="M88 112 Q88 103 76 101 L66 101 L70 170 L84 170 Q88 170 88 164 Z" fill="#fbfdff" stroke="#c9d3dc" stroke-width="1.5"/>' +
+      '<path d="M44 101 L54 101 L50 122 Z M76 101 L66 101 L70 122 Z" fill="#e6edf3"/>' +
+      '<rect x="72" y="134" width="12" height="10" rx="1.5" fill="#eef3f7" stroke="#c9d3dc"/><rect x="76" y="128" width="2.4" height="10" rx="1" fill="#1472cc"/>' +
+      // cofia (gorro de red)
+      '<path d="M37 25 Q60 2 83 25 Q60 31 37 25 Z" fill="#eaf4ff" stroke="#9fb7d1" stroke-width="1.5"/>' +
+      '<g fill="#b9cde2"><circle cx="50" cy="17" r="1.2"/><circle cx="60" cy="13" r="1.2"/><circle cx="70" cy="17" r="1.2"/><circle cx="55" cy="22" r="1.2"/><circle cx="65" cy="22" r="1.2"/></g>' +
+      // lupa en la mano
+      '<g transform="translate(92 110)"><path d="M17 18 L28 31" stroke="#7a4a24" stroke-width="5" stroke-linecap="round"/><circle cx="10" cy="10" r="9.5" fill="rgba(190,225,255,.55)" stroke="#5b6670" stroke-width="3"/>' +
+      '<path d="M5 7 Q8 3 12 3" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></g>';
+    var saluda = !(t === "administracion" || t === "comercial" || t === "rrhh" || t === "calidad");
     return '<svg class="sif-svg" viewBox="0 0 120 190" width="' + (tam || 110) + '" height="' + Math.round((tam || 110) * 190 / 120) + '" aria-hidden="true">' +
       '<defs><linearGradient id="' + u + 'M" x1="0" x2="1"><stop offset="0" stop-color="#8e969e"/><stop offset=".45" stop-color="#eef1f4"/><stop offset="1" stop-color="#7d858d"/></linearGradient>' +
       '<linearGradient id="' + u + 'V" x1="0" x2="1"><stop offset="0" stop-color="#7fc3dc"/><stop offset=".35" stop-color="#cdeef8"/><stop offset="1" stop-color="#5fa9c6"/></linearGradient></defs>' +

@@ -571,6 +571,8 @@
   .panel-company h4::before{background:var(--chart-company);}
   .panel-occasional h4::before{background:var(--chart-occasional);}
   .panel-gastos h4::before{background:var(--chart-gastos);}
+  .panel-calidad h4::before{background:#7c3aed;}
+  .panel-calidad2 h4::before{background:#db2777;}
 
   .dash-section-title{font-size:13.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-2); margin:26px 0 12px; padding-top:18px; border-top:1px solid var(--border);}
   .kpi-tile.tile-branch::before{background:var(--chart-branch);}
@@ -629,6 +631,42 @@
   .anulado-banner{margin:6px 0 10px; padding:8px 12px; border-radius:10px; font-size:13px; font-weight:600;
     background:color-mix(in srgb, var(--danger) 10%, var(--surface)); color:var(--danger); border:1px solid color-mix(in srgb, var(--danger) 35%, var(--surface));}
   #anular-overlay{z-index:60;}
+  /* ---------- Calidad ---------- */
+  .cal-filtros{display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:flex-end;}
+  .cal-filtros .scope-select{max-width:170px;}
+  .cal-wrap{max-height:calc(100vh - 290px); overflow:auto;}
+  .cal-table th{position:sticky; top:0; z-index:1;}
+  .cal-table td{font-size:12.5px;}
+  .cal-table td:first-child{white-space:nowrap;}
+  .cal-table td.hallazgo{max-width:360px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cal-badge{display:inline-flex; padding:2px 9px; border-radius:999px; font-size:11.5px; font-weight:600; white-space:nowrap;}
+  .cal-badge.abierto{background:color-mix(in srgb, #d97706 16%, var(--surface)); color:#b45309;}
+  .cal-badge.gestion{background:color-mix(in srgb, #2563eb 14%, var(--surface)); color:#1d4ed8;}
+  .cal-badge.just{background:color-mix(in srgb, var(--danger) 12%, var(--surface)); color:var(--danger);}
+  .cal-badge.nojust{background:color-mix(in srgb, #16a34a 14%, var(--surface)); color:#15803d;}
+  .cal-badge.cerrada{background:color-mix(in srgb, #16a34a 14%, var(--surface)); color:#15803d;}
+  .cal-badge.anulado{background:color-mix(in srgb, var(--muted) 16%, var(--surface)); color:var(--muted);}
+  .cal-badge.alto{background:color-mix(in srgb, var(--danger) 12%, var(--surface)); color:var(--danger);}
+  .cal-badge.medio{background:color-mix(in srgb, #d97706 16%, var(--surface)); color:#b45309;}
+  .cal-badge.bajo{background:color-mix(in srgb, #16a34a 14%, var(--surface)); color:#15803d;}
+  .cal-vencida{color:var(--danger); font-weight:700;}
+  .cal-grid{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:0 14px;}
+  .cal-grid .cal-span2{grid-column:span 2;}
+  @media (max-width:720px){ .cal-grid{grid-template-columns:1fr 1fr;} }
+  .cal-check{display:flex; align-items:center; gap:6px; font-size:12px; text-transform:none; letter-spacing:0; color:var(--ink-2); margin-top:4px; font-weight:400;}
+  .cal-check input{width:auto;}
+  .cal-sec{font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:#7c3aed; margin:14px 0 6px; padding-top:10px; border-top:1px solid var(--border);}
+  .cal-sec:first-of-type{border-top:none; padding-top:0; margin-top:4px;}
+  .cal-dash-h{font-size:14px; margin:6px 0 10px;}
+  .kpi-tile.tile-calidad::before{background:#7c3aed;}
+  .kpi-tile.tile-calidad2::before{background:#db2777;}
+  .cal-listas{display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:14px;}
+  .cal-lista{border:1px solid var(--border); border-radius:12px; padding:10px 12px; background:var(--surface);}
+  .cal-lista h4{margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);}
+  .cal-chips{display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px;}
+  .cal-chip{display:inline-flex; align-items:center; gap:4px; border:1px solid var(--border); border-radius:999px; padding:2px 4px 2px 10px; font-size:12px; background:var(--bg);}
+  .cal-chip button{border:none; background:none; cursor:pointer; color:var(--muted); font-size:13px; padding:0 4px;}
+  .cal-lista .addrow{margin-top:0;}
   #ccm-ref-field[hidden]{display:none;}
   .subtabs .stabbtn .cnt{font-weight:500; color:var(--muted); margin-left:4px;}
   .subtabs .stabbtn.active .cnt{color:var(--accent);}
@@ -658,7 +696,7 @@
       <img class="brand-logo" src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDI2LjMuMSwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgeD0iMHB4IiB5PSIwcHgiCgkgdmlld0JveD0iMCAwIDU5NS4zIDI3OS44IiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCA1OTUuMyAyNzkuODsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiMyMjNDN0U7fQoJLnN0MXtmaWxsOiMwMDlGRTM7fQoJLnN0MntmaWxsOiNFMzA2MTM7fQo8L3N0eWxlPgo8ZyBpZD0iTGF5ZXJfMiI+CjwvZz4KPGcgaWQ9IkxheWVyXzEiPgoJPGc+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTE3My42LDE2NS4ydi0xMC43Yy0yLDEtNC44LDEuOS04LjYsMi43bC05LjksMi4xYy00LjIsMC45LTcuMSwxLjktOC44LDMuMWMtMi41LDEuNi0zLjcsNC0zLjcsNy4zCgkJCWMwLDIuOCwxLjEsNSwzLjQsNi43YzIuMiwxLjcsNSwyLjYsOC40LDIuNmM0LjksMCw5LjEtMS4xLDEyLjgtMy4zQzE3MS40LDE3My4xLDE3My42LDE2OS42LDE3My42LDE2NS4yIE0xOTEuNywxMzkuOHYzOS42CgkJCWMwLDUuNSwwLjksOS43LDIuOCwxMi42aC0xOS4xYy0xLjItMS44LTEuOC00LTEuOC02LjhjLTcuMSw1LjgtMTUuMyw4LjYtMjQuNSw4LjZjLTcuMywwLTEzLjQtMi4yLTE4LjMtNi41CgkJCWMtNC44LTQuMy03LjMtMTAtNy4zLTE3LjFjMC0xMi43LDcuNi0yMC41LDIyLjktMjMuNWw3LjYtMS41YzUuMS0xLDExLjYtMi41LDE5LjYtNC40di0yLjJjMC02LjMtNC43LTkuNS0xNC4zLTkuNQoJCQljLTUuMiwwLTguOSwwLjgtMTAuOSwyLjVjLTIsMS43LTMsNC42LTMsOC44bC0xOC4xLTAuN2MwLTguMiwzLjMtMTQuNSw5LjgtMTguOWM1LjctMy44LDEzLjItNS42LDIyLjMtNS42CgkJCWM5LjgsMCwxNy4yLDEuNCwyMi4zLDQuM0MxODguMywxMjMuMywxOTEuNywxMzAuMSwxOTEuNywxMzkuOCIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0yMDIuNCwxOTMuNHYtNzUuMWgxOC4xdjcuNGgwLjNjNS02LjEsMTEuOS05LjIsMjAuNS05LjJjMTcuMiwwLDI1LjgsOC41LDI1LjgsMjUuNXY1MS40SDI0OXYtNDUuOQoJCQljMC05LTQuMi0xMy41LTEyLjUtMTMuNWMtNC43LDAtOC40LDEuNi0xMS4zLDQuN2MtMy4yLDMuNS00LjgsOC41LTQuOCwxNXYzOS42SDIwMi40eiIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0zMjMuNywxNjUuMnYtMTAuN2MtMiwxLTQuOSwxLjktOC42LDIuN2wtMTAsMi4xYy00LjEsMC45LTcuMSwxLjktOC44LDMuMWMtMi41LDEuNi0zLjcsNC0zLjcsNy4zCgkJCWMwLDIuOCwxLjEsNSwzLjMsNi43YzIuMiwxLjcsNSwyLjYsOC40LDIuNmM0LjksMCw5LjEtMS4xLDEyLjgtMy4zQzMyMS41LDE3My4xLDMyMy43LDE2OS42LDMyMy43LDE2NS4yIE0zNDEuOCwxMzkuOHYzOS42CgkJCWMwLDUuNSwwLjksOS43LDIuOCwxMi42aC0xOS4yYy0xLjItMS44LTEuOC00LTEuOC02LjhjLTcuMSw1LjgtMTUuMyw4LjYtMjQuNSw4LjZjLTcuMywwLTEzLjQtMi4yLTE4LjMtNi41CgkJCWMtNC45LTQuMy03LjMtMTAtNy4zLTE3LjFjMC0xMi43LDcuNi0yMC41LDIyLjktMjMuNWw3LjYtMS41YzUuMS0xLDExLjYtMi41LDE5LjYtNC40di0yLjJjMC02LjMtNC44LTkuNS0xNC4zLTkuNQoJCQljLTUuMiwwLTguOSwwLjgtMTAuOSwyLjVjLTIsMS43LTMsNC42LTMsOC44bC0xOC4xLTAuN2MwLTguMiwzLjMtMTQuNSw5LjgtMTguOWM1LjctMy44LDEzLjItNS42LDIyLjMtNS42CgkJCWM5LjgsMCwxNy4yLDEuNCwyMi4zLDQuM0MzMzguNCwxMjMuMywzNDEuOCwxMzAuMSwzNDEuOCwxMzkuOCIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0zNTUuMiwxOTMuOXYtNjJoLTExdi0xMy4xaDExdi0xMS45YzAtMTIuNSw3LjQtMTguNywyMi4xLTE4LjdjNC4yLDAsOC4yLDAuMiwxMi4yLDAuNXYxNS43CgkJCWMtMS45LTAuMy0zLjgtMC40LTUuOS0wLjRjLTYuOCwwLTEwLjIsMy4yLTEwLjIsOS41djUuM2gxNi4ydjEzLjFoLTE2LjJ2NjJIMzU1LjJ6Ii8+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTQwNy4zLDE0NC44aDM2LjVjMC0yLjktMS4zLTUuOC00LTguOWMtMy40LTMuOS03LjctNS45LTEzLjEtNS45Yy01LDAtOS4zLDEuNC0xMi44LDQuMgoJCQlDNDEwLjUsMTM3LjEsNDA4LjMsMTQwLjYsNDA3LjMsMTQ0LjggTTQ2Mi44LDE1OC44aC01NS41YzAuMSw1LjMsMi4yLDkuOCw2LjIsMTMuNGMzLjcsMy40LDguMSw1LjEsMTMuMiw1LjEKCQkJYzkuNCwwLDE2LjYtMy42LDIxLjctMTAuN2wxNS4zLDguOWMtOCwxMi4zLTIwLjQsMTguNC0zNywxOC40Yy0xMS45LDAtMjEuMy0zLjctMjguMy0xMS4zYy02LjgtNy4yLTEwLjEtMTYuNi0xMC4xLTI4LjEKCQkJYzAtMTEuNSwzLjQtMjAuOSwxMC4zLTI4LjNjNi45LTcuNCwxNi4zLTExLjEsMjguMS0xMS4xQzQ1MC44LDExNS4yLDQ2Mi44LDEyOS43LDQ2Mi44LDE1OC44Ii8+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTQ2OS41LDE5My40di03NS4xaDE4LjF2MTAuNGgwLjNjNC4xLTguMSwxMS44LTEyLjIsMjMuMi0xMi4ydjE4LjRjLTYuOCwwLTEyLjMsMS42LTE2LjMsNC45CgkJCWMtNC44LDMuOC03LjEsOS42LTcuMSwxNy4ydjM2LjRINDY5LjV6Ii8+CgkJPHBhdGggY2xhc3M9InN0MSIgZD0iTTE1OC4yLDQyYy00Ny4zLTAuMy04NS45LDM3LjktODYuMSw4NS4yYy0wLjEsMjAuNCw3LDM5LjIsMTguOCw1NGwxNy41LTEyYy05LjUtMTEuMy0xNS4yLTI1LjktMTUuMS00MS44CgkJCWMwLjItMzUuNiwyOS4yLTY0LjMsNjQuOC02NC4xYzMuNywwLDcuMywwLjQsMTAuOCwxVjQyLjdDMTY1LjQsNDIuMiwxNjEuOCw0MiwxNTguMiw0MiIvPgoJCTxwYXRoIGNsYXNzPSJzdDEiIGQ9Ik0yMTEuOSw5OS40Yy0xNi45LTI5LjEtNTQuMy0zOS04My40LTIyLjFjLTEyLjYsNy4zLTIxLjUsMTguNS0yNi4zLDMxLjFsMTMuNyw2LjQKCQkJYzMuNS05LjksMTAuNC0xOC43LDIwLjItMjQuNGMyMS45LTEyLjcsNTAtNS4zLDYyLjcsMTYuNmMxLjMsMi4zLDIuNCw0LjYsMy4zLDdsMTMuMi03LjhDMjE0LjMsMTAzLjksMjEzLjIsMTAxLjYsMjExLjksOTkuNCIvPgoJCTxwYXRoIGNsYXNzPSJzdDIiIGQ9Ik0yMjEsMjIxLjVsLTY4LjIsMGMtNDkuMS0zLjItODcuOS00NC04Ny45LTkzLjljMC0xOS4zLDUuOC0zNy4yLDE1LjctNTIuMUw1NS40LDU3LjYKCQkJYy0xMy41LDIwLTIxLjQsNDQuMS0yMS40LDcwYzAsNjcsNTIuNywxMjEuNywxMTguOCwxMjQuOWw2OC4yLTAuMVYyMjEuNXoiLz4KCQk8cGF0aCBkPSJNMjMzLjgsMjQ1LjhoNC4yYzMuMywwLDQuNC0yLjIsNC40LTQuNmMwLTMuNC0yLjItNC44LTQuOS00LjhoLTMuN1YyNDUuOHogTTIzMy44LDIzNC4xaDMuNWMxLjMsMCw0LjMtMC4zLDQuMy00LjIKCQkJYzAtMi42LTEuMy00LjEtNC4zLTQuMWgtMy41VjIzNC4xeiBNMjMwLjcsMjIzLjNoNy43YzMuMywwLDYuNCwxLjUsNi40LDYuNGMwLDIuMy0xLjQsNC42LTMuNyw1LjJ2MC4xYzMuMSwwLjcsNC41LDMuMSw0LjUsNi4yCgkJCWMwLDUuMS0yLjksNy4yLTguMSw3LjJoLTYuOFYyMjMuM3oiLz4KCQk8cGF0aCBkPSJNMjUzLjUsMjM5aDYuN2wtMy4yLTEyLjFoLTAuMUwyNTMuNSwyMzl6IE0yNTUsMjIzLjNoNC4ybDYuOCwyNS4xaC0zLjJsLTEuOC02LjloLThsLTEuOSw2LjloLTMuMkwyNTUsMjIzLjN6Ii8+CgkJPHBhdGggZD0iTTI3OS42LDI0MS4yYzAsNC40LTEuMSw3LjctNi4zLDcuN2MtNC4yLDAtNS45LTIuNy01LjktNS43di0yLjFoM3YxLjhjMCwyLDAuOCwzLjQsMi45LDMuNGMyLjgsMCwzLjItMS44LDMuMi01LjN2LTE3LjgKCQkJaDMuMVYyNDEuMnoiLz4KCQk8cGF0aCBkPSJNMjg3LjYsMjM1LjhjMCw1LjgsMC42LDEwLjUsNC45LDEwLjVjNC4zLDAsNC45LTQuNyw0LjktMTAuNWMwLTUuOC0wLjYtMTAuNS00LjktMTAuNUMyODguMiwyMjUuMywyODcuNiwyMzAsMjg3LjYsMjM1LjgKCQkJIE0zMDAuNSwyMzUuOGMwLDYuMy0xLjIsMTMuMS04LjEsMTMuMWMtNi45LDAtOC4xLTYuNy04LjEtMTMuMWMwLTYuMywxLjItMTMsOC4xLTEzQzI5OS40LDIyMi44LDMwMC41LDIyOS41LDMwMC41LDIzNS44Ii8+CgkJPHBvbHlnb24gcG9pbnRzPSIzMTQuOCwyMjMuMyAzMTguOCwyMjMuMyAzMjcuMSwyNDQuMiAzMjcuMiwyNDQuMiAzMjcuMiwyMjMuMyAzMzAuMywyMjMuMyAzMzAuMywyNDguNCAzMjYsMjQ4LjQgMzE4LDIyOC4xCgkJCTMxNy45LDIyOC4xIDMxNy45LDI0OC40IDMxNC44LDI0OC40IAkJIi8+CgkJPHBhdGggZD0iTTMzOC4zLDIzNS44YzAsNS44LDAuNiwxMC41LDQuOCwxMC41YzQuMywwLDQuOS00LjcsNC45LTEwLjVjMC01LjgtMC42LTEwLjUtNC45LTEwLjVDMzM4LjgsMjI1LjMsMzM4LjMsMjMwLDMzOC4zLDIzNS44CgkJCSBNMzUxLjIsMjM1LjhjMCw2LjMtMS4yLDEzLjEtOC4xLDEzLjFjLTYuOSwwLTguMS02LjctOC4xLTEzLjFjMC02LjMsMS4xLTEzLDguMS0xM0MzNTAuMSwyMjIuOCwzNTEuMiwyMjkuNSwzNTEuMiwyMzUuOCIvPgoJCTxwYXRoIGQ9Ik0zNTkuMSwyMzQuN2gzLjFjMS44LDAsNS4yLDAsNS4yLTQuOWMwLTIuNS0xLjctNC00LjUtNGgtMy43VjIzNC43eiBNMzU2LDIyMy4zaDguMWMzLjksMCw2LjQsMi4zLDYuNCw2LjMKCQkJYzAsMi43LTEsNS42LTMuOSw2LjN2MC4xYzIuMiwwLjIsMy40LDIsMy42LDQuMmwwLjIsNC4zYzAuMSwyLjgsMC42LDMuNSwxLjMsNGgtMy43Yy0wLjUtMC41LTAuOC0yLjQtMC44LTMuNmwtMC4yLTMuOQoJCQljLTAuMi0zLjQtMi4xLTMuNi0zLjctMy42aC00LjJ2MTEuMkgzNTZWMjIzLjN6Ii8+CgkJPHBvbHlnb24gcG9pbnRzPSIzNzUuNCwyMjMuMyAzODAuNiwyMjMuMyAzODUuNiwyNDMuMiAzODUuNywyNDMuMiAzOTAuNywyMjMuMyAzOTUuOSwyMjMuMyAzOTUuOSwyNDguNCAzOTIuOCwyNDguNCAzOTIuOCwyMjYuNAoJCQkzOTIuOCwyMjYuNCAzODcuMiwyNDguNCAzODQuMSwyNDguNCAzNzguNiwyMjYuNCAzNzguNSwyMjYuNCAzNzguNSwyNDguNCAzNzUuNCwyNDguNCAJCSIvPgoJCTxwYXRoIGQ9Ik00MDQuNSwyMzloNi44bC0zLjItMTIuMUg0MDhMNDA0LjUsMjM5eiBNNDA2LjEsMjIzLjNoNC4xbDYuNywyNS4xaC0zLjJsLTEuOC02LjloLThsLTEuOSw2LjloLTMuM0w0MDYuMSwyMjMuM3oiLz4KCQk8cGF0aCBkPSJNNDMwLjQsMjI5LjhjMC0yLjYtMS00LjUtMy45LTQuNWMtMi42LDAtNC4xLDEuNC00LjEsNC4xYzAsNy4xLDExLjgsMi45LDExLjgsMTJjMCw1LjgtNC4yLDcuNS03LjgsNy41CgkJCWMtNS45LDAtNy42LTMtNy42LTguNGgzLjFjMCwyLjgsMC4xLDUuOCw0LjcsNS44YzIuNSwwLDQuNC0xLjgsNC40LTQuNGMwLTcuMS0xMS45LTMtMTEuOS0xMi4yYzAtMi4zLDEtNi45LDcuMy02LjkKCQkJYzQuOCwwLDcsMi40LDcsN0g0MzAuNHoiLz4KCQk8cmVjdCB4PSI0NDcuMiIgeT0iMjIwLjUiIHdpZHRoPSI2LjEiIGhlaWdodD0iMjcuOSIvPgoJCTxwb2x5Z29uIHBvaW50cz0iNDcyLjUsMjQ4LjQgNDY1LjUsMjQ4LjQgNDU2LjUsMjIwLjUgNDYyLjgsMjIwLjUgNDY5LDI0MC4xIDQ2OS4xLDI0MC4xIDQ3NS40LDIyMC41IDQ4MS43LDIyMC41IAkJIi8+CgkJPHBvbHlnb24gcG9pbnRzPSI0ODQuOSwyMjAuNSA1MDUuOCwyMjAuNSA1MDUuOCwyMjUuNiA0OTEsMjI1LjYgNDkxLDIzMS42IDUwNC41LDIzMS42IDUwNC41LDIzNi40IDQ5MSwyMzYuNCA0OTEsMjQzLjIKCQkJNTA2LjEsMjQzLjIgNTA2LjEsMjQ4LjQgNDg0LjksMjQ4LjQgCQkiLz4KCQk8cGF0aCBkPSJNNTE1LjIsMjM5LjFjMCwzLjcsMi45LDUuMiw2LjIsNS4yYzIuMiwwLDUuNC0wLjYsNS40LTMuNWMwLTMtNC4yLTMuNS04LjMtNC42Yy00LjEtMS4xLTguMy0yLjctOC4zLTcuOQoJCQljMC01LjcsNS40LTguNCwxMC40LTguNGM1LjgsMCwxMS4yLDIuNSwxMS4yLDloLTUuOWMtMC4yLTMuMy0yLjYtNC4yLTUuNS00LjJjLTEuOSwwLTQuMiwwLjgtNC4yLDMuMmMwLDIuMSwxLjMsMi40LDguMyw0LjIKCQkJYzIsMC41LDguMywxLjgsOC4zLDguMWMwLDUuMS00LDktMTEuNiw5Yy02LjIsMC0xMi0zLjEtMTEuOS05LjlINTE1LjJ6Ii8+CgkJPHBhdGggZD0iTTU0MS4zLDIzOS4xYzAsMy43LDIuOSw1LjIsNi4yLDUuMmMyLjIsMCw1LjQtMC42LDUuNC0zLjVjMC0zLTQuMi0zLjUtOC4zLTQuNmMtNC4xLTEuMS04LjMtMi43LTguMy03LjkKCQkJYzAtNS43LDUuNC04LjQsMTAuNC04LjRjNS44LDAsMTEuMiwyLjUsMTEuMiw5SDU1MmMtMC4yLTMuMy0yLjYtNC4yLTUuNS00LjJjLTIsMC00LjIsMC44LTQuMiwzLjJjMCwyLjEsMS4zLDIuNCw4LjMsNC4yCgkJCWMyLDAuNSw4LjMsMS44LDguMyw4LjFjMCw1LjEtNCw5LTExLjYsOWMtNi4yLDAtMTItMy4xLTExLjktOS45SDU0MS4zeiIvPgoJCTxwYXRoIGQ9Ik01MjEuMiwxNzQuNGMwLTIuNy0xLTQuNS00LTQuNWMtMi42LDAtNC4yLDEuNC00LjIsNC4xYzAsNy4yLDEyLDIuOSwxMiwxMi4yYzAsNS45LTQuMyw3LjYtNy45LDcuNmMtNiwwLTcuNy0zLjEtNy43LTguNQoJCQloMy4xYzAsMi45LDAuMiw1LjksNC44LDUuOWMyLjUsMCw0LjQtMS44LDQuNC00LjVjMC03LjItMTItMy0xMi0xMi40YzAtMi4zLDEtNyw3LjUtN2M0LjksMCw3LjEsMi40LDcuMSw3LjFINTIxLjJ6Ii8+CgkJPHJlY3QgeD0iNTI4LjgiIHk9IjE4OS41IiB3aWR0aD0iMy4zIiBoZWlnaHQ9IjMuOCIvPgoJCTxwYXRoIGQ9Ik01NDAuMiwxODMuOGg2LjlsLTMuMy0xMi4zaC0wLjFMNTQwLjIsMTgzLjh6IE01NDEuOCwxNjcuOWg0LjJsNi44LDI1LjVoLTMuM2wtMS44LTdoLTguMWwtMS45LDdoLTMuM0w1NDEuOCwxNjcuOXoiLz4KCQk8cmVjdCB4PSI1NTUuMiIgeT0iMTg5LjUiIHdpZHRoPSIzLjMiIGhlaWdodD0iMy44Ii8+Cgk8L2c+CjwvZz4KPC9zdmc+Cg==" alt="Anafer S.A.">
       <div class="brand-text">
         <h1>Gestión Anafer</h1>
-        <div class="tag" id="brand-tag">Logística, administración y comercial en un solo lugar</div>
+        <div class="tag" id="brand-tag">Logística, administración, calidad y comercial en un solo lugar</div>
       </div>
     </div>
     <div class="who">
@@ -689,6 +727,9 @@
     <button class="viewtab" id="tab-tesoreria">Tesorería</button>
     <button class="viewtab" id="tab-day">Día</button>
     <button class="viewtab" id="tab-dashboard">Dashboard</button>
+    <button class="viewtab" id="tab-reclamos">Reclamos de PT</button>
+    <button class="viewtab" id="tab-ncpac">NC y PAC</button>
+    <button class="viewtab" id="tab-calidash">Indicadores</button>
   </div>
 
   <div id="view-grid">
@@ -1157,6 +1198,98 @@
       <div class="item">Los cheques de terceros que entran (concepto CHE) quedan en la cartera hasta que se depositan, se entregan a un proveedor en una orden de pago o se marcan como rechazados</div>
       <div class="item">Al marcar una orden de pago como Pagada se elige la cuenta y se genera el egreso automáticamente — esos movimientos no se pueden editar ni borrar desde acá, solo cambiando la orden de pago</div>
       <div class="item">Los movimientos cargados a mano (no ligados a una orden de pago) sí se pueden editar o borrar</div>
+    </div>
+  </div>
+
+  <!-- ===================== CALIDAD (calidad.js) ===================== -->
+  <div id="view-reclamos" hidden>
+    <div class="toolbar">
+      <div style="font-size:12.5px; color:var(--ink-2);">Control de producto reclamado (devoluciones) · RG-0802</div>
+    </div>
+    <div class="compras-section-head">
+      <h3>Reclamos de producto terminado <span class="prov-count" id="rq-count"></span></h3>
+      <div class="cal-filtros">
+        <select id="rq-f-anio" class="scope-select" title="Año"></select>
+        <select id="rq-f-mes" class="scope-select" title="Mes"></select>
+        <select id="rq-f-producto" class="scope-select" title="Producto"></select>
+        <select id="rq-f-desvio" class="scope-select" title="Desvío real"></select>
+        <select id="rq-f-estado" class="scope-select" title="Estado"></select>
+        <input type="search" id="rq-f-buscar" class="prov-search" placeholder="Buscar lote, envase, observación…" style="width:220px;">
+        <button class="btn" id="rq-csv" title="Descargar lo filtrado">⬇ CSV</button>
+        <button class="btn primary edit-action" id="rq-nuevo">+ Nuevo reclamo</button>
+      </div>
+    </div>
+    <div class="day-wrap cal-wrap">
+      <table class="day-table cal-table" id="rq-table">
+        <thead><tr><th>Nº</th><th>Fecha</th><th>Producto</th><th>Lote</th><th>Vto.</th><th>Reclamo del cliente</th><th>Desvío real</th><th>Envase</th><th>Tapa</th><th>Destino envase</th><th>Estado</th><th>Controló</th></tr></thead>
+        <tbody id="rq-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="view-ncpac" hidden>
+    <div class="toolbar">
+      <div style="font-size:12.5px; color:var(--ink-2);">Seguimiento de no conformidades y plan de acción correctiva · RG-0801</div>
+    </div>
+    <div class="compras-section-head">
+      <h3>NC y PAC <span class="prov-count" id="pq-count"></span></h3>
+      <div class="cal-filtros">
+        <select id="pq-f-anio" class="scope-select" title="Año"></select>
+        <select id="pq-f-estado" class="scope-select" title="Estado"></select>
+        <select id="pq-f-clasif" class="scope-select" title="Clasificación"></select>
+        <select id="pq-f-proceso" class="scope-select" title="Proceso"></select>
+        <select id="pq-f-origen" class="scope-select" title="Origen"></select>
+        <input type="search" id="pq-f-buscar" class="prov-search" placeholder="Buscar en hallazgo, causa, acción…" style="width:220px;">
+        <button class="btn" id="pq-csv" title="Descargar lo filtrado">⬇ CSV</button>
+        <button class="btn primary edit-action" id="pq-nuevo">+ Nueva NC / PAC</button>
+      </div>
+    </div>
+    <div class="day-wrap cal-wrap">
+      <table class="day-table cal-table" id="pq-table">
+        <thead><tr><th>Nº</th><th>Fecha</th><th>Origen</th><th>Clasificación</th><th>Proceso</th><th>Hallazgo</th><th>Riesgo</th><th>Responsable AC</th><th>Límite AC</th><th>Eficacia</th><th>Estado</th></tr></thead>
+        <tbody id="pq-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="view-calidash" hidden>
+    <div class="toolbar">
+      <div class="cal-filtros">
+        <label class="fm-hint" for="cd-anio" style="font-size:12.5px;">Período</label>
+        <select id="cd-anio" class="scope-select"></select>
+        <select id="cd-desde" class="scope-select" title="Desde"></select>
+        <select id="cd-hasta" class="scope-select" title="Hasta"></select>
+      </div>
+    </div>
+    <h3 class="cal-dash-h">Reclamos de producto terminado</h3>
+    <div class="kpi-grid">
+      <div class="kpi-tile tile-calidad"><div class="kpi-label">Reclamos en el período</div><div class="kpi-value" id="cd-k-rec">0</div></div>
+      <div class="kpi-tile tile-calidad"><div class="kpi-label">Justificados (desvío real confirmado)</div><div class="kpi-value" id="cd-k-just">—</div></div>
+      <div class="kpi-tile tile-calidad"><div class="kpi-label">Abiertos</div><div class="kpi-value" id="cd-k-abiertos">0</div></div>
+      <div class="kpi-tile tile-calidad"><div class="kpi-label">Unidades devueltas</div><div class="kpi-value" id="cd-k-unid">0</div></div>
+    </div>
+    <div class="dash-grid">
+      <div class="panel panel-calidad panel-wide"><h4>Reclamos por mes</h4><div id="cd-b-mes"></div></div>
+      <div class="panel panel-calidad"><h4>Desvío real</h4><div id="cd-b-desvio"></div></div>
+      <div class="panel panel-calidad"><h4>Lo que reclamó el cliente</h4><div id="cd-b-cliente"></div></div>
+      <div class="panel panel-calidad"><h4>Por producto</h4><div id="cd-b-producto"></div></div>
+      <div class="panel panel-calidad"><h4>Justificados por proveedor de envase</h4><div id="cd-b-envase"></div></div>
+      <div class="panel panel-calidad"><h4>Justificados por proveedor de tapa</h4><div id="cd-b-tapa"></div></div>
+      <div class="panel panel-calidad"><h4>Destino del envase</h4><div id="cd-b-destino"></div></div>
+      <div class="panel panel-calidad panel-wide"><h4>Lotes con más reclamos justificados</h4><div id="cd-b-lotes"></div></div>
+    </div>
+    <h3 class="cal-dash-h">No conformidades y planes de acción</h3>
+    <div class="kpi-grid">
+      <div class="kpi-tile tile-calidad2"><div class="kpi-label">NC / PAC en el período</div><div class="kpi-value" id="cd-k-pac">0</div></div>
+      <div class="kpi-tile tile-calidad2"><div class="kpi-label">Abiertas o en gestión</div><div class="kpi-value" id="cd-k-pac-abiertas">0</div></div>
+      <div class="kpi-tile tile-calidad2"><div class="kpi-label">Con acción vencida</div><div class="kpi-value" id="cd-k-pac-vencidas">0</div></div>
+      <div class="kpi-tile tile-calidad2"><div class="kpi-label">Eficacia verificada</div><div class="kpi-value" id="cd-k-pac-eficacia">—</div></div>
+    </div>
+    <div class="dash-grid">
+      <div class="panel panel-calidad2"><h4>Por clasificación</h4><div id="cd-b-clasif"></div></div>
+      <div class="panel panel-calidad2"><h4>Por estado</h4><div id="cd-b-estado"></div></div>
+      <div class="panel panel-calidad2"><h4>Por proceso</h4><div id="cd-b-proceso"></div></div>
+      <div class="panel panel-calidad2"><h4>Por origen</h4><div id="cd-b-origen"></div></div>
     </div>
   </div>
 </div>
@@ -1859,6 +1992,7 @@
         <button class="scatbtn" id="scatbtn-sucursales"><span class="scat-icon">🏢</span> Sucursales y empresas</button>
         <button class="scatbtn" id="scatbtn-compras"><span class="scat-icon">🧾</span> Compras</button>
         <button class="scatbtn" id="scatbtn-tesoreria"><span class="scat-icon">💰</span> Tesorería</button>
+        <button class="scatbtn" id="scatbtn-calidad"><span class="scat-icon">🔬</span> Calidad</button>
         <button class="scatbtn" id="scatbtn-acceso"><span class="scat-icon">🔐</span> Acceso</button>
       </div>
 
@@ -1883,6 +2017,9 @@
         <div class="settings-tabs settings-subtabs" id="settings-subtabs-tesoreria" hidden>
           <button class="stabbtn" id="stabbtn-medios-caja">Conceptos de caja</button>
           <button class="stabbtn" id="stabbtn-retenciones">Retenciones</button>
+        </div>
+        <div class="settings-tabs settings-subtabs" id="settings-subtabs-calidad" hidden>
+          <button class="stabbtn" id="stabbtn-calidad-listas">Listas de calidad</button>
         </div>
         <div class="settings-tabs settings-subtabs" id="settings-subtabs-acceso" hidden>
           <button class="stabbtn" id="stabbtn-auth">Perfiles y permisos</button>
@@ -1986,6 +2123,10 @@
           <div class="ret-escalas" id="gan-escalas"></div>
           <div class="addrow"><button class="btn primary" id="gan-save">Guardar regímenes y escalas</button></div>
         </div>
+        <div id="stab-calidad-listas" hidden>
+          <div class="sub" style="margin-bottom:12px;">Las opciones de los desplegables de Reclamos y de NC/PAC. Lo que se saca de una lista no se borra de los registros ya cargados.</div>
+          <div id="cal-listas" class="cal-listas"></div>
+        </div>
         <div id="stab-auth" hidden>
           <div class="sub" style="margin-bottom:14px;">Cada perfil tiene sus propios permisos por pestaña; a cada persona se le asigna un perfil en Usuarios (más abajo). "Ver" deja mirar esa pestaña sin poder crear, editar ni borrar nada ahí; "Editar" da acceso completo. Los cambios se guardan recién al tocar "Guardar perfiles".</div>
           <div id="roles-list"></div>
@@ -2052,7 +2193,106 @@
     </div>
   </div>
 </div>
+<!-- ===================== CALIDAD: modales ===================== -->
+<div class="overlay" id="reclamo-overlay">
+  <div class="modal wide modal-lg" id="reclamo-modal">
+    <h3 id="rq-title">Nuevo reclamo</h3>
+    <div class="sub" id="rq-sub">Control de producto reclamado (devolución)</div>
+    <div class="modal-scroll-body">
+    <div class="cal-grid">
+      <div class="field"><label for="rq-fecha">Fecha</label><input type="date" id="rq-fecha"></div>
+      <div class="field"><label for="rq-hora">Hora</label><input type="time" id="rq-hora"></div>
+      <div class="field"><label for="rq-producto">Producto</label><select id="rq-producto"></select></div>
+      <div class="field"><label for="rq-lote">Lote</label><input type="text" id="rq-lote" maxlength="30" placeholder="Ej: 343"></div>
+      <div class="field"><label for="rq-venc">Vencimiento</label><input type="date" id="rq-venc">
+        <label class="cal-check"><input type="checkbox" id="rq-venc-ilegible"> Ilegible / borroso</label></div>
+      <div class="field"><label for="rq-cantidad">Cantidad</label><input type="number" id="rq-cantidad" min="1" step="1" value="1"></div>
+      <div class="field"><label for="rq-desvio">Desvío informado</label><select id="rq-desvio"></select></div>
+      <div class="field"><label for="rq-cliente">Reclamo del cliente</label><select id="rq-cliente"></select></div>
+      <div class="field"><label for="rq-real">Desvío real (lo que se comprobó)</label><select id="rq-real"></select></div>
+      <div class="field"><label for="rq-envase">Envase (proveedor)</label><select id="rq-envase"></select></div>
+      <div class="field"><label for="rq-lote-envase">Lote de envase</label><input type="text" id="rq-lote-envase" maxlength="20" placeholder="Ej: 2/25"></div>
+      <div class="field"><label for="rq-tapa">Tapa (proveedor)</label><select id="rq-tapa"></select></div>
+      <div class="field"><label for="rq-destino">Destino del envase</label><select id="rq-destino"></select></div>
+      <div class="field"><label for="rq-estado">Estado</label><select id="rq-estado"></select></div>
+      <div class="field"><label for="rq-controlo">Controló</label><select id="rq-controlo"></select></div>
+    </div>
+    <div class="field"><label for="rq-obs">Observaciones</label><textarea id="rq-obs" placeholder="Lo que se vio al controlar el envase…"></textarea></div>
+    <div class="fm-hint" id="rq-pac-link"></div>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="rq-cancel">Cancelar</button>
+        <button class="btn" id="rq-anular" style="display:none; color:var(--danger);">Anular</button>
+      </div>
+      <button class="btn primary" id="rq-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="pac-overlay">
+  <div class="modal wide modal-lg" id="pac-modal">
+    <h3 id="pq-title">Nueva NC / PAC</h3>
+    <div class="sub" id="pq-sub">Se le asigna un número al guardar</div>
+    <div class="modal-scroll-body">
+    <h4 class="cal-sec">1 · Hallazgo</h4>
+    <div class="cal-grid">
+      <div class="field"><label for="pq-fecha">Fecha</label><input type="date" id="pq-fecha"></div>
+      <div class="field"><label for="pq-origen">Origen</label><select id="pq-origen"></select></div>
+      <div class="field"><label for="pq-clasif">Clasificación</label><select id="pq-clasif"></select></div>
+      <div class="field"><label for="pq-proceso">Proceso</label><select id="pq-proceso"></select></div>
+    </div>
+    <div class="field"><label for="pq-hallazgo">Hallazgo</label><textarea id="pq-hallazgo" rows="5" placeholder="Qué se detectó, dónde y con qué evidencia…"></textarea></div>
+    <h4 class="cal-sec">2 · Riesgo y causa</h4>
+    <div class="cal-grid">
+      <div class="field"><label for="pq-riesgo">Riesgo</label><select id="pq-riesgo"></select></div>
+      <div class="field cal-span2"><label for="pq-opcion">Opción para abordar el riesgo</label><select id="pq-opcion"></select></div>
+    </div>
+    <div class="field"><label for="pq-causa">Causa</label><textarea id="pq-causa" rows="2"></textarea></div>
+    <h4 class="cal-sec">3 · Corrección (lo inmediato)</h4>
+    <div class="field"><label for="pq-correccion">Corrección</label><textarea id="pq-correccion" rows="2"></textarea></div>
+    <div class="cal-grid">
+      <div class="field cal-span2"><label for="pq-resp-c">Responsable</label><select id="pq-resp-c"></select></div>
+      <div class="field"><label for="pq-fecha-c">Fecha límite</label><input type="date" id="pq-fecha-c"></div>
+    </div>
+    <h4 class="cal-sec">4 · Acción correctiva / de mejora</h4>
+    <div class="field"><label for="pq-accion">Acción</label><textarea id="pq-accion" rows="2"></textarea></div>
+    <div class="cal-grid">
+      <div class="field cal-span2"><label for="pq-resp-ac">Responsable</label><select id="pq-resp-ac"></select></div>
+      <div class="field"><label for="pq-fecha-ac">Fecha límite de implementación</label><input type="date" id="pq-fecha-ac"></div>
+    </div>
+    <h4 class="cal-sec">5 · Seguimiento</h4>
+    <div class="cal-grid">
+      <div class="field cal-span2"><label for="pq-resp-seg">Responsable del seguimiento</label><select id="pq-resp-seg"></select></div>
+      <div class="field"><label for="pq-fecha-seg">Fecha de seguimiento</label><input type="date" id="pq-fecha-seg"></div>
+    </div>
+    <div class="field"><label for="pq-comentarios">Comentarios</label><textarea id="pq-comentarios" rows="2"></textarea></div>
+    <h4 class="cal-sec">6 · Verificación de eficacia</h4>
+    <div class="field"><label for="pq-ef-criterio">Cómo se va a verificar (criterio)</label><input type="text" id="pq-ef-criterio" placeholder="Ej: eficaz si no se repiten reclamos del lote durante 2 meses"></div>
+    <div class="cal-grid">
+      <div class="field"><label for="pq-ef-resultado">Resultado</label><select id="pq-ef-resultado"></select></div>
+      <div class="field"><label for="pq-resp-ef">Responsable</label><select id="pq-resp-ef"></select></div>
+      <div class="field"><label for="pq-fecha-ef">Fecha</label><input type="date" id="pq-fecha-ef"></div>
+    </div>
+    <div class="field"><label for="pq-ef-detalle">Detalles de la verificación</label><textarea id="pq-ef-detalle" rows="2"></textarea></div>
+    <div class="cal-grid">
+      <div class="field"><label for="pq-estado">Estado</label><select id="pq-estado"></select></div>
+    </div>
+    <div class="fm-hint" id="pq-reclamos"></div>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="pq-cancel">Cancelar</button>
+        <button class="btn" id="pq-anular" style="display:none; color:var(--danger);">Anular</button>
+        <button class="btn" id="pq-imprimir" style="display:none;">🖨 Imprimir</button>
+      </div>
+      <button class="btn primary" id="pq-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <script src="app.js"></script>
+<script src="calidad.js"></script>
 <script src="ayuda.js" defer></script>
 </body>
 </html>
