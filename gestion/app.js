@@ -4031,6 +4031,7 @@
     document.getElementById('ocm-estado').value = o ? (o.estado||'pendiente') : 'pendiente';
     document.getElementById('ocm-notas').value = o ? (o.notas||'') : '';
     document.getElementById('ocm-delete').style.display = o ? '' : 'none';
+    document.getElementById('ocm-imprimir').style.display = o ? '' : 'none';
     marcarModalAnulado('ocm-save', 'ocm-delete', o, 'a');
     document.getElementById('oc-overlay').classList.add('show');
   }
@@ -4254,7 +4255,7 @@
     banner.textContent = anulacionTexto(Object.assign({__genero:genero}, x));
     save.style.display = 'none';
     document.getElementById(anularBtnId).style.display = 'none';
-    Array.prototype.forEach.call(modal.querySelectorAll('input, select, textarea, button:not([id$="-cancel"])'), function(el){
+    Array.prototype.forEach.call(modal.querySelectorAll('input, select, textarea, button:not([id$="-cancel"]):not([id$="-imprimir"])'), function(el){
       if(!el.disabled){ el.disabled = true; el.setAttribute('data-anul-dis', '1'); }
     });
   }
@@ -4495,35 +4496,153 @@
     return max+1;
   }
   function certNumeroLabel(n){ return String(n||0).padStart(6,'0'); }
+  // ======================================================================
+  // Impresiones: un solo formato para todos los comprobantes
+  // ======================================================================
+  // Hoja A4 con el logo y los datos de la empresa (los del agente de
+  // retención, ⚙ → Tesorería → Retenciones), la franja de colores Anafer,
+  // el tipo y número de comprobante, secciones, totales, firmas y pie con
+  // quién y cuándo lo imprimió. Si el comprobante está anulado, sale con
+  // una marca de agua "ANULADO".
+  function impLogo(){ var l = document.querySelector('.brand-logo'); return l ? l.src : ''; }
+  function impFecha(f){ return f ? String(f).slice(0,10).split('-').reverse().join('/') : '—'; }
+  function impKV(pares){
+    return '<table class="kv">'+pares.filter(function(p){ return p && p[1]!=null && p[1]!==''; }).map(function(p){
+      return '<tr><th>'+esc(p[0])+'</th><td>'+(p[2] ? p[1] : esc(p[1]).replace(/\n/g,'<br>'))+'</td></tr>'; }).join('')+'</table>';
+  }
+  function impTabla(cols, filas, pie){
+    return '<table class="grid"><thead><tr>'+cols.map(function(c){ return '<th'+(c.num?' class="n"':'')+'>'+esc(c.t)+'</th>'; }).join('')+'</tr></thead><tbody>'+
+      (filas.length ? filas.map(function(f){ return '<tr>'+f.map(function(v,i){ return '<td'+(cols[i].num?' class="n"':'')+'>'+v+'</td>'; }).join('')+'</tr>'; }).join('')
+        : '<tr><td colspan="'+cols.length+'" class="vacio">—</td></tr>')+'</tbody>'+
+      (pie ? '<tfoot><tr>'+pie.map(function(v,i){ return '<td'+(cols[i].num?' class="n"':'')+'>'+v+'</td>'; }).join('')+'</tr></tfoot>' : '')+'</table>';
+  }
+  function impTotales(filas){
+    return '<table class="totales">'+filas.map(function(f){ return '<tr class="'+(f[2]||'')+'"><th>'+esc(f[0])+'</th><td>'+f[1]+'</td></tr>'; }).join('')+'</table>';
+  }
+  function imprimirDocumento(o){
+    var w = window.open('', '_blank');
+    if(!w){ showToast('El navegador bloqueó la ventana de impresión: permití las ventanas emergentes para este sitio.', 6000); return null; }
+    var ag = state.agente || {};
+    var emp = [ag.cuit ? 'CUIT '+ag.cuit : '', [ag.domicilio, ag.localidad, ag.provincia].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
+    var ahora = new Date();
+    var quien = state.sessionEmail || whoName();
+    var css = '@page{size:A4;margin:14mm 13mm 16mm}*{box-sizing:border-box}'+
+      'body{margin:0;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1f2d38;font-size:12.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#eef1f4}'+
+      '.hoja{position:relative;background:#fff;max-width:200mm;margin:16px auto;padding:22px 26px 18px;box-shadow:0 8px 28px rgba(31,45,56,.15);border-radius:6px;overflow:hidden}'+
+      '.franja{height:6px;margin:-22px -26px 18px;background:linear-gradient(90deg,#223c7e 0%,#223c7e 42%,#2ba9e0 42%,#2ba9e0 68%,#e1251b 68%,#e1251b 100%)}'+
+      '.cab{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding-bottom:14px;border-bottom:2px solid #223c7e}'+
+      '.emp{display:flex;gap:14px;align-items:center}.emp img{height:54px}.emp b{display:block;font-size:15px;color:#223c7e}.emp span{display:block;font-size:11px;color:#5c6b78;margin-top:2px}'+
+      '.doc{text-align:right;min-width:200px}.doc .tipo{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#5c6b78}'+
+      '.doc .num{font-size:24px;font-weight:800;color:#223c7e;line-height:1.15;margin-top:2px}.doc .fecha{font-size:12px;color:#5c6b78;margin-top:2px}'+
+      '.doc .codigo{display:inline-block;font-size:10.5px;color:#5c6b78;border:1px solid #cfd6dd;border-radius:6px;padding:1px 7px;margin-top:6px}'+
+      '.estado{display:inline-block;margin-top:6px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 10px;border-radius:999px;color:#fff}'+
+      'h2{font-size:11.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#223c7e;margin:18px 0 7px;padding-left:9px;border-left:4px solid #2ba9e0}'+
+      '.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 22px}'+
+      'table{width:100%;border-collapse:collapse}'+
+      '.kv th{text-align:left;width:38%;font-weight:600;color:#5c6b78;padding:3px 8px 3px 0;vertical-align:top;font-size:12px}.kv td{padding:3px 0;vertical-align:top}'+
+      '.grid th{background:#f1f4f7;color:#5c6b78;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-align:left;padding:7px 8px;border-bottom:1px solid #cfd6dd}'+
+      '.grid td{padding:7px 8px;border-bottom:1px solid #e9edf1}.grid tfoot td{font-weight:800;border-top:2px solid #223c7e;border-bottom:none}'+
+      '.n,.grid th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.vacio{color:#94a1ab;text-align:center}'+
+      '.totales{width:auto;min-width:300px;margin:12px 0 0 auto}.totales th{text-align:left;font-weight:600;color:#5c6b78;padding:4px 14px 4px 0}.totales td{text-align:right;font-variant-numeric:tabular-nums;padding:4px 0}'+
+      '.totales tr.menos td{color:#e1251b}.totales tr.total th,.totales tr.total td{font-size:15px;font-weight:800;color:#223c7e;border-top:2px solid #223c7e;padding-top:7px}'+
+      '.texto{white-space:pre-wrap;line-height:1.45}.nota{font-size:11.5px;color:#5c6b78;margin-top:8px}'+
+      '.firmas{display:grid;grid-template-columns:repeat(var(--nf,3),1fr);gap:28px;margin-top:56px}.firmas div{border-top:1px solid #1f2d38;text-align:center;padding-top:5px;font-size:11px;color:#5c6b78}'+
+      '.pie{margin-top:26px;padding-top:8px;border-top:1px solid #e3e8ed;display:flex;justify-content:space-between;font-size:10px;color:#94a1ab}'+
+      '.anulado{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}'+
+      '.anulado span{transform:rotate(-28deg);font-size:110px;font-weight:900;letter-spacing:.08em;color:rgba(225,37,27,.13);border:10px solid rgba(225,37,27,.13);padding:4px 34px;border-radius:18px}'+
+      '.anul-motivo{margin-top:12px;border:1px solid #f3b3ae;background:#fff1f0;color:#b42318;border-radius:8px;padding:8px 12px;font-size:12px}'+
+      '.barra{position:sticky;top:0;z-index:5;display:flex;gap:8px;justify-content:center;padding:10px;background:#1f2d38}'+
+      '.barra button{font:600 13px "Segoe UI",sans-serif;border:none;border-radius:8px;padding:8px 16px;cursor:pointer}.barra .imp{background:#2ba9e0;color:#fff}.barra .cer{background:#fff;color:#1f2d38}'+
+      '@media print{body{background:#fff}.barra{display:none}.hoja{box-shadow:none;margin:0;max-width:none;padding:0;border-radius:0}.franja{margin:0 0 14px}h2{break-after:avoid}tr{break-inside:avoid}.firmas{break-inside:avoid}}';
+    var firmas = o.firmas || [];
+    var html = '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>'+esc(o.tipo+' '+(o.numero||''))+'</title><style>'+css+'</style></head><body>'+
+      '<div class="barra"><button class="imp" onclick="window.print()">🖨 Imprimir / guardar PDF</button><button class="cer" onclick="window.close()">Cerrar</button></div>'+
+      '<div class="hoja">'+(o.anulado ? '<div class="anulado"><span>ANULADO</span></div>' : '')+'<div class="franja"></div>'+
+      '<div class="cab"><div class="emp">'+(impLogo() ? '<img src="'+impLogo()+'" alt="Anafer">' : '')+'<div><b>'+esc(ag.razon_social || 'ANAFER S.A.')+'</b>'+(emp ? '<span>'+esc(emp)+'</span>' : '')+'</div></div>'+
+      '<div class="doc"><div class="tipo">'+esc(o.tipo)+'</div><div class="num">'+esc(o.numero||'')+'</div>'+(o.fecha ? '<div class="fecha">Fecha: '+impFecha(o.fecha)+'</div>' : '')+
+      (o.estado ? '<div class="estado" style="background:'+(o.estado.color||'#223c7e')+'">'+esc(o.estado.texto)+'</div>' : '')+(o.codigo ? '<div><span class="codigo">'+esc(o.codigo)+'</span></div>' : '')+'</div></div>'+
+      (o.anulado ? '<div class="anul-motivo">'+esc(o.anulado)+'</div>' : '')+
+      (o.bloques||[]).map(function(b){ return b ? ((b.titulo ? '<h2>'+esc(b.titulo)+'</h2>' : '')+b.html) : ''; }).join('')+
+      (firmas.length ? '<div class="firmas" style="--nf:'+firmas.length+'">'+firmas.map(function(f){ return '<div>'+esc(f)+'</div>'; }).join('')+'</div>' : '')+
+      '<div class="pie"><span>Gestión Anafer · '+esc(o.tipo)+' '+esc(o.numero||'')+'</span><span>Impreso el '+ahora.toLocaleDateString('es-AR')+' '+ahora.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})+' por '+esc(quien)+'</span></div>'+
+      '</div></body></html>';
+    w.document.open(); w.document.write(html); w.document.close();
+    if(o.autoImprimir !== false) setTimeout(function(){ try{ w.focus(); w.print(); }catch(err){} }, 400);
+    return w;
+  }
+
+  // ---------- Orden de pago ----------
+  function imprimirOrdenPago(op){
+    var p = state.proveedores.find(function(x){ return x.id===op.proveedorId; }) || {};
+    var facts = (op.facturaIds||[]).map(facturaById).filter(Boolean);
+    var totalFact = r2(facts.reduce(function(t,f){ return t+Number(f.monto||0); }, 0));
+    var rets = (op.retenciones||[]).filter(function(e){ return e.importe>0; });
+    var retenido = r2(rets.reduce(function(t,e){ return t+Number(e.importe||0); }, 0));
+    var formas = formasDePago(op).filter(function(f){ return f.medioId || f.importe; });
+    var anul = esAnulado(op);
+    var estadoTxt = anul ? 'Anulada' : (op.estado==='pagada' ? 'Pagada' : 'Pendiente de pago');
+    imprimirDocumento({
+      tipo:'Orden de pago', numero:pagoNumeroLabel(op.numero), fecha:op.fecha,
+      estado:{ texto:estadoTxt, color: anul ? '#e1251b' : (op.estado==='pagada' ? '#16a34a' : '#d48f00') },
+      anulado: anul ? anulacionTexto(op) : null,
+      bloques:[
+        { titulo:'Beneficiario', html:'<div class="cols">'+impKV([['Proveedor', p.nombre||proveedorNombre(op.proveedorId)], ['CUIT', p.cuit], ['Condición IVA', p.condicionIva]])+
+          impKV([['Domicilio', [p.direccion, p.localidad, p.provincia].filter(Boolean).join(', ')], ['Banco', p.banco], ['CBU / alias', p.cbu]])+'</div>' },
+        { titulo:'Comprobantes que se cancelan', html: impTabla([{t:'Comprobante'},{t:'Fecha'},{t:'Imputación'},{t:'Importe',num:true}],
+            facts.map(function(f){ var l = facturaLineas(f)[0] || {}; return [esc(f.numero||''), impFecha(f.fecha), esc(l.centroCostoId ? centroCostoLabel(l.centroCostoId) : '—'), fmtMoney(f.monto)]; }),
+            ['<b>Total comprobantes</b>','','',fmtMoney(totalFact)]) },
+        rets.length ? { titulo:'Retenciones practicadas', html: impTabla([{t:'Impuesto'},{t:'Régimen'},{t:'Certificado'},{t:'Base',num:true},{t:'Retenido',num:true}],
+            rets.map(function(e){ return ['Ganancias', esc(regimenLabel(e.regimen)), e.certificado ? certNumeroLabel(e.certificado) : '—', fmtMoney(e.base), fmtMoney(e.importe)]; })) } : null,
+        { titulo:'Forma de pago', html: formas.length ? impTabla([{t:'Concepto'},{t:'Cuenta'},{t:'Cheque / echeq'},{t:'Fecha de cobro'},{t:'Importe',num:true}],
+            formas.map(function(f){
+              var chq = formaModo(f)==='cartera' ? (f.chequeIds||[]).map(chequeById).filter(Boolean).map(function(c){ return esc(chequeResumen(c)); }).join('<br>') : esc(f.chequeNumero||'');
+              var cobro = formaModo(f)==='cartera' ? (f.chequeIds||[]).map(chequeById).filter(Boolean).map(function(c){ return impFecha(c.fechaCobro); }).join('<br>') : (f.chequeFecha ? impFecha(f.chequeFecha) : '');
+              return [esc(medioLabel(f.medioId)||'—'), esc(f.cuentaId ? cuentaNombre(f.cuentaId) : '—'), chq||'—', cobro||'—', fmtMoney(f.importe)];
+            })) : '<div class="nota">Todavía no se cargó cómo se paga (la orden está pendiente).</div>' },
+        { html: impTotales([['Total comprobantes', fmtMoney(totalFact)]].concat(retenido ? [['Retenciones', '− '+fmtMoney(retenido), 'menos']] : []).concat([['Neto a pagar', fmtMoney(r2(totalFact-retenido)), 'total']])) },
+        op.notas ? { titulo:'Observaciones', html:'<div class="texto">'+esc(op.notas)+'</div>' } : null
+      ],
+      firmas:['Confeccionó', 'Autorizó', 'Recibí conforme · firma y aclaración']
+    });
+  }
+  // ---------- Orden de compra ----------
+  function imprimirOrdenCompra(o){
+    var p = state.proveedores.find(function(x){ return x.id===o.proveedorId; }) || {};
+    var anul = esAnulado(o);
+    imprimirDocumento({
+      tipo:'Orden de compra', numero:ocNumeroLabel(o.numero), fecha:o.fecha,
+      estado:{ texto: anul ? 'Anulada' : ocEstadoLabel(o.estado), color: anul ? '#e1251b' : (o.estado==='recibida' ? '#16a34a' : o.estado==='aprobada' ? '#2ba9e0' : '#d48f00') },
+      anulado: anul ? anulacionTexto(o) : null,
+      bloques:[
+        { titulo:'Proveedor', html:'<div class="cols">'+impKV([['Proveedor', p.nombre||proveedorNombre(o.proveedorId)], ['CUIT', p.cuit], ['Contacto', p.contacto]])+
+          impKV([['Teléfono', p.telefono], ['Email', p.email], ['Domicilio', [p.direccion, p.localidad, p.provincia].filter(Boolean).join(', ')]])+'</div>' },
+        { titulo:'Detalle del pedido', html:'<div class="texto">'+esc(o.descripcion||'—')+'</div>' },
+        { html: impTotales([['Importe estimado', fmtMoney(o.monto), 'total']]) },
+        o.notas ? { titulo:'Observaciones', html:'<div class="texto">'+esc(o.notas)+'</div>' } : null
+      ],
+      firmas:['Solicitó', 'Autorizó', 'Recibió el proveedor']
+    });
+  }
+
   function imprimirCertificado(op, e){
     var p = state.proveedores.find(function(x){ return x.id===op.proveedorId; }) || {};
     var ag = state.agente || {};
     var facts = (op.facturaIds||[]).map(function(fid){ var f = facturaById(fid); return f && facturaRegimen(f)===Number(e.regimen) ? f : null; }).filter(Boolean);
     var reg = regimenByCodigo(e.regimen);
-    var w = window.open('', '_blank');
-    if(!w){ showToast('El navegador bloqueó la ventana del certificado: permití las ventanas emergentes para este sitio.', 6000); return; }
-    var fila = function(a,b){ return '<tr><th>'+esc(a)+'</th><td>'+b+'</td></tr>'; };
-    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Certificado de retención '+certNumeroLabel(e.certificado)+'</title>'
-      +'<style>body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:32px;font-size:13px}h1{font-size:18px;margin:0 0 4px}h2{font-size:14px;margin:20px 0 6px;border-bottom:1px solid #999;padding-bottom:3px}'
-      +'table{border-collapse:collapse;width:100%}th{text-align:left;width:38%;padding:4px 6px;color:#444;font-weight:600}td{padding:4px 6px}.n{text-align:right;font-variant-numeric:tabular-nums}'
-      +'.cab{display:flex;justify-content:space-between;align-items:flex-start}.box{border:1px solid #999;padding:8px 12px;text-align:right}.firma{margin-top:70px;display:flex;justify-content:flex-end}.firma div{border-top:1px solid #333;width:260px;text-align:center;padding-top:4px}'
-      +'.lst th,.lst td{border:1px solid #ccc}@media print{button{display:none}}</style></head><body>'
-      +'<div class="cab"><div><h1>Certificado de retención</h1><div>Impuesto a las Ganancias — RG (AFIP/ARCA) 830</div></div>'
-      +'<div class="box"><b>N° '+certNumeroLabel(e.certificado)+'</b><br>Fecha: '+esc(op.fecha||'')+'</div></div>'
-      +'<h2>Agente de retención</h2><table>'+fila('Razón social', esc(ag.razon_social||''))+fila('CUIT', esc(ag.cuit||''))+fila('Domicilio', esc([ag.domicilio, ag.localidad, ag.provincia].filter(Boolean).join(', ')))+'</table>'
-      +'<h2>Sujeto retenido</h2><table>'+fila('Nombre / razón social', esc(p.nombre||''))+fila('CUIT', esc(p.cuit||''))+fila('Domicilio', esc([p.direccion, p.localidad, p.provincia].filter(Boolean).join(', ')))
-      +fila('Condición', esc(GAN_COND_LABEL[e.condicion]||e.condicion||''))+'</table>'
-      +'<h2>Retención</h2><table>'+fila('Régimen', esc(reg ? reg.codigo+' — '+reg.descripcion : String(e.regimen)))
-      +fila('Orden de pago', esc(pagoNumeroLabel(op.numero)))
-      +fila('Comprobantes', esc(facts.map(function(f){ return (f.numero||'')+' ('+(f.fecha||'')+')'; }).join(', ')))
-      +fila('Importe neto de este pago', '<span class="n">'+fmtMoney(e.base)+'</span>')
-      +fila('Pagos anteriores del mes', '<span class="n">'+fmtMoney(e.acum_prev)+'</span>')
-      +fila('Retenido anteriormente en el mes', '<span class="n">'+fmtMoney(e.ret_prev)+'</span>')
-      +fila('Importe retenido', '<b class="n">'+fmtMoney(e.importe)+'</b>')+'</table>'
-      +'<div class="firma"><div>Firma y aclaración<br>Agente de retención</div></div>'
-      +'<p style="margin-top:24px"><button onclick="window.print()">Imprimir</button></p></body></html>');
-    w.document.close();
-    setTimeout(function(){ try{ w.focus(); w.print(); }catch(err){} }, 300);
+    var anul = esAnulado(op);
+    imprimirDocumento({
+      tipo:'Certificado de retención', numero:'N° '+certNumeroLabel(e.certificado), fecha:op.fecha, codigo:'Impuesto a las Ganancias · RG (ARCA) 830',
+      estado: anul ? {texto:'Anulado', color:'#e1251b'} : null,
+      anulado: anul ? 'Este certificado corresponde a la '+pagoNumeroLabel(op.numero)+', que fue anulada. '+anulacionTexto(op) : null,
+      bloques:[
+        { titulo:'Agente de retención', html: impKV([['Razón social', ag.razon_social||''], ['CUIT', ag.cuit||''], ['Domicilio', [ag.domicilio, ag.localidad, ag.provincia].filter(Boolean).join(', ')]]) },
+        { titulo:'Sujeto retenido', html: impKV([['Nombre / razón social', p.nombre||''], ['CUIT', p.cuit||''], ['Domicilio', [p.direccion, p.localidad, p.provincia].filter(Boolean).join(', ')], ['Condición', GAN_COND_LABEL[e.condicion]||e.condicion||'']]) },
+        { titulo:'Retención', html: impKV([['Régimen', reg ? reg.codigo+' — '+reg.descripcion : String(e.regimen)], ['Orden de pago', pagoNumeroLabel(op.numero)],
+            ['Comprobantes', facts.map(function(f){ return (f.numero||'')+' ('+impFecha(f.fecha)+')'; }).join(', ')]]) +
+          impTotales([['Importe neto de este pago', fmtMoney(e.base)], ['Pagos anteriores del mes', fmtMoney(e.acum_prev)], ['Retenido anteriormente en el mes', fmtMoney(e.ret_prev)], ['Importe retenido', fmtMoney(e.importe), 'total']]) }
+      ],
+      firmas:['Firma y aclaración · Agente de retención']
+    });
   }
 
 
@@ -5467,6 +5586,7 @@
     document.getElementById('pom-estado').value = p ? (p.estado||'pendiente') : 'pendiente';
     document.getElementById('pom-notas').value = p ? (p.notas||'') : '';
     document.getElementById('pom-delete').style.display = p ? '' : 'none';
+    document.getElementById('pom-imprimir').style.display = p ? '' : 'none';
     updatePagoMontoTotal();
     renderPomFormas();
     marcarModalAnulado('pom-save', 'pom-delete', p, 'a');
@@ -5579,6 +5699,14 @@
     });
     writePago(p);
   }
+  document.getElementById('pom-imprimir').addEventListener('click', function(){
+    var p = state.editingPagoId ? state.ordenesPago.find(function(x){ return x.id===state.editingPagoId; }) : null;
+    if(p) imprimirOrdenPago(p);
+  });
+  document.getElementById('ocm-imprimir').addEventListener('click', function(){
+    var o = state.editingOCId ? state.ordenesCompra.find(function(x){ return x.id===state.editingOCId; }) : null;
+    if(o) imprimirOrdenCompra(o);
+  });
   document.getElementById('pom-delete').addEventListener('click', function(){
     var id = state.editingPagoId;
     var p = id ? state.ordenesPago.find(function(x){ return x.id===id; }) : null;
@@ -6622,7 +6750,8 @@
       movimientos: state.movimientos, cheques: state.cheques, routes: state.routes, trucks: state.trucks, branches: state.branches, facturasCargadas: !!state.facturasCargadas }; },
     esAnulado: esAnulado, facturaLineas: facturaLineas, ccRaiz: ccRaiz, ccNombre: ccNombre, ccRuta: ccRuta, proveedorNombre: proveedorNombre,
     labelForRoute: labelForRoute, branchLabel: branchLabel, cuentaSaldoActual: cuentaSaldoActual, cuentaSaldoProyectado: cuentaSaldoProyectado,
-    fmtMoney: fmtMoney, AREAS: AREAS
+    fmtMoney: fmtMoney, AREAS: AREAS,
+    imprimirDocumento: imprimirDocumento, impKV: impKV, impTabla: impTabla, impTotales: impTotales, impFecha: impFecha
   };
 
   // ---------- 1) Viajes y envíos que se repiten ----------

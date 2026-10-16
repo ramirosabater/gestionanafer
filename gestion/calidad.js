@@ -407,20 +407,26 @@
       }));
   });
   function imprimirPac(p) {
-    var w = window.open('', '_blank');
-    if (!w) { toast('El navegador bloqueó la ventana: permití las ventanas emergentes para este sitio.', 6000); return; }
-    var fila = function (a, b) { return '<tr><th>' + esc(a) + '</th><td>' + esc(b || '—').replace(/\n/g, '<br>') + '</td></tr>'; };
-    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>NC/PAC ' + esc(codigoPac(p)) + '</title><style>body{font-family:Arial,sans-serif;font-size:12.5px;margin:28px;color:#111}' +
-      'h1{font-size:17px;margin:0}h2{font-size:13px;margin:16px 0 4px;border-bottom:1px solid #999;padding-bottom:2px}table{border-collapse:collapse;width:100%}th{text-align:left;width:30%;padding:3px 6px;color:#444;vertical-align:top}td{padding:3px 6px}' +
-      '.cab{display:flex;justify-content:space-between}.box{border:1px solid #999;padding:6px 10px;text-align:right;font-size:11.5px}@media print{button{display:none}}</style></head><body>' +
-      '<div class="cab"><div><h1>Seguimiento de NC / PAC ' + esc(codigoPac(p)) + '</h1><div>' + esc(p.clasificacion || '') + ' · ' + esc(p.proceso || '') + '</div></div><div class="box">RG-0801<br>Estado: <b>' + esc(anulado(p) ? 'ANULADA' : p.estado) + '</b></div></div>' +
-      '<h2>Hallazgo</h2><table>' + fila('Fecha', fmtFecha(p.fecha)) + fila('Origen', p.origen) + fila('Hallazgo', p.hallazgo) + fila('Riesgo', p.riesgo) + fila('Opción para abordar el riesgo', p.opcion_riesgo) + fila('Causa', p.causa) + '</table>' +
-      '<h2>Corrección</h2><table>' + fila('Corrección', p.correccion) + fila('Responsable', p.resp_correccion) + fila('Fecha límite', fmtFecha(p.fecha_correccion)) + '</table>' +
-      '<h2>Acción correctiva / de mejora</h2><table>' + fila('Acción', p.accion) + fila('Responsable', p.resp_accion) + fila('Fecha límite de implementación', fmtFecha(p.fecha_accion)) + '</table>' +
-      '<h2>Seguimiento</h2><table>' + fila('Responsable', p.resp_seguimiento) + fila('Fecha', fmtFecha(p.fecha_seguimiento)) + fila('Comentarios', p.comentarios) + '</table>' +
-      '<h2>Verificación de eficacia</h2><table>' + fila('Criterio', p.eficacia_criterio) + fila('Resultado', p.eficacia_resultado || 'Pendiente') + fila('Responsable', p.resp_eficacia) + fila('Fecha', fmtFecha(p.fecha_eficacia)) + fila('Detalles', p.eficacia_detalle) + '</table>' +
-      '<p style="margin-top:20px"><button onclick="window.print()">Imprimir</button></p></body></html>');
-    w.document.close();
+    var anul = anulado(p);
+    var col = p.estado === 'Cerrada' ? '#16a34a' : p.estado === 'En gestión' ? '#2ba9e0' : '#d48f00';
+    var texto = function (t) { return '<div class="texto">' + esc(t || '—') + '</div>'; };
+    var vinc = (p.reclamo_ids || []).map(function (rid) { return S.reclamos.find(function (x) { return x.id === rid; }); }).filter(Boolean);
+    G.imprimirDocumento({
+      tipo: 'Seguimiento de NC / PAC', numero: codigoPac(p), fecha: p.fecha, codigo: 'RG-0801',
+      estado: { texto: anul ? 'Anulada' : (p.estado || 'Abierta'), color: anul ? '#e1251b' : col },
+      anulado: anul ? G.anulacionTexto({ anuladoEn: p.anulado_en, anuladoPor: p.anulado_por, motivoAnulacion: p.motivo_anulacion }) : null,
+      bloques: [
+        { titulo: '1 · Hallazgo', html: '<div class="cols">' + G.impKV([['Origen', p.origen], ['Clasificación', p.clasificacion]]) + G.impKV([['Proceso', p.proceso], ['Riesgo', p.riesgo]]) + '</div>' + texto(p.hallazgo) },
+        { titulo: '2 · Riesgo y causa', html: G.impKV([['Opción para abordar el riesgo', p.opcion_riesgo], ['Causa', p.causa || '—']]) },
+        { titulo: '3 · Corrección', html: texto(p.correccion) + G.impKV([['Responsable', p.resp_correccion], ['Fecha límite', G.impFecha(p.fecha_correccion)]]) },
+        { titulo: '4 · Acción correctiva / de mejora', html: texto(p.accion) + G.impKV([['Responsable', p.resp_accion], ['Fecha límite de implementación', G.impFecha(p.fecha_accion)]]) },
+        { titulo: '5 · Seguimiento', html: G.impKV([['Responsable', p.resp_seguimiento], ['Fecha', G.impFecha(p.fecha_seguimiento)], ['Comentarios', p.comentarios || '—']]) },
+        { titulo: '6 · Verificación de eficacia', html: G.impKV([['Criterio', p.eficacia_criterio || '—'], ['Resultado', p.eficacia_resultado || 'Pendiente'], ['Responsable', p.resp_eficacia], ['Fecha', G.impFecha(p.fecha_eficacia)], ['Detalles', p.eficacia_detalle || '—']]) },
+        vinc.length ? { titulo: 'Reclamos vinculados', html: G.impTabla([{ t: 'Nº' }, { t: 'Fecha' }, { t: 'Producto' }, { t: 'Lote' }, { t: 'Desvío real' }],
+          vinc.map(function (r) { return [String(r.numero), G.impFecha(r.fecha), esc(r.producto), esc(r.lote), esc(r.desvio_real)]; })) } : null,
+      ],
+      firmas: ['Responsable de la acción', 'Responsable del SGC', 'Verificó la eficacia'],
+    });
   }
 
   // =====================================================================
