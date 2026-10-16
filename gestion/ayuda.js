@@ -194,6 +194,11 @@
     ".ayuda-btn{position:fixed;right:18px;bottom:18px;z-index:9000;border:none;background:#fff;border-radius:999px;box-shadow:0 8px 24px -8px rgba(0,0,0,.35);padding:6px 14px 6px 6px;display:flex;align-items:center;gap:6px;cursor:pointer;font:600 13px system-ui,-apple-system,Segoe UI,sans-serif;color:#18160f}" +
     ".ayuda-btn .sif-svg{height:46px;width:auto}" +
     ".ayuda-btn:hover{transform:translateY(-1px)}" +
+    // Con una ventana abierta (factura, configuración...) el botón sube arriba
+    // a la derecha y queda solo el sifón, para no tapar Guardar / Listo.
+    "body:has(.overlay.show) .ayuda-btn{top:6px;bottom:auto;right:6px;padding:3px;box-shadow:0 4px 12px -4px rgba(0,0,0,.35)}" +
+    "body:has(.overlay.show) .ayuda-btn span{display:none}" +
+    "body:has(.overlay.show) .ayuda-btn .sif-svg{height:34px}" +
     ".ayuda-btn[hidden],.ayuda-panel[hidden]{display:none}" +
     ".ayuda-panel{position:fixed;right:18px;bottom:18px;z-index:9001;width:360px;max-width:calc(100vw - 32px);max-height:calc(100vh - 36px);overflow:auto;background:#fff;color:#18160f;border-radius:16px;box-shadow:0 18px 48px -12px rgba(0,0,0,.4);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}" +
     ".ayuda-top{display:flex;gap:10px;align-items:flex-end;padding:14px 14px 0}" +

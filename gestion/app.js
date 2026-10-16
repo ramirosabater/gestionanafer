@@ -1046,6 +1046,9 @@
     }
   });
 
+  // Las ventanas (nueva factura, orden de pago, configuración...) ya NO se
+  // cierran con un clic afuera: solo con Cancelar / Listo / Guardar, para no
+  // perder lo que se venía cargando por un clic de más.
   function closeCellModal(){
     document.getElementById('cell-overlay').classList.remove('show');
     state.editing = null;
@@ -1134,7 +1137,6 @@
   document.getElementById('cm-cancel').addEventListener('click', closeCellModal);
   document.getElementById('cm-save').addEventListener('click', saveCell);
   document.getElementById('cm-delete').addEventListener('click', deleteCell);
-  document.getElementById('cell-overlay').addEventListener('click', function(e){ if(e.target===this) closeCellModal(); });
 
   // ---------- Auto-plan ----------
   function autoPlan(){
@@ -1741,7 +1743,6 @@
     document.getElementById(kind.modalPrefix+'-cancel').addEventListener('click', function(){ closeExtraVisitModal(kind); });
     document.getElementById(kind.modalPrefix+'-save').addEventListener('click', function(){ saveExtraVisit(kind); });
     document.getElementById(kind.modalPrefix+'-delete').addEventListener('click', function(){ deleteExtraVisit(kind); });
-    document.getElementById(kind.overlayId).addEventListener('click', function(e){ if(e.target===this) closeExtraVisitModal(kind); });
   });
 
   function renderBranchGrid(){
@@ -1975,7 +1976,6 @@
   document.getElementById('vm-cancel').addEventListener('click', closeVisitModal);
   document.getElementById('vm-save').addEventListener('click', saveVisit);
   document.getElementById('vm-delete').addEventListener('click', deleteVisit);
-  document.getElementById('visit-overlay').addEventListener('click', function(e){ if(e.target===this) closeVisitModal(); });
 
   function fetchVisitsMonth(){
     if(!state.sb) return;
@@ -3452,7 +3452,6 @@
 
   document.getElementById('new-centro-costo-btn').addEventListener('click', function(){ openCentroCostoModal(null); });
   document.getElementById('ccm-cancel').addEventListener('click', closeCentroCostoModal);
-  document.getElementById('centro-costo-overlay').addEventListener('click', function(e){ if(e.target===this) closeCentroCostoModal(); });
   document.getElementById('ccm-save').addEventListener('click', function(){
     var codigo = document.getElementById('ccm-codigo').value.trim();
     var descripcion = document.getElementById('ccm-descripcion').value.trim();
@@ -3514,7 +3513,6 @@
 
   document.getElementById('new-concepto-btn').addEventListener('click', function(){ openConceptoModal(null); });
   document.getElementById('cpm-cancel').addEventListener('click', closeConceptoModal);
-  document.getElementById('concepto-overlay').addEventListener('click', function(e){ if(e.target===this) closeConceptoModal(); });
   document.getElementById('cpm-save').addEventListener('click', function(){
     var nombre = document.getElementById('cpm-nombre').value.trim();
     if(!nombre){ showToast('Ingresá el nombre del concepto.'); return; }
@@ -3602,7 +3600,6 @@
   function closeRubroModal(){ document.getElementById('rubro-overlay').classList.remove('show'); }
   document.getElementById('new-rubro-btn').addEventListener('click', function(){ openRubroModal(null); });
   document.getElementById('rbm-cancel').addEventListener('click', closeRubroModal);
-  document.getElementById('rubro-overlay').addEventListener('click', function(e){ if(e.target===this) closeRubroModal(); });
   document.getElementById('rbm-save').addEventListener('click', function(){
     var nombre = document.getElementById('rbm-nombre').value.trim();
     if(!nombre){ showToast('Ingresá el nombre del rubro.'); return; }
@@ -3943,7 +3940,6 @@
 
   document.getElementById('new-proveedor-btn').addEventListener('click', function(){ openProveedorModal(null); });
   document.getElementById('pm-cancel').addEventListener('click', closeProveedorModal);
-  document.getElementById('proveedor-overlay').addEventListener('click', function(e){ if(e.target===this) closeProveedorModal(); });
   document.getElementById('pm-save').addEventListener('click', function(){
     var nombre = document.getElementById('pm-nombre').value.trim();
     if(!nombre){ showToast('Ingresá el nombre del proveedor.'); return; }
@@ -4035,7 +4031,6 @@
 
   document.getElementById('new-oc-btn').addEventListener('click', function(){ openOCModal(null); });
   document.getElementById('ocm-cancel').addEventListener('click', closeOCModal);
-  document.getElementById('oc-overlay').addEventListener('click', function(e){ if(e.target===this) closeOCModal(); });
   document.getElementById('oc-filter-estado').addEventListener('change', function(){
     state.ocFilterEstado = this.value;
     renderOCList();
@@ -5134,7 +5129,6 @@
 
   document.getElementById('new-factura-btn').addEventListener('click', function(){ openFacturaModal(null); });
   document.getElementById('fm-cancel').addEventListener('click', closeFacturaModal);
-  document.getElementById('factura-overlay').addEventListener('click', function(e){ if(e.target===this) closeFacturaModal(); });
   document.getElementById('factura-filter-estado').addEventListener('change', function(){
     state.facturaFilterEstado = this.value;
     renderFacturasList();
@@ -5461,7 +5455,6 @@
 
   document.getElementById('new-pago-btn').addEventListener('click', function(){ openPagoModal(null); });
   document.getElementById('pom-cancel').addEventListener('click', closePagoModal);
-  document.getElementById('pago-overlay').addEventListener('click', function(e){ if(e.target===this) closePagoModal(); });
   document.getElementById('pago-filter-estado').addEventListener('change', function(){
     state.pagoFilterEstado = this.value;
     renderPagosList();
@@ -5853,7 +5846,6 @@
 
   document.getElementById('new-cuenta-btn').addEventListener('click', function(){ openCuentaModal(null); });
   document.getElementById('ctam-cancel').addEventListener('click', closeCuentaModal);
-  document.getElementById('cuenta-overlay').addEventListener('click', function(e){ if(e.target===this) closeCuentaModal(); });
   document.getElementById('ctam-save').addEventListener('click', function(){
     var nombre = document.getElementById('ctam-nombre').value.trim();
     if(!nombre){ showToast('Ingresá el nombre de la cuenta.'); return; }
@@ -6084,7 +6076,6 @@
   document.getElementById('new-movimiento-btn').addEventListener('click', function(){ openMovimientoModal(null, 'egreso'); });
   document.getElementById('new-entrada-btn').addEventListener('click', function(){ openMovimientoModal(null, 'ingreso'); });
   document.getElementById('movm-cancel').addEventListener('click', closeMovimientoModal);
-  document.getElementById('movimiento-overlay').addEventListener('click', function(e){ if(e.target===this) closeMovimientoModal(); });
   document.getElementById('movm-save').addEventListener('click', function(){
     var tipo = movTipoActual();
     var medioId = document.getElementById('movm-medio').value;
@@ -6201,7 +6192,6 @@
   }
   function closeChequeModal(){ document.getElementById('cheque-overlay').classList.remove('show'); }
   document.getElementById('chq-cancel').addEventListener('click', closeChequeModal);
-  document.getElementById('cheque-overlay').addEventListener('click', function(e){ if(e.target===this) closeChequeModal(); });
   document.getElementById('chq-btn-depositar').addEventListener('click', function(){
     var sel = document.getElementById('chq-dep-cuenta');
     fillSelect(sel, state.cuentas.filter(function(c){ return c.tipo==='banco'; }).sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); }), 'id', 'nombre', 'Elegir banco');
@@ -6290,7 +6280,6 @@
   function closeMedioModal(){ document.getElementById('medio-overlay').classList.remove('show'); }
   document.getElementById('new-medio-btn').addEventListener('click', function(){ openMedioModal(null); });
   document.getElementById('mcm-cancel').addEventListener('click', closeMedioModal);
-  document.getElementById('medio-overlay').addEventListener('click', function(e){ if(e.target===this) closeMedioModal(); });
   document.getElementById('mcm-save').addEventListener('click', function(){
     var codigo = document.getElementById('mcm-codigo').value.trim().toUpperCase();
     var nombre = document.getElementById('mcm-nombre').value.trim();
@@ -6369,7 +6358,6 @@
   document.getElementById('settings-close').addEventListener('click', function(){
     document.getElementById('settings-overlay').classList.remove('show');
   });
-  document.getElementById('settings-overlay').addEventListener('click', function(e){ if(e.target===this) this.classList.remove('show'); });
 
   document.getElementById('add-role-btn').addEventListener('click', function(){
     var list = document.getElementById('roles-list');

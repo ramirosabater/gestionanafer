@@ -352,6 +352,11 @@
   .settings-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
   @media (max-width:520px){ .settings-grid{grid-template-columns:1fr;} .modal.wide{max-width:480px;} }
   .modal.wide{max-width:600px; max-height:calc(100vh - 32px); display:flex; flex-direction:column;}
+  /* Ventanas grandes: configuración casi a pantalla completa; factura y
+     orden de pago, anchas, para que entre más información sin scroll. */
+  .modal.wide.modal-xl{max-width:min(1360px, calc(100vw - 32px)); height:calc(100vh - 32px);}
+  .modal.wide.modal-lg{max-width:min(980px, calc(100vw - 32px));}
+  .overlay:has(.modal-xl){padding:16px;}
   .settings-body{overflow-y:auto; flex:1 1 auto; min-height:0; margin:0 -4px; padding:0 4px;}
   /* Igual que .settings-body, para cualquier otro modal "wide" con contenido
      que puede no entrar en la pantalla (p.ej. Factura): el título/subtítulo
@@ -1338,7 +1343,7 @@
 </div>
 
 <div class="overlay" id="proveedor-overlay">
-  <div class="modal" id="proveedor-modal" style="max-width:460px;">
+  <div class="modal" id="proveedor-modal" style="max-width:720px;">
     <h3 id="pm-title">Nuevo proveedor</h3>
     <div class="sub">Datos del proveedor</div>
     <div class="field">
@@ -1529,7 +1534,7 @@
 </div>
 
 <div class="overlay" id="cheque-overlay">
-  <div class="modal" id="cheque-modal" style="max-width:460px;">
+  <div class="modal" id="cheque-modal" style="max-width:560px;">
     <h3 id="chq-title">Cheque</h3>
     <div class="sub" id="chq-sub">—</div>
     <div class="chq-detail" id="chq-detail"></div>
@@ -1555,7 +1560,7 @@
 </div>
 
 <div class="overlay" id="oc-overlay">
-  <div class="modal" id="oc-modal" style="max-width:420px;">
+  <div class="modal" id="oc-modal" style="max-width:560px;">
     <h3 id="ocm-title">Nueva orden de compra</h3>
     <div class="sub" id="ocm-sub">—</div>
     <div class="field">
@@ -1597,7 +1602,7 @@
 </div>
 
 <div class="overlay" id="factura-overlay">
-  <div class="modal wide" id="factura-modal" style="max-width:660px;">
+  <div class="modal wide modal-lg" id="factura-modal">
     <h3 id="fm-title">Nueva factura</h3>
     <div class="sub">Datos de la factura — cargalos a mano o subí el archivo para completarlos automáticamente</div>
     <div class="modal-scroll-body">
@@ -1684,7 +1689,7 @@
 </div>
 
 <div class="overlay" id="pago-overlay">
-  <div class="modal wide" id="pago-modal" style="max-width:640px;">
+  <div class="modal wide modal-lg" id="pago-modal">
     <h3 id="pom-title">Nueva orden de pago</h3>
     <div class="sub" id="pom-sub">—</div>
     <div class="modal-scroll-body">
@@ -1776,7 +1781,7 @@
 </div>
 
 <div class="overlay" id="movimiento-overlay">
-  <div class="modal wide" id="movimiento-modal" style="max-width:520px;">
+  <div class="modal wide" id="movimiento-modal" style="max-width:720px;">
     <h3 id="movm-title">Nuevo movimiento</h3>
     <div class="sub" id="movm-sub">Movimiento de caja/banco</div>
     <div class="modal-scroll-body">
@@ -1844,7 +1849,7 @@
 </div>
 
 <div class="overlay" id="settings-overlay">
-  <div class="modal wide" id="settings-modal" style="max-width:760px;">
+  <div class="modal wide modal-xl" id="settings-modal">
     <h3>Configuración</h3>
     <div class="sub">Elegí una categoría a la izquierda para administrar sus datos.</div>
 
