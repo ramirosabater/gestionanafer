@@ -42,6 +42,10 @@ test("Calidad aparece como área nueva para el administrador y muestra los recla
   await expect(page.locator("#rq-count")).toHaveText("(4)");
   await page.fill("#rq-f-buscar", "350");
   await expect(page.locator("#rq-body tr")).toHaveCount(1);
+  // volver al inicio no deja la pantalla de Calidad abierta
+  await page.click("#home-btn");
+  await expect(page.locator("#view-reclamos")).toBeHidden();
+  await expect(page.locator("#menu-card")).toBeHidden();
   expect(errores).toEqual([]);
 });
 
@@ -117,11 +121,17 @@ test("indicadores y listas de calidad", async ({ page }) => {
   await abrirGestion(page, datosCalidad(), { email: "admin@anafer.test" });
   await entrarCalidad(page);
   await page.click("#tab-calidash");
-  await expect(page.locator("#cd-k-rec")).toHaveText("4");
-  await expect(page.locator("#cd-k-just")).toHaveText("67% (2)");
-  await expect(page.locator("#cd-k-abiertos")).toHaveText("1");
-  await expect(page.locator("#cd-k-pac-vencidas")).toHaveText("1");
-  await expect(page.locator("#cd-b-envase")).toContainText("Camillo");
+  const kpi = (sel, lab) => page.locator(sel + " .cq-kpi").filter({ has: page.locator(".lab", { hasText: new RegExp("^" + lab + "$") }) }).locator(".val");
+  await expect(kpi("#cd-kpis", "Reclamos del período")).toHaveText("4");
+  await expect(kpi("#cd-kpis", "Justificados")).toHaveText("67%");
+  await expect(kpi("#cd-kpis", "Abiertos")).toHaveText("1");
+  await expect(kpi("#cd-kpis-pac", "Con acción vencida")).toHaveText("1");
+  await expect(page.locator("#cd-envase")).toContainText("Camillo");
+  await expect(page.locator("#cd-dona-desvio .center b")).toHaveText("3");          // 3 reclamos controlados
+  await expect(page.locator("#cd-vencidas tbody tr")).toHaveCount(1);
+  // filtro por producto
+  await page.selectOption("#cd-producto", "Bx12Azul");
+  await expect(kpi("#cd-kpis", "Reclamos del período")).toHaveText("1");
   // ⚙ → Calidad → Listas
   await page.click("#settings-btn");
   await page.click("#scatbtn-calidad");

@@ -19,6 +19,7 @@
     --border-strong:rgba(24,22,15,0.22);
     --accent:#1472cc;
     --accent-ink:#ffffff;
+    --menu-navy:#223c7e; --menu-ink2:#5c6b78; --menu-line:#e3e8ed; --menu-soft:#f1f4f7; --menu-sub-bg:#f6f8fa;
     --ghost-bg:rgba(24,22,15,0.04);
     --today:rgba(20,114,204,0.10);
     --danger:#e30613;
@@ -62,6 +63,7 @@
   @media (prefers-color-scheme: dark){
     :root:not([data-theme="light"]){
       color-scheme: dark;
+      --menu-navy:#a9bdf0; --menu-ink2:#c4c1b5; --menu-line:rgba(255,255,255,0.12); --menu-soft:rgba(255,255,255,0.06); --menu-sub-bg:#151513;
       --bg:#0e0e0c;
       --surface:#1a1a17;
       --surface-2:#232320;
@@ -112,6 +114,7 @@
   }
   :root[data-theme="dark"]{
     color-scheme: dark;
+    --menu-navy:#a9bdf0; --menu-ink2:#c4c1b5; --menu-line:rgba(255,255,255,0.12); --menu-soft:rgba(255,255,255,0.06); --menu-sub-bg:#151513;
     --bg:#0e0e0c;
     --surface:#1a1a17;
     --surface-2:#232320;
@@ -432,10 +435,37 @@
   table.cargo-table input[type=number]{width:100%; font-family:inherit; font-size:12.5px; border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:6px; padding:4px 6px;}
   .cargo-empty{font-size:12.5px; color:var(--muted); padding:8px;}
 
-  .viewtabs{display:flex; gap:4px; margin-bottom:14px; border-bottom:1px solid var(--border);}
-  .viewtab{font-family:inherit; font-size:13.5px; font-weight:600; color:var(--ink-2); background:transparent; border:none; border-bottom:2px solid transparent; padding:9px 4px; margin-right:18px; cursor:pointer;}
-  .viewtab:hover{color:var(--ink);}
-  .viewtab.active{color:var(--ink); border-bottom-color:var(--accent);}
+  /* ---- Encabezado y menú con el estilo del panel de RR.HH. ---- */
+  .topbar{position:relative; overflow:hidden; align-items:center; background:var(--surface); border:1px solid var(--menu-line); border-radius:16px;
+    box-shadow:0 4px 14px rgba(31,45,56,.08); padding:20px 22px 16px; margin-bottom:14px;}
+  .topbar::before{content:''; position:absolute; top:0; left:0; right:0; height:6px;
+    background:linear-gradient(90deg,#223c7e 0%,#223c7e 42%,#2ba9e0 42%,#2ba9e0 68%,#e1251b 68%,#e1251b 100%);}
+  .topbar .brand h1{color:var(--menu-navy); font-weight:800;}
+  .topbar .brand .tag{color:var(--muted); font-size:12px;}
+  .topbar .who{align-items:center;}
+  .topbar .who .btn.ghost{border:1px solid var(--menu-line); background:var(--surface); border-radius:9px; color:var(--menu-ink2); font-weight:600; padding:6px 12px;}
+  .topbar .who .btn.ghost:hover{color:var(--menu-navy);}
+  .who-email{font-size:12px; color:var(--menu-ink2); background:var(--menu-soft); border:1px solid var(--menu-line); border-radius:999px; padding:6px 12px; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .who-email[hidden]{display:none;}
+  .menu-card{background:var(--surface); border:1px solid var(--menu-line); border-radius:16px; box-shadow:0 1px 3px rgba(31,45,56,.06); margin-bottom:18px; overflow:hidden;}
+  .menu-card:has(> .viewtabs[hidden]):has(> .menu-sub[hidden]){display:none;}
+  .viewtabs{display:flex; flex-wrap:wrap; gap:4px; padding:8px; margin:0; border:none;}
+  .viewtab{font-family:inherit; font-size:14px; font-weight:600; color:var(--menu-ink2); background:transparent; border:none; border-radius:12px; padding:8px 14px; margin:0; cursor:pointer;
+    display:inline-flex; align-items:center; gap:6px; transition:background-color .15s, color .15s;}
+  .viewtab:hover{background:var(--menu-soft); color:var(--menu-navy);}
+  .viewtab.active, .viewtab.active:hover{background:var(--area-color, #e1251b); color:#fff;}
+  .viewtab[hidden]{display:none;}
+  .vt-ico{font-size:15px; line-height:1;}
+  .menu-sub{background:var(--menu-sub-bg); border-top:1px solid var(--menu-line); padding:6px 12px;}
+  .menu-sub[hidden]{display:none;}
+  .menu-sub .settings-tabs{border:none; margin:0; gap:4px;}
+  .menu-sub .settings-tabs[hidden]{display:none;}
+  .menu-sub .stabbtn, .settings-subtabs .stabbtn{border:1px solid transparent; border-radius:8px; padding:6px 12px; font-size:13px; color:var(--menu-ink2);}
+  .menu-sub .stabbtn:hover, .settings-subtabs .stabbtn:hover{color:var(--menu-navy);}
+  .menu-sub .stabbtn.active, .settings-subtabs .stabbtn.active{background:var(--surface); color:var(--menu-navy); border-color:var(--menu-line); box-shadow:0 1px 2px rgba(0,0,0,.08);}
+  .settings-subtabs{background:var(--menu-sub-bg); border:1px solid var(--menu-line) !important; border-radius:12px; padding:5px 8px; gap:4px !important;}
+  .settings-nav .scatbtn{border-left:none !important; border-radius:12px !important; color:var(--menu-ink2);}
+  .settings-nav .scatbtn.active{background:var(--menu-navy) !important; color:#fff !important; box-shadow:none !important;}
 
   .dash-toolbar{display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:14px; flex-wrap:wrap;}
   .dash-toolbar label{font-size:12.5px; color:var(--ink-2);}
@@ -571,8 +601,6 @@
   .panel-company h4::before{background:var(--chart-company);}
   .panel-occasional h4::before{background:var(--chart-occasional);}
   .panel-gastos h4::before{background:var(--chart-gastos);}
-  .panel-calidad h4::before{background:#7c3aed;}
-  .panel-calidad2 h4::before{background:#db2777;}
 
   .dash-section-title{font-size:13.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-2); margin:26px 0 12px; padding-top:18px; border-top:1px solid var(--border);}
   .kpi-tile.tile-branch::before{background:var(--chart-branch);}
@@ -632,6 +660,74 @@
     background:color-mix(in srgb, var(--danger) 10%, var(--surface)); color:var(--danger); border:1px solid color-mix(in srgb, var(--danger) 35%, var(--surface));}
   #anular-overlay{z-index:60;}
   /* ---------- Calidad ---------- */
+  /* Tablero de Calidad: mismo estilo que los tableros de Comercial y RR.HH. */
+  .cq{--cq-navy:#223c7e;--cq-ink:#1f2d38;--cq-ink2:#5c6b78;--cq-muted:#94a1ab;--cq-line:#e3e8ed;--cq-soft:#f1f4f7;--cq-track:#eef1f4;color:var(--cq-ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+  .cq-card{background:#fff;border:1px solid var(--cq-line);border-radius:16px;box-shadow:0 6px 20px rgba(31,45,56,.06);}
+  .cq-hero{background:linear-gradient(115deg,#1e3a7b 0%,#2c4f9e 55%,#2c7fcf 100%);color:#fff;border-radius:18px;padding:20px 22px 18px;box-shadow:0 10px 28px rgba(34,60,126,.28);margin:4px 0 14px;}
+  .cq-hero h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-.01em;color:#fff;}
+  .cq-hero p{margin:3px 0 0;font-size:13px;color:rgba(255,255,255,.78);}
+  .cq-filters{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:16px;}
+  .cq-hf label{display:block;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.72);margin-bottom:5px;}
+  .cq-hf select{font:inherit;font-size:13.5px;color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);border-radius:10px;padding:8px 30px 8px 12px;outline:none;min-width:120px;appearance:none;-webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='white' stroke-width='1.6' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;}
+  .cq-hf select option{color:var(--cq-ink);}
+  .cq-chip{font:inherit;font-size:12px;font-weight:700;color:#fff;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);border-radius:9px;padding:8px 11px;cursor:pointer;}
+  .cq-chip:hover{background:rgba(255,255,255,.28);}
+  .cq-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:4px 0 10px;}
+  .cq-kpi{position:relative;padding:16px 18px 15px;border-left:4px solid var(--c,var(--cq-navy));overflow:hidden;}
+  .cq-kpi .top{display:flex;align-items:center;gap:9px;margin-bottom:10px;}
+  .cq-kpi .ico{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;background:color-mix(in srgb,var(--c,var(--cq-navy)) 13%,#fff);flex-shrink:0;}
+  .cq-kpi .lab{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--cq-muted);line-height:1.25;}
+  .cq-kpi .val{font-size:27px;font-weight:800;letter-spacing:-.01em;line-height:1.1;font-variant-numeric:tabular-nums;}
+  .cq-kpi .sub{font-size:12px;color:var(--cq-ink2);margin-top:5px;}
+  .cq-kpi .tag{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;margin-top:6px;}
+  .cq-nota{color:var(--cq-muted);font-size:11px;padding:0 6px 14px;}
+  .cq-grid{display:grid;gap:16px;margin-bottom:16px;}
+  .cq-g32{grid-template-columns:3fr 2fr;} .cq-g11{grid-template-columns:1fr 1fr;}
+  .cq-panel{padding:18px 20px;min-width:0;} .cq-full{margin-bottom:16px;}
+  .cq-ph{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+  .cq-ph h2{margin:0;font-size:15px;font-weight:800;padding-left:11px;border-left:4px solid var(--a,var(--cq-navy));line-height:1.25;color:var(--cq-ink);text-transform:none;letter-spacing:0;}
+  .cq-ph p{margin:3px 0 0 15px;font-size:12px;color:var(--cq-muted);}
+  .cq-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--cq-ink2);align-items:center;}
+  .cq-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+  .cq-scrollx{overflow-x:auto;}
+  .cq-sec{font-size:17px;font-weight:800;margin:26px 2px 12px;color:var(--cq-ink);}
+  .cq-vchart{position:relative;padding-top:6px;}
+  .cq-vgrid{position:absolute;left:0;right:0;border-top:1px solid #edf0f3;}
+  .cq-vcols{position:relative;display:flex;gap:8px;align-items:flex-end;}
+  .cq-vcol{flex:1;min-width:34px;text-align:center;}
+  .cq-vplot{position:relative;display:flex;align-items:flex-end;justify-content:center;}
+  .cq-vstack{width:56%;max-width:46px;display:flex;flex-direction:column-reverse;border-radius:5px 5px 0 0;overflow:hidden;}
+  .cq-vcol:hover .cq-vstack{filter:brightness(1.08);}
+  .cq-vlab{position:absolute;left:0;right:0;font-size:11px;font-weight:800;color:var(--cq-ink);}
+  .cq-vx{font-size:11.5px;color:var(--cq-muted);margin-top:6px;border-top:1px solid #dfe4e9;padding-top:6px;}
+  .cq-donut-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;}
+  .cq-donut{position:relative;width:180px;height:180px;}
+  .cq-donut svg{transform:rotate(-90deg);}
+  .cq-donut .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .cq-donut .center b{font-size:22px;font-weight:800;}
+  .cq-donut .center span{font-size:11px;color:var(--cq-muted);}
+  .cq-dleg{width:100%;max-width:380px;}
+  .cq-dleg .r{display:grid;grid-template-columns:14px 1fr auto 46px;gap:8px;align-items:center;font-size:13px;padding:4px 0;}
+  .cq-dleg .r i{width:11px;height:11px;border-radius:3px;}
+  .cq-dleg .r b{font-variant-numeric:tabular-nums;}
+  .cq-dleg .r span:last-child{text-align:right;color:var(--cq-muted);font-size:11.5px;font-variant-numeric:tabular-nums;}
+  .cq-hrow{display:grid;grid-template-columns:minmax(90px,170px) 1fr auto;gap:10px;align-items:center;margin:9px 0;}
+  .cq-hrow .hl{font-size:12px;color:var(--cq-ink2);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cq-hrow .hv{font-size:12.5px;font-weight:800;min-width:54px;text-align:right;font-variant-numeric:tabular-nums;}
+  .cq-htrack{position:relative;height:18px;background:var(--cq-track);border-radius:5px;overflow:hidden;}
+  .cq-htrack .b{position:absolute;top:0;bottom:0;left:0;border-radius:5px;}
+  .cq-hsub{grid-column:2 / 4;font-size:10.5px;color:var(--cq-muted);margin-top:-6px;}
+  .cq-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .cq-table th,.cq-table td{padding:9px 10px;border-bottom:1px solid #f0f2f5;text-align:left;}
+  .cq-table th{color:var(--cq-muted);font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;border-bottom:1px solid var(--cq-line);background:none;position:static;}
+  .cq-table td.num,.cq-table th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .cq-table tbody tr:hover td{background:#f8fafc;}
+  .cq-table tr.link{cursor:pointer;}
+  .cq-table td:first-child{white-space:nowrap;} #cd-vencidas td,#cd-vencidas th{padding:8px 6px;}
+  .cq-empty{color:var(--cq-muted);font-size:12.5px;padding:14px 4px;}
+  @media(max-width:980px){ .cq-kpis{grid-template-columns:repeat(2,1fr);} .cq-g32,.cq-g11{grid-template-columns:1fr;} }
+  @media(max-width:640px){ .cq-hero{padding:16px;} .cq-hero h1{font-size:20px;} .cq-hf{flex:1 1 45%;} .cq-hf select{width:100%;min-width:0;} .cq-kpi{padding:12px 13px;} .cq-kpi .val{font-size:20px;} .cq-panel{padding:14px;} .cq-hrow{grid-template-columns:minmax(70px,110px) 1fr auto;} }
   .cal-filtros{display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:flex-end;}
   .cal-filtros .scope-select{max-width:170px;}
   .cal-wrap{max-height:calc(100vh - 290px); overflow:auto;}
@@ -657,9 +753,6 @@
   .cal-check input{width:auto;}
   .cal-sec{font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:#7c3aed; margin:14px 0 6px; padding-top:10px; border-top:1px solid var(--border);}
   .cal-sec:first-of-type{border-top:none; padding-top:0; margin-top:4px;}
-  .cal-dash-h{font-size:14px; margin:6px 0 10px;}
-  .kpi-tile.tile-calidad::before{background:#7c3aed;}
-  .kpi-tile.tile-calidad2::before{background:#db2777;}
   .cal-listas{display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:14px;}
   .cal-lista{border:1px solid var(--border); border-radius:12px; padding:10px 12px; background:var(--surface);}
   .cal-lista h4{margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);}
@@ -705,6 +798,7 @@
         <input id="who-input" type="text" placeholder="tu nombre" maxlength="30">
       </span>
       <button class="btn ghost" id="home-btn" title="Volver al inicio" hidden>⌂ Inicio</button>
+      <span class="who-email" id="who-email" hidden></span>
       <button class="btn ghost" id="settings-btn" title="Configuración">⚙</button>
       <button class="btn ghost" id="logout-btn" title="Cerrar sesión">Salir</button>
     </div>
@@ -717,19 +811,23 @@
     <div class="home-grid" id="home-grid"></div>
   </div>
 
+  <!-- Menú con el estilo del panel de RR.HH.: secciones arriba y submenú abajo -->
+  <div class="menu-card" id="menu-card">
   <div class="viewtabs" id="viewtabs">
-    <button class="viewtab active" id="tab-grid">FlotaPesada</button>
-    <button class="viewtab" id="tab-branches">Sucursales</button>
-    <button class="viewtab" id="tab-company">Empresas</button>
-    <button class="viewtab" id="tab-occasional">Eventuales</button>
-    <button class="viewtab" id="tab-compras">Compras</button>
-    <button class="viewtab" id="tab-pagos">Pagos</button>
-    <button class="viewtab" id="tab-tesoreria">Tesorería</button>
-    <button class="viewtab" id="tab-day">Día</button>
-    <button class="viewtab" id="tab-dashboard">Dashboard</button>
-    <button class="viewtab" id="tab-reclamos">Reclamos de PT</button>
-    <button class="viewtab" id="tab-ncpac">NC y PAC</button>
-    <button class="viewtab" id="tab-calidash">Indicadores</button>
+    <button class="viewtab active" id="tab-grid"><span class="vt-ico" aria-hidden="true">🚛</span>FlotaPesada</button>
+    <button class="viewtab" id="tab-branches"><span class="vt-ico" aria-hidden="true">🏪</span>Sucursales</button>
+    <button class="viewtab" id="tab-company"><span class="vt-ico" aria-hidden="true">🏢</span>Empresas</button>
+    <button class="viewtab" id="tab-occasional"><span class="vt-ico" aria-hidden="true">📦</span>Eventuales</button>
+    <button class="viewtab" id="tab-compras"><span class="vt-ico" aria-hidden="true">🛒</span>Compras</button>
+    <button class="viewtab" id="tab-pagos"><span class="vt-ico" aria-hidden="true">💳</span>Pagos</button>
+    <button class="viewtab" id="tab-tesoreria"><span class="vt-ico" aria-hidden="true">🏦</span>Tesorería</button>
+    <button class="viewtab" id="tab-day"><span class="vt-ico" aria-hidden="true">📅</span>Día</button>
+    <button class="viewtab" id="tab-dashboard"><span class="vt-ico" aria-hidden="true">📊</span>Dashboard</button>
+    <button class="viewtab" id="tab-reclamos"><span class="vt-ico" aria-hidden="true">🧴</span>Reclamos de PT</button>
+    <button class="viewtab" id="tab-ncpac"><span class="vt-ico" aria-hidden="true">📋</span>NC y PAC</button>
+    <button class="viewtab" id="tab-calidash"><span class="vt-ico" aria-hidden="true">📈</span>Indicadores</button>
+  </div>
+  <div class="menu-sub" id="menu-sub" hidden></div>
   </div>
 
   <div id="view-grid">
@@ -1252,44 +1350,87 @@
     </div>
   </div>
 
-  <div id="view-calidash" hidden>
-    <div class="toolbar">
-      <div class="cal-filtros">
-        <label class="fm-hint" for="cd-anio" style="font-size:12.5px;">Período</label>
-        <select id="cd-anio" class="scope-select"></select>
-        <select id="cd-desde" class="scope-select" title="Desde"></select>
-        <select id="cd-hasta" class="scope-select" title="Hasta"></select>
+  <div id="view-calidash" class="cq" hidden>
+    <header class="cq-hero">
+      <div class="cq-hero-top">
+        <div class="cq-hero-title"><h1>Tablero de Calidad</h1><p id="cd-sub">Reclamos de producto terminado y no conformidades</p></div>
       </div>
+      <div class="cq-filters">
+        <div class="cq-hf"><label for="cd-anio">Año</label><select id="cd-anio"></select></div>
+        <div class="cq-hf"><label for="cd-desde">Desde</label><select id="cd-desde"></select></div>
+        <div class="cq-hf"><label for="cd-hasta">Hasta</label><select id="cd-hasta"></select></div>
+        <div class="cq-hf"><label for="cd-producto">Producto</label><select id="cd-producto"></select></div>
+        <button type="button" class="cq-chip" id="cd-todo">Todo el año</button>
+      </div>
+    </header>
+
+    <div class="cq-kpis" id="cd-kpis"></div>
+    <div class="cq-nota">ⓘ Justificado = el control confirmó el desvío (estado "Cerrado justificado"). El % se calcula sobre los reclamos ya cerrados. Los anulados no cuentan.</div>
+
+    <div class="cq-grid cq-g32">
+      <section class="cq-card cq-panel">
+        <div class="cq-ph"><div><h2 style="--a:#3456a8">Reclamos por mes</h2><p>Según cómo se cerró cada reclamo</p></div>
+          <div class="cq-legend"><span><i style="background:#e1251b"></i>Justificado</span><span><i style="background:#16a34a"></i>No justificado</span><span><i style="background:#d48f00"></i>Abierto</span></div></div>
+        <div class="cq-scrollx"><div id="cd-evol"></div></div>
+      </section>
+      <section class="cq-card cq-panel">
+        <div class="cq-ph"><div><h2 style="--a:#e1251b">Desvío real</h2><p>Lo que comprobó el control</p></div></div>
+        <div id="cd-dona-desvio"></div>
+      </section>
     </div>
-    <h3 class="cal-dash-h">Reclamos de producto terminado</h3>
-    <div class="kpi-grid">
-      <div class="kpi-tile tile-calidad"><div class="kpi-label">Reclamos en el período</div><div class="kpi-value" id="cd-k-rec">0</div></div>
-      <div class="kpi-tile tile-calidad"><div class="kpi-label">Justificados (desvío real confirmado)</div><div class="kpi-value" id="cd-k-just">—</div></div>
-      <div class="kpi-tile tile-calidad"><div class="kpi-label">Abiertos</div><div class="kpi-value" id="cd-k-abiertos">0</div></div>
-      <div class="kpi-tile tile-calidad"><div class="kpi-label">Unidades devueltas</div><div class="kpi-value" id="cd-k-unid">0</div></div>
+
+    <div class="cq-grid cq-g11">
+      <section class="cq-card cq-panel">
+        <div class="cq-ph"><div><h2 style="--a:#2ba9e0">Lo que reclama el cliente</h2><p>Y cuánto de eso se confirmó</p></div>
+          <div class="cq-legend"><span><i style="background:#cfd6dd"></i>Reclamado</span><span><i style="background:#e1251b"></i>Confirmado</span></div></div>
+        <div id="cd-cliente"></div>
+      </section>
+      <section class="cq-card cq-panel">
+        <div class="cq-ph"><div><h2 style="--a:#223c7e">Por producto</h2><p>Cantidad de reclamos del período</p></div></div>
+        <div id="cd-dona-producto"></div>
+      </section>
     </div>
-    <div class="dash-grid">
-      <div class="panel panel-calidad panel-wide"><h4>Reclamos por mes</h4><div id="cd-b-mes"></div></div>
-      <div class="panel panel-calidad"><h4>Desvío real</h4><div id="cd-b-desvio"></div></div>
-      <div class="panel panel-calidad"><h4>Lo que reclamó el cliente</h4><div id="cd-b-cliente"></div></div>
-      <div class="panel panel-calidad"><h4>Por producto</h4><div id="cd-b-producto"></div></div>
-      <div class="panel panel-calidad"><h4>Justificados por proveedor de envase</h4><div id="cd-b-envase"></div></div>
-      <div class="panel panel-calidad"><h4>Justificados por proveedor de tapa</h4><div id="cd-b-tapa"></div></div>
-      <div class="panel panel-calidad"><h4>Destino del envase</h4><div id="cd-b-destino"></div></div>
-      <div class="panel panel-calidad panel-wide"><h4>Lotes con más reclamos justificados</h4><div id="cd-b-lotes"></div></div>
+
+    <div class="cq-grid cq-g11">
+      <section class="cq-card cq-panel">
+        <div class="cq-ph"><div><h2 style="--a:#8b5cf6">Proveedor de envase</h2><p>Reclamos justificados · % sobre los reclamos de ese envase</p></div></div>
+        <div id="cd-envase"></div>
+      </section>
+      <section class="cq-card cq-panel">
+        <div class="cq-ph"><div><h2 style="--a:#d48f00">Proveedor de tapa</h2><p>Reclamos justificados · % sobre los reclamos de esa tapa</p></div></div>
+        <div id="cd-tapa"></div>
+      </section>
     </div>
-    <h3 class="cal-dash-h">No conformidades y planes de acción</h3>
-    <div class="kpi-grid">
-      <div class="kpi-tile tile-calidad2"><div class="kpi-label">NC / PAC en el período</div><div class="kpi-value" id="cd-k-pac">0</div></div>
-      <div class="kpi-tile tile-calidad2"><div class="kpi-label">Abiertas o en gestión</div><div class="kpi-value" id="cd-k-pac-abiertas">0</div></div>
-      <div class="kpi-tile tile-calidad2"><div class="kpi-label">Con acción vencida</div><div class="kpi-value" id="cd-k-pac-vencidas">0</div></div>
-      <div class="kpi-tile tile-calidad2"><div class="kpi-label">Eficacia verificada</div><div class="kpi-value" id="cd-k-pac-eficacia">—</div></div>
+
+    <section class="cq-card cq-panel cq-full">
+      <div class="cq-ph"><div><h2 style="--a:#e1251b">Lotes con reclamos repetidos</h2><p>Lotes con 2 o más reclamos justificados en el período</p></div></div>
+      <div class="cq-scrollx"><table class="cq-table" id="cd-lotes"></table></div>
+    </section>
+
+    <h3 class="cq-sec">No conformidades y planes de acción</h3>
+    <div class="cq-kpis" id="cd-kpis-pac"></div>
+    <div class="cq-grid cq-g11">
+      <section class="cq-card cq-panel">
+        <div class="cq-ph"><div><h2 style="--a:#16a34a">Estado</h2><p>NC / PAC del período</p></div></div>
+        <div id="cd-dona-estado"></div>
+      </section>
+      <section class="cq-card cq-panel">
+        <div class="cq-ph"><div><h2 style="--a:#e1251b">Por clasificación</h2><p>NC / PAC del período</p></div></div>
+        <div id="cd-clasif"></div>
+        <div class="cq-ph" style="margin-top:18px"><div><h2 style="--a:#2ba9e0">Por origen</h2></div></div>
+        <div id="cd-origen"></div>
+      </section>
     </div>
-    <div class="dash-grid">
-      <div class="panel panel-calidad2"><h4>Por clasificación</h4><div id="cd-b-clasif"></div></div>
-      <div class="panel panel-calidad2"><h4>Por estado</h4><div id="cd-b-estado"></div></div>
-      <div class="panel panel-calidad2"><h4>Por proceso</h4><div id="cd-b-proceso"></div></div>
-      <div class="panel panel-calidad2"><h4>Por origen</h4><div id="cd-b-origen"></div></div>
+    <div class="cq-grid cq-g11">
+      <section class="cq-card cq-panel">
+        <div class="cq-ph"><div><h2 style="--a:#3456a8">Por proceso</h2><p>Abiertas y en gestión sobre el total</p></div>
+          <div class="cq-legend"><span><i style="background:#cfd6dd"></i>Total</span><span><i style="background:#d48f00"></i>Pendientes</span></div></div>
+        <div id="cd-proceso"></div>
+      </section>
+      <section class="cq-card cq-panel">
+        <div class="cq-ph"><div><h2 style="--a:#e1251b">Acciones vencidas</h2><p>NC / PAC sin cerrar con la fecha límite pasada (todas, no solo el período)</p></div></div>
+        <div class="cq-scrollx"><table class="cq-table" id="cd-vencidas"></table></div>
+      </section>
     </div>
   </div>
 </div>

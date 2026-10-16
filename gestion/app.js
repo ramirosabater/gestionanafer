@@ -307,6 +307,8 @@
     if(tag) tag.textContent = area ? area.label : 'Logística, administración, calidad y comercial en un solo lugar';
     var settingsBtn = document.getElementById('settings-btn');
     if(settingsBtn) settingsBtn.hidden = !canOpenSettings();
+    var mail = document.getElementById('who-email');
+    if(mail){ mail.textContent = state.sessionEmail || ''; mail.title = state.sessionEmail || ''; mail.hidden = !state.sessionEmail; }
   }
   var SETTINGS_TAB_PERMISOS = {
     routes:'grid', trucks:'grid', drivers:'grid', helpers:'grid', cargo:'grid',
@@ -807,6 +809,7 @@
     if((VISTAS_CALIDAD||[]).indexOf(v)!==-1 && window.Calidad) window.Calidad.mostrar(v);
     if(v==='day') fetchDay(state.day);
     if(v==='dashboard') fetchDashboard();
+    actualizarMenuSub(v);
   }
   document.getElementById('tab-grid').addEventListener('click', function(){ setView('grid'); });
   document.getElementById('tab-day').addEventListener('click', function(){ setView('day'); });
@@ -4675,6 +4678,21 @@
     });
     mostrarSubtab(view, subtabActual(view));
   }
+  // El submenú de cada pestaña vive en la segunda fila del menú (estilo RR.HH.).
+  ['compras','pagos','tesoreria'].forEach(function(v){
+    var bar = document.getElementById('subtabs-'+v);
+    if(bar){ bar.hidden = true; document.getElementById('menu-sub').appendChild(bar); }
+  });
+  function actualizarMenuSub(v){
+    var algun = false;
+    ['compras','pagos','tesoreria'].forEach(function(x){
+      var bar = document.getElementById('subtabs-'+x);
+      if(!bar) return;
+      bar.hidden = (x!==v) || !bar.children.length;
+      if(!bar.hidden) algun = true;
+    });
+    document.getElementById('menu-sub').hidden = !algun;
+  }
   ['compras','pagos','tesoreria'].forEach(armarSubtabs);
   // Contadores al lado de cada submenú (lo pendiente de cada cosa).
   function actualizarSubtabs(){
@@ -7061,6 +7079,8 @@
       document.getElementById('view-'+v).hidden = true;
       document.getElementById('toolbar-'+v).hidden = true;
     });
+    (VISTAS_CALIDAD||[]).forEach(function(v){ document.getElementById('view-'+v).hidden = true; });
+    document.getElementById('menu-sub').hidden = true;
     refreshTabVisibility();
     renderHome();
     document.getElementById('view-home').hidden = false;
@@ -7071,6 +7091,7 @@
     if(a.href){ window.location.href = a.href; return; }
     state.area = id;
     document.body.dataset.area = id; // para la ayuda (ayuda.js)
+    document.body.style.setProperty('--area-color', a.color || '#e1251b'); // color de la sección activa en el menú
     try{ localStorage.setItem('hdr_area', id); }catch(e){}
     var prev = state.view;
     setView(a.tabs.indexOf(prev)!==-1 ? prev : null);

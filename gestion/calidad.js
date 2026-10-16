@@ -422,65 +422,206 @@
   }
 
   // =====================================================================
-  // INDICADORES
+  // INDICADORES — mismo estilo que los tableros de Comercial y RR.HH.
   // =====================================================================
-  var FD = { anio: null, desde: 1, hasta: 12 };
+  var OK = '#16a34a', MAL = '#e1251b', AMBAR = '#d48f00', GRIS = '#94a1ab';
+  var PALETA = ['#223c7e', '#2ba9e0', '#e1251b', '#16a34a', '#d48f00', '#8b5cf6', '#3456a8', '#db2777', '#0d9488', '#94a1ab'];
+  var MES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  var FD = { anio: null, desde: 1, hasta: 12, producto: '' };
   function armarFiltrosDash() {
     var anios = aniosDe(S.reclamos.concat(S.pacs));
-    if (FD.anio == null) FD.anio = anios[0];
+    if (FD.anio == null) {
+      FD.anio = anios[0];
+      if (FD.anio === new Date().getFullYear()) FD.hasta = new Date().getMonth() + 1; // año en curso: hasta el mes actual
+    }
     llenarSelect('cd-anio', anios.map(String), String(FD.anio));
     ['cd-desde', 'cd-hasta'].forEach(function (id) {
       var el = $(id);
-      el.innerHTML = MESES.map(function (m, i) { return '<option value="' + (i + 1) + '">' + (id === 'cd-desde' ? 'desde ' : 'hasta ') + m + '</option>'; }).join('');
+      el.innerHTML = MESES.map(function (m, i) { return '<option value="' + (i + 1) + '">' + m.charAt(0).toUpperCase() + m.slice(1) + '</option>'; }).join('');
       el.value = String(id === 'cd-desde' ? FD.desde : FD.hasta);
     });
+    llenarSelect('cd-producto', lista('productos'), FD.producto, 'Todos');
   }
   function enPeriodo(x) {
     if (anulado(x) || !x.fecha) return false;
     var m = Number(String(x.fecha).slice(5, 7));
     return Number(String(x.fecha).slice(0, 4)) === Number(FD.anio) && m >= FD.desde && m <= FD.hasta;
   }
-  function barras(id, filas, opts) { G.renderBarList(id, filas, Object.assign({ fill: '#7c3aed' }, opts || {})); }
+  function pct(a, b) { return b ? Math.round(a / b * 100) : 0; }
+  function kpiCard(o) {
+    return '<div class="cq-card cq-kpi" style="--c:' + o.c + '"><div class="top"><div class="ico">' + o.ico + '</div><div class="lab">' + o.lab + '</div></div>' +
+      '<div class="val"' + (o.vc ? ' style="color:' + o.vc + '"' : '') + '>' + o.val + '</div>' + (o.sub ? '<div class="sub">' + o.sub + '</div>' : '') + (o.extra || '') + '</div>';
+  }
+  function tag(t, bien) {
+    return '<span class="tag" style="background:' + (bien ? 'rgba(22,163,74,.12)' : 'rgba(225,37,27,.12)') + ';color:' + (bien ? OK : MAL) + '">' + t + '</span>';
+  }
+  function donutSVG(items, size, grosor) {
+    var r = (size - grosor) / 2, C = 2 * Math.PI * r, tot = items.reduce(function (s, x) { return s + x.v; }, 0) || 1;
+    var gap = items.filter(function (x) { return x.v > 0; }).length > 1 ? 2 : 0, off = 0, segs = '';
+    items.forEach(function (x) {
+      if (!(x.v > 0)) return;
+      var len = x.v / tot * C, vis = Math.max(len - gap, 0.5);
+      segs += '<circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" fill="none" stroke="' + x.c + '" stroke-width="' + grosor + '" stroke-dasharray="' + vis + ' ' + (C - vis) + '" stroke-dashoffset="' + (-off) + '"><title>' + esc(x.t || '') + '</title></circle>';
+      off += len;
+    });
+    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '"><circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" fill="none" stroke="#eef1f4" stroke-width="' + grosor + '"/>' + segs + '</svg>';
+  }
+  // Dona con el total al centro y leyenda con cantidad y %. colores: {etiqueta: color} opcional.
+  function dona(id, filas, centro, colores, max) {
+    var el = $(id);
+    var tot = filas.reduce(function (s, x) { return s + x.count; }, 0);
+    if (!tot) { el.innerHTML = '<div class="cq-empty">Sin datos para el período.</div>'; return; }
+    max = max || 7;
+    var vis = filas.slice(0, max);
+    if (filas.length > max) vis.push({ label: 'Otros', count: filas.slice(max).reduce(function (s, x) { return s + x.count; }, 0) });
+    vis.forEach(function (x, i) { x.c = (colores && colores[x.label]) || (x.label === 'Otros' ? GRIS : PALETA[i % PALETA.length]); });
+    el.innerHTML = '<div class="cq-donut-wrap"><div class="cq-donut">' +
+      donutSVG(vis.map(function (x) { return { v: x.count, c: x.c, t: x.label + ': ' + x.count + ' (' + (x.count / tot * 100).toFixed(1) + '%)' }; }), 180, 28) +
+      '<div class="center"><b>' + tot.toLocaleString('es-AR') + '</b><span>' + esc(centro) + '</span></div></div>' +
+      '<div class="cq-dleg">' + vis.map(function (x) {
+        return '<div class="r"><i style="background:' + x.c + '"></i><span style="color:var(--cq-ink)">' + esc(x.label) + '</span><b>' + x.count.toLocaleString('es-AR') + '</b><span>' + (x.count / tot * 100).toFixed(1) + '%</span></div>';
+      }).join('') + '</div></div>';
+  }
+  // Ranking horizontal: cada fila {label, total, parte, sub}. Barra gris = total, de color = parte.
+  function ranking(id, filas, color, valFn) {
+    var el = $(id);
+    if (!filas.length) { el.innerHTML = '<div class="cq-empty">Sin datos para el período.</div>'; return; }
+    var max = Math.max.apply(null, filas.map(function (x) { return Math.max(x.total || 0, x.parte || 0); })) || 1;
+    el.innerHTML = filas.map(function (x) {
+      return '<div class="cq-hrow" title="' + esc(x.label + (x.sub ? '\n' + x.sub : '')) + '"><div class="hl">' + esc(x.label) + '</div>' +
+        '<div class="cq-htrack">' + (x.total != null ? '<div class="b" style="width:' + (x.total / max * 100) + '%;background:#cfd6dd"></div>' : '') +
+        '<div class="b" style="width:' + Math.max((x.parte || 0) / max * 100, x.parte ? 1.5 : 0) + '%;background:' + color + '"></div></div>' +
+        '<div class="hv" style="color:' + color + '">' + (valFn ? valFn(x) : x.parte) + '</div>' + (x.sub ? '<div class="cq-hsub">' + esc(x.sub) + '</div>' : '') + '</div>';
+    }).join('');
+  }
+  function agrupar(list, keyFn) {
+    var o = {};
+    list.forEach(function (x) { var k = keyFn(x); if (k == null || k === '') return; (o[k] = o[k] || []).push(x); });
+    return o;
+  }
   function renderDash() {
     if (!S.cargado) return;
-    var rec = S.reclamos.filter(enPeriodo), just = rec.filter(justificado), cerr = rec.filter(function (r) { return r.estado !== 'Abierto'; });
-    $('cd-k-rec').textContent = rec.length;
-    $('cd-k-just').textContent = cerr.length ? Math.round(just.length / cerr.length * 100) + '% (' + just.length + ')' : '—';
-    $('cd-k-abiertos').textContent = rec.filter(function (r) { return r.estado === 'Abierto'; }).length;
-    $('cd-k-unid').textContent = rec.reduce(function (t, r) { return t + (Number(r.cantidad) || 0); }, 0);
+    if (S.sinTablas) { $('cd-kpis').innerHTML = '<div class="cq-empty">Falta crear las tablas de Calidad: corré base-de-datos/calidad.sql en Supabase.</div>'; return; }
+    var periodoTxt = (FD.desde === FD.hasta ? MESES[FD.desde - 1] : MESES[FD.desde - 1] + ' a ' + MESES[FD.hasta - 1]) + ' ' + FD.anio;
+    $('cd-sub').textContent = (FD.producto || 'Todos los productos') + ' · ' + periodoTxt + ' · Reclamos de PT (RG-0802) y NC / PAC (RG-0801)';
+    var rec = S.reclamos.filter(function (r) { return enPeriodo(r) && (!FD.producto || r.producto === FD.producto); });
+    var just = rec.filter(justificado), nojust = rec.filter(function (r) { return r.estado === 'Cerrado No justificado'; }), abiertos = rec.filter(function (r) { return r.estado === 'Abierto'; });
+    var cerrados = just.length + nojust.length;
+    var unid = rec.reduce(function (t, r) { return t + (Number(r.cantidad) || 0); }, 0);
+
+    // Variación del último mes con datos contra el anterior
     var porMes = [];
-    for (var m = FD.desde; m <= FD.hasta; m++) porMes.push({ key: m, label: MESES[m - 1], count: rec.filter(function (r) { return Number(r.fecha.slice(5, 7)) === m; }).length });
-    // Por mes: en orden de calendario (no de mayor a menor)
-    if (!porMes.some(function (x) { return x.count; })) G.renderBarList('cd-b-mes', []);
-    else {
-      var max = Math.max.apply(null, porMes.map(function (x) { return x.count; }));
-      $('cd-b-mes').innerHTML = porMes.map(function (x) {
-        return '<div class="barrow"><div class="barname">' + esc(x.label) + '</div><div class="bartrack"><div class="barfill" style="width:' + (x.count ? Math.max(3, Math.round(x.count / max * 100)) : 0) + '%;background:#7c3aed"></div></div><div class="barcount">' + x.count + '</div></div>';
-      }).join('');
+    for (var m = 1; m <= 12; m++) porMes.push(S.reclamos.filter(function (r) { return !anulado(r) && r.fecha && Number(r.fecha.slice(0, 4)) === Number(FD.anio) && Number(r.fecha.slice(5, 7)) === m && (!FD.producto || r.producto === FD.producto); }));
+    var ult = -1; for (var i = FD.hasta - 1; i >= FD.desde - 1; i--) { if (porMes[i].length) { ult = i; break; } }
+    var variacion = null, varTxt = 'Sin datos';
+    if (ult > 0 && porMes[ult - 1].length) { variacion = (porMes[ult].length / porMes[ult - 1].length - 1) * 100; varTxt = MES_CORTO[ult] + ' vs ' + MES_CORTO[ult - 1]; }
+    else if (ult >= 0) varTxt = 'Sin datos del mes anterior';
+    var meses = ult >= 0 ? (ult - (FD.desde - 1) + 1) : 0;
+    var desvioTop = G.tally(just, function (r) { return r.desvio_real; })[0];
+    var lotesRep = Object.values(agrupar(just.filter(function (r) { return loteValido(r.lote); }), function (r) { return r.producto + '|' + r.lote; })).filter(function (g) { return g.length >= 2; }).length;
+
+    $('cd-kpis').innerHTML = [
+      kpiCard({ c: '#3456a8', ico: '📦', lab: 'Reclamos del período', val: rec.length.toLocaleString('es-AR'), sub: meses ? 'Promedio ' + Math.round(rec.length / meses) + ' por mes' : '' }),
+      kpiCard({ c: MAL, ico: '🔎', lab: 'Justificados', val: cerrados ? pct(just.length, cerrados) + '%' : '—', vc: cerrados ? MAL : GRIS, sub: just.length + ' de ' + cerrados + ' cerrados' }),
+      kpiCard({ c: OK, ico: '✅', lab: 'No justificados', val: cerrados ? pct(nojust.length, cerrados) + '%' : '—', vc: cerrados ? OK : GRIS, sub: 'El control no encontró el desvío' }),
+      kpiCard({ c: AMBAR, ico: '⏳', lab: 'Abiertos', val: abiertos.length, vc: abiertos.length ? AMBAR : OK, sub: abiertos.length ? 'Sin cerrar todavía' : 'Todo cerrado', extra: abiertos.length ? '' : tag('Al día', true) }),
+      kpiCard({ c: '#2ba9e0', ico: '🔁', lab: 'Variación vs mes anterior', val: variacion == null ? '—' : (variacion >= 0 ? '+' : '') + variacion.toFixed(0) + '%', vc: variacion == null ? GRIS : (variacion <= 0 ? OK : MAL), sub: varTxt }),
+      kpiCard({ c: '#223c7e', ico: '🧴', lab: 'Unidades devueltas', val: unid.toLocaleString('es-AR'), sub: 'Envases reclamados' }),
+      kpiCard({ c: '#8b5cf6', ico: '🧪', lab: 'Desvío más frecuente', val: desvioTop ? esc(desvioTop.label) : '—', sub: desvioTop ? desvioTop.count + ' justificados (' + pct(desvioTop.count, just.length) + '%)' : '' }),
+      kpiCard({ c: '#db2777', ico: '🏷️', lab: 'Lotes con 2+ justificados', val: lotesRep, vc: lotesRep ? MAL : OK, sub: 'Ver el detalle más abajo' }),
+    ].join('');
+    $('cd-kpis').querySelector('.cq-kpi:nth-child(7) .val').style.fontSize = '20px';
+
+    // Evolución mensual: barras apiladas justificado / no justificado / abierto
+    var Hpx = 200, visM = [];
+    for (var k = FD.desde - 1; k <= FD.hasta - 1; k++) visM.push(k);
+    var maxV = Math.max.apply(null, visM.map(function (k) { return porMes[k].length; }).concat([1])) * 1.12;
+    var ev = '<div class="cq-vchart" style="min-width:' + (visM.length * 42) + 'px">';
+    [0.25, 0.5, 0.75, 1].forEach(function (f) { ev += '<div class="cq-vgrid" style="bottom:' + (f * Hpx + 30) + 'px"></div>'; });
+    ev += '<div class="cq-vcols">';
+    visM.forEach(function (k) {
+      var l = porMes[k], j = l.filter(justificado).length, n = l.filter(function (r) { return r.estado === 'Cerrado No justificado'; }).length, a = l.length - j - n;
+      var h = l.length / maxV * Hpx;
+      var seg = function (v, c) { return v ? '<div style="height:' + (v / l.length * h) + 'px;background:' + c + '"></div>' : ''; };
+      ev += '<div class="cq-vcol" title="' + esc(MESES[k] + ' ' + FD.anio + '\nReclamos: ' + l.length + '\nJustificados: ' + j + '\nNo justificados: ' + n + '\nAbiertos: ' + a) + '"><div class="cq-vplot" style="height:' + Hpx + 'px">' +
+        (l.length ? '<div class="cq-vlab" style="bottom:' + (h + 6) + 'px">' + l.length + '</div>' : '') +
+        '<div class="cq-vstack" style="height:' + h + 'px">' + seg(j, MAL) + seg(n, OK) + seg(a, AMBAR) + '</div></div><div class="cq-vx">' + MES_CORTO[k] + '</div></div>';
+    });
+    ev += '</div></div>';
+    $('cd-evol').innerHTML = rec.length ? ev : '<div class="cq-empty">Sin reclamos en el período.</div>';
+
+    var colDesvio = { 'SIN GUSTO': OK, 'MG: plastico': MAL, 'MG: cloro': '#2ba9e0', 'MG: otro': AMBAR, 'EE: insecto': '#8b5cf6', 'EE: precinto/tapa': '#223c7e', 'EE: otro': '#3456a8' };
+    dona('cd-dona-desvio', G.tally(rec.filter(function (r) { return r.desvio_real; }), function (r) { return r.desvio_real; }), 'reclamos controlados', colDesvio);
+    dona('cd-dona-producto', G.tally(rec, function (r) { return r.producto; }), 'reclamos');
+
+    // Reclamado vs confirmado
+    var porCliente = agrupar(rec, function (r) { return r.reclamo_cliente; });
+    ranking('cd-cliente', Object.keys(porCliente).map(function (kk) {
+      var l = porCliente[kk], c = l.filter(justificado).length;
+      return { label: kk, total: l.length, parte: c, sub: l.length + ' reclamados · ' + c + ' confirmados (' + pct(c, l.length) + '%)' };
+    }).sort(function (a, b) { return b.total - a.total; }), MAL, function (x) { return pct(x.parte, x.total) + '%'; });
+
+    function porProveedor(campo) {
+      var g = agrupar(rec, function (r) { return r[campo]; });
+      return Object.keys(g).map(function (kk) {
+        var l = g[kk], j = l.filter(justificado).length;
+        return { label: kk, total: l.length, parte: j, sub: j + ' justificados de ' + l.length + ' reclamos (' + pct(j, l.length) + '%)' };
+      }).filter(function (x) { return x.total; }).sort(function (a, b) { return b.parte - a.parte || b.total - a.total; });
     }
-    barras('cd-b-desvio', G.tally(rec, function (r) { return r.desvio_real || '(sin controlar)'; }));
-    barras('cd-b-cliente', G.tally(rec, function (r) { return r.reclamo_cliente; }));
-    barras('cd-b-producto', G.tally(rec, function (r) { return r.producto; }));
-    barras('cd-b-envase', G.tally(just, function (r) { return r.envase; }));
-    barras('cd-b-tapa', G.tally(just, function (r) { return r.tapa; }));
-    barras('cd-b-destino', G.tally(rec, function (r) { return r.destino_envase; }));
-    barras('cd-b-lotes', G.tally(just.filter(function (r) { return loteValido(r.lote); }), function (r) { return r.producto + ' · lote ' + r.lote; }).filter(function (x) { return x.count >= 2; }).slice(0, 12));
+    ranking('cd-envase', porProveedor('envase'), '#8b5cf6', function (x) { return x.parte; });
+    ranking('cd-tapa', porProveedor('tapa'), AMBAR, function (x) { return x.parte; });
+
+    // Lotes repetidos
+    var gl = agrupar(just.filter(function (r) { return loteValido(r.lote); }), function (r) { return r.producto + '|' + r.lote; });
+    var lotes = Object.keys(gl).map(function (kk) { return gl[kk]; }).filter(function (g) { return g.length >= 2; }).sort(function (a, b) { return b.length - a.length; }).slice(0, 15);
+    var maxL = lotes.length ? lotes[0].length : 1;
+    $('cd-lotes').innerHTML = lotes.length ? '<thead><tr><th>Producto</th><th>Lote</th><th class="num">Justificados</th><th>Desvío principal</th><th>Envases</th><th>Último</th><th>NC / PAC</th></tr></thead><tbody>' +
+      lotes.map(function (g) {
+        var d = G.tally(g, function (r) { return r.desvio_real; })[0], env = G.tally(g, function (r) { return r.envase; }).map(function (x) { return x.label; }).join(', ');
+        var ultimo = g.reduce(function (m, r) { return r.fecha > m ? r.fecha : m; }, '');
+        var pac = g.map(function (r) { return r.pac_id; }).filter(Boolean)[0];
+        var p = pac && S.pacs.find(function (x) { return x.id === pac; });
+        return '<tr><td><b>' + esc(g[0].producto) + '</b></td><td class="num">' + esc(g[0].lote) + '</td>' +
+          '<td class="num"><div style="display:flex;align-items:center;gap:8px;justify-content:flex-end"><div style="width:70px;height:6px;border-radius:3px;background:var(--cq-track);overflow:hidden"><div style="height:100%;width:' + (g.length / maxL * 100) + '%;background:' + MAL + '"></div></div><b style="min-width:22px;color:' + MAL + '">' + g.length + '</b></div></td>' +
+          '<td>' + esc(d ? d.label : '') + '</td><td>' + esc(env) + '</td><td class="num">' + fmtFecha(ultimo) + '</td>' +
+          '<td>' + (p ? '<span class="cal-badge gestion">' + esc(codigoPac(p)) + '</span>' : '<span style="color:var(--cq-muted)">—</span>') + '</td></tr>';
+      }).join('') + '</tbody>' : '<tbody><tr><td class="cq-empty">No hay lotes con 2 o más reclamos justificados en el período.</td></tr></tbody>';
+
+    // ---- NC / PAC ----
     var pac = S.pacs.filter(enPeriodo);
-    var abiertas = S.pacs.filter(function (p) { return !anulado(p) && p.estado !== 'Cerrada'; });
+    var pendTodas = S.pacs.filter(function (p) { return !anulado(p) && p.estado !== 'Cerrada'; });
+    var vencidas = pendTodas.filter(pacVencida);
     var conEf = pac.filter(function (p) { return p.eficacia_resultado === 'Efectiva' || p.eficacia_resultado === 'No efectiva'; });
-    $('cd-k-pac').textContent = pac.length;
-    $('cd-k-pac-abiertas').textContent = abiertas.length;
-    $('cd-k-pac-vencidas').textContent = abiertas.filter(pacVencida).length;
-    $('cd-k-pac-eficacia').textContent = conEf.length ? Math.round(conEf.filter(function (p) { return p.eficacia_resultado === 'Efectiva'; }).length / conEf.length * 100) + '% efectivas' : '—';
-    var fill2 = { fill: '#db2777' };
-    barras('cd-b-clasif', G.tally(pac, function (p) { return p.clasificacion; }), fill2);
-    barras('cd-b-estado', G.tally(pac, function (p) { return p.estado; }), fill2);
-    barras('cd-b-proceso', G.tally(pac, function (p) { return p.proceso; }), fill2);
-    barras('cd-b-origen', G.tally(pac, function (p) { return p.origen; }), fill2);
+    var efectivas = conEf.filter(function (p) { return p.eficacia_resultado === 'Efectiva'; }).length;
+    var cerradasP = pac.filter(function (p) { return p.estado === 'Cerrada'; }).length;
+    $('cd-kpis-pac').innerHTML = [
+      kpiCard({ c: '#3456a8', ico: '📋', lab: 'NC / PAC del período', val: pac.length, sub: pac.filter(function (p) { return /^NC/.test(p.clasificacion || ''); }).length + ' no conformidades' }),
+      kpiCard({ c: OK, ico: '✔️', lab: 'Cerradas', val: pac.length ? pct(cerradasP, pac.length) + '%' : '—', vc: pac.length ? OK : GRIS, sub: cerradasP + ' de ' + pac.length }),
+      kpiCard({ c: vencidas.length ? MAL : OK, ico: vencidas.length ? '⚠️' : '📅', lab: 'Con acción vencida', val: vencidas.length, vc: vencidas.length ? MAL : OK, sub: pendTodas.length + ' pendientes en total', extra: vencidas.length ? tag('Requiere seguimiento', false) : tag('Al día', true) }),
+      kpiCard({ c: '#8b5cf6', ico: '🎯', lab: 'Eficacia verificada', val: conEf.length ? pct(efectivas, conEf.length) + '%' : '—', vc: conEf.length ? (efectivas === conEf.length ? OK : AMBAR) : GRIS, sub: conEf.length ? efectivas + ' efectivas de ' + conEf.length + ' verificadas' : 'Ninguna verificada en el período' }),
+    ].join('');
+    dona('cd-dona-estado', G.tally(pac, function (p) { return p.estado; }), 'NC / PAC', { 'Cerrada': OK, 'En gestión': '#2ba9e0', 'Abierta': AMBAR });
+    ranking('cd-clasif', G.tally(pac, function (p) { return p.clasificacion; }).map(function (x) { return { label: x.label, parte: x.count }; }), MAL);
+    ranking('cd-origen', G.tally(pac, function (p) { return p.origen; }).map(function (x) { return { label: x.label, parte: x.count }; }), '#2ba9e0');
+    var gp = agrupar(pac, function (p) { return p.proceso; });
+    ranking('cd-proceso', Object.keys(gp).map(function (kk) {
+      var l = gp[kk], pe = l.filter(function (p) { return p.estado !== 'Cerrada'; }).length;
+      return { label: kk, total: l.length, parte: pe, sub: l.length + ' en total · ' + pe + ' pendientes' };
+    }).sort(function (a, b) { return b.total - a.total; }), AMBAR, function (x) { return x.parte + ' / ' + x.total; });
+    var hoyS = hoy();
+    $('cd-vencidas').innerHTML = vencidas.length ? '<thead><tr><th>Nº</th><th>Hallazgo</th><th>Responsable</th><th class="num">Venció</th><th class="num">Atraso</th></tr></thead><tbody>' +
+      vencidas.sort(function (a, b) { return String(a.fecha_accion || a.fecha_correccion).localeCompare(String(b.fecha_accion || b.fecha_correccion)); }).map(function (p) {
+        var f = p.fecha_accion || p.fecha_correccion;
+        return '<tr class="link" data-pac="' + esc(p.id) + '"><td><b>' + esc(codigoPac(p)) + '</b></td><td style="max-width:190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + esc(p.hallazgo) + '">' + esc(p.hallazgo) + '</td>' +
+          '<td>' + esc(p.resp_accion || p.resp_correccion || '—') + '</td><td class="num">' + fmtFecha(f) + '</td><td class="num" style="color:' + MAL + ';font-weight:800">' + G.difDias(f, hoyS) + ' días</td></tr>';
+      }).join('') + '</tbody>' : '<tbody><tr><td class="cq-empty">No hay acciones vencidas. 👌</td></tr></tbody>';
   }
+  $('cd-vencidas').addEventListener('click', function (e) { var tr = e.target.closest('tr[data-pac]'); if (tr) abrirPac(tr.dataset.pac); });
   $('cd-anio').addEventListener('change', function () { FD.anio = Number(this.value); renderDash(); });
   $('cd-desde').addEventListener('change', function () { FD.desde = Number(this.value); if (FD.hasta < FD.desde) FD.hasta = FD.desde; armarFiltrosDash(); renderDash(); });
   $('cd-hasta').addEventListener('change', function () { FD.hasta = Number(this.value); if (FD.desde > FD.hasta) FD.desde = FD.hasta; armarFiltrosDash(); renderDash(); });
+  $('cd-producto').addEventListener('change', function () { FD.producto = this.value; renderDash(); });
+  $('cd-todo').addEventListener('click', function () { FD.desde = 1; FD.hasta = 12; armarFiltrosDash(); renderDash(); });
 
   // =====================================================================
   // ⚙ → Calidad → Listas
