@@ -779,6 +779,7 @@
     document.getElementById('tab-compras').classList.toggle('active', v==='compras');
     document.getElementById('tab-pagos').classList.toggle('active', v==='pagos');
     document.getElementById('tab-tesoreria').classList.toggle('active', v==='tesoreria');
+    if(v==='pagos') setTimeout(revisarFacturasFaltantes, 600);
     document.getElementById('toolbar-grid').hidden = (v!=='grid');
     document.getElementById('toolbar-day').hidden = (v!=='day');
     document.getElementById('toolbar-dashboard').hidden = (v!=='dashboard');
@@ -1062,6 +1063,7 @@
       var cargo = Object.keys(state.editingCargo).map(function(typeId){
         return {type:typeId, qty:parseFloat(state.editingCargo[typeId]), unit:cargoUnit};
       }).filter(function(c){ return !isNaN(c.qty) && c.qty!==0; });
+      var esNuevo = !state.editing.tripId;
       var tripId = state.editing.tripId || generateTripId(state.editing.dateStr, state.editing.routeId);
       var payload = {
         id: tripId,
@@ -1078,6 +1080,9 @@
         cargo: cargo
       };
       writeTrip(payload);
+      if(esNuevo && truck) revisarRepeticion({tabla:'trips', campo:'route_id', valor:payload.route_id, que:'viaje', nombre:labelForRoute(payload.route_id),
+        fecha:payload.date, camion:truck, plantilla:{route_id:payload.route_id, truck:truck, driver:driver, helper:helper, cargo:cargo},
+        idDe:function(ds){ return ds+'_'+payload.route_id; }, recargar:fetchMonth});
       closeCellModal();
     } catch(err){
       console.error('Error al guardar el viaje:', err);
@@ -1633,6 +1638,7 @@
       var cargo = Object.keys(s.editingVisitCargo).map(function(typeId){
         return {type:typeId, qty:parseFloat(s.editingVisitCargo[typeId])};
       }).filter(function(c){ return !isNaN(c.qty) && c.qty!==0; });
+      var esNuevo = !s.editingVisit.visitId;
       var visitId = s.editingVisit.visitId || extraGenerateVisitId(kind, s.editingVisit.dateStr, s.editingVisit.itemId);
       var payload = {
         id: visitId,
@@ -1650,6 +1656,11 @@
       };
       payload[kind.idField] = s.editingVisit.itemId;
       writeExtraVisit(kind, payload);
+      if(esNuevo){
+        var plant = {truck:truck, driver:driver, helper:helper, helper2:helper2, cargo:cargo}; plant[kind.idField] = payload[kind.idField];
+        revisarRepeticion({tabla:kind.visitCollection, campo:kind.idField, valor:payload[kind.idField], que:'envío', nombre:extraItemLabel(kind, payload[kind.idField]),
+          fecha:payload.date, plantilla:plant, idDe:function(ds){ return ds+'_'+payload[kind.idField]; }, recargar:function(){ fetchExtraVisitsMonth(kind); }});
+      }
       closeExtraVisitModal(kind);
     } catch(err){
       console.error('Error al guardar el envío:', err);
@@ -1881,6 +1892,7 @@
       var cargo = Object.keys(state.editingVisitCargo).map(function(typeId){
         return {type:typeId, qty:parseFloat(state.editingVisitCargo[typeId])};
       }).filter(function(c){ return !isNaN(c.qty) && c.qty!==0; });
+      var esNuevo = !state.editingVisit.visitId;
       var visitId = state.editingVisit.visitId || generateVisitId(state.editingVisit.dateStr, state.editingVisit.branchId);
       var payload = {
         id: visitId,
@@ -1898,6 +1910,9 @@
         cargo: cargo
       };
       writeVisit(payload);
+      if(esNuevo) revisarRepeticion({tabla:'visits', campo:'branch_id', valor:payload.branch_id, que:'envío', nombre:branchLabel(payload.branch_id),
+        fecha:payload.date, plantilla:{branch_id:payload.branch_id, truck:truck, driver:driver, helper:helper, helper2:helper2, cargo:cargo},
+        idDe:function(ds){ return ds+'_'+payload.branch_id; }, recargar:fetchVisitsMonth});
       closeVisitModal();
     } catch(err){
       console.error('Error al guardar el envío:', err);
@@ -5189,6 +5204,8 @@
       if(isNew) state.facturas.push(f);
       else { var idx = state.facturas.findIndex(function(x){ return x.id===id; }); if(idx>=0) state.facturas[idx]=f; }
       writeFactura(f);
+      // El asistente mira el historial ANTES de sumar la imputación al proveedor.
+      if(isNew) revisarFacturaNueva(f);
       facturaLineas(f).forEach(function(l){ sumarImputacionAProveedor(f.proveedorId, l.centroCostoId, l.conceptoId); });
       closeFacturaModal();
       renderPagos();
@@ -5317,7 +5334,7 @@
     });
     updatePagoMontoTotal();
   }
-  document.getElementById('pom-proveedor').addEventListener('change', function(){ renderPagoFacturasChecklist(this.value, []); });
+  document.getElementById('pom-proveedor').addEventListener('change', function(){ renderPagoFacturasChecklist(this.value, []); sifCerrarSi('pago:'); sugerirFormaHabitual(); });
 
   // ---------- Formas de pago de la orden (pagos mixtos) ----------
   // Una orden se puede pagar con varias formas a la vez: cheques de cartera,
@@ -5416,7 +5433,7 @@
     return [{medioId:p.medioId||'', cuentaId:p.cuentaId||'', importe:r2((p.monto||0)-(p.retenido||0)), chequeIds:(p.chequeIds||[]).slice(),
       chequeNumero:p.chequeNumero || (chq ? chq.numero||'' : ''), chequeFecha:p.chequeFecha || (chq ? chq.fechaCobro||'' : '')}];
   }
-  document.getElementById('pom-estado').addEventListener('change', function(){ renderPomRetenciones(); renderPomFormas(); });
+  document.getElementById('pom-estado').addEventListener('change', function(){ renderPomRetenciones(); renderPomFormas(); sugerirFormaHabitual(); });
   document.getElementById('pom-fecha').addEventListener('change', updatePagoMontoTotal);
 
   function openPagoModal(id){
@@ -5439,6 +5456,7 @@
   }
   function closePagoModal(){
     document.getElementById('pago-overlay').classList.remove('show');
+    sifCerrarSi('pago:');
   }
 
   document.getElementById('new-pago-btn').addEventListener('click', function(){ openPagoModal(null); });
@@ -5594,7 +5612,9 @@
     fetchAllRows('facturas').then(function(res){
       if(res.error){ showToast('Error cargando facturas: '+res.error.message); return; }
       state.facturas = (res.data||[]).map(mapFacturaRow);
+      state.facturasCargadas = true;
       renderPagos();
+      setTimeout(revisarFacturasFaltantes, 600);
       renderProveedoresList(); // la imputación por defecto depende de las facturas
       if(state.view==='dashboard') renderDashboard();
     });
@@ -6497,6 +6517,334 @@
   function mapCargoTypeRow(row){ return {id:row.id, name:row.name||row.id, active:row.active!==false, order:row.sort_order||99}; }
   function mapBranchRow(row){ return {id:row.id, label:row.label||row.id, order:row.sort_order||99, active:row.active!==false}; }
   function mapExtraItemRow(row){ return {id:row.id, label:row.label||row.id, order:row.sort_order||99, active:row.active!==false}; }
+
+  // ======================================================================
+  // Asistente con memoria: "Sifoncito sugiere"
+  // ======================================================================
+  // Mira el historial que ya está en la base y, mientras se trabaja, propone:
+  //  - viajes y envíos que se repiten → cargarlos para los próximos 6 meses;
+  //  - facturas: posibles duplicadas, montos fuera de lo habitual, imputación
+  //    distinta de la de siempre, y las mensuales que este mes no llegaron;
+  //  - órdenes de pago: pagar como se le paga siempre a ese proveedor.
+  // Lo que cada usuario contesta se recuerda en la tabla ayudante_memoria
+  // (si no existe, en el navegador): "No me lo preguntes más" no vuelve a
+  // aparecer; "Ahora no" espera un tiempo antes de volver a proponerlo.
+  var MEM_LS = 'ayudante_memoria';
+  state.memoria = {};
+  function memUsuario(){ return state.sessionEmail || 'sin-sesion'; }
+  function memLeerLS(){ try{ return JSON.parse(localStorage.getItem(MEM_LS+':'+memUsuario())||'{}') || {}; }catch(e){ return {}; } }
+  function memListo(){
+    var u = memUsuario();
+    if(state.memPromesa && state.memDe===u) return state.memPromesa;
+    state.memDe = u;
+    state.memoria = memLeerLS();
+    state.memTabla = false;
+    state.memPromesa = !state.sb ? Promise.resolve() : Promise.resolve(state.sb.from('ayudante_memoria').select('*').eq('usuario', u)).then(function(res){
+      if(!res || res.error) return; // sin la tabla: queda la memoria del navegador
+      state.memTabla = true;
+      (res.data||[]).forEach(function(r){ if(r.usuario===u) state.memoria[r.clave] = {decision:r.decision||'', hasta:r.hasta||''}; });
+    }, function(){});
+    return state.memPromesa;
+  }
+  function memPuede(clave){
+    var m = state.memoria[clave];
+    if(!m) return true;
+    if(m.decision==='nunca') return false;
+    return !(m.hasta && m.hasta > todayStr());
+  }
+  function memGuardar(clave, decision, hasta){
+    state.memoria[clave] = {decision:decision, hasta:hasta||''};
+    try{ localStorage.setItem(MEM_LS+':'+memUsuario(), JSON.stringify(state.memoria)); }catch(e){}
+    if(state.sb && state.memTabla) state.sb.from('ayudante_memoria').upsert({
+      id:memUsuario()+'|'+clave, usuario:memUsuario(), clave:clave, decision:decision, hasta:hasta||null, actualizado:new Date().toISOString()
+    }).then(function(){}, function(){});
+  }
+  function sumarDias(ds, n){ var d = new Date(ds+'T12:00:00'); d.setDate(d.getDate()+n); return dateStr(d.getFullYear(), d.getMonth(), d.getDate()); }
+  function difDias(a, b){ return Math.round((new Date(b+'T12:00:00') - new Date(a+'T12:00:00'))/86400000); }
+  function wdDe(ds){ return pyWeekday(new Date(ds+'T12:00:00')); }
+  function mediana(xs){ var v = xs.slice().sort(function(a,b){ return a-b; }); if(!v.length) return 0; var m = Math.floor(v.length/2); return v.length%2 ? v[m] : (v[m-1]+v[m])/2; }
+  function sifSugerir(op){ return !!(window.AyudaAnafer && window.AyudaAnafer.sugerir && window.AyudaAnafer.sugerir(op)); }
+  function sifCerrarSi(prefijo){
+    var A = window.AyudaAnafer;
+    if(A && A.sugerenciaActual && String(A.sugerenciaActual()||'').indexOf(prefijo)===0) A.cerrarSugerencia();
+  }
+  function conMemoria(op, clave, diasPosponer, conNunca){
+    op.ahoraNo = function(){ memGuardar(clave, 'pospuesta', sumarDias(todayStr(), diasPosponer||30)); };
+    if(conNunca!==false) op.nunca = function(){ memGuardar(clave, 'nunca'); };
+    return op;
+  }
+  function listaNatural(xs){ return xs.length<=1 ? (xs[0]||'') : xs.slice(0,-1).join(', ')+' y '+xs[xs.length-1]; }
+
+  // ---------- 1) Viajes y envíos que se repiten ----------
+  var DIAS_PLURAL = ['lunes','martes','miércoles','jueves','viernes','sábados','domingos'];
+  var DIAS_CORTO = ['lun','mar','mié','jue','vie','sáb','dom'];
+  var MESES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  var FERIADOS_FIJOS = {'01-01':'Año Nuevo','03-24':'Día de la Memoria','04-02':'Malvinas','05-01':'Día del Trabajador','05-25':'25 de Mayo',
+    '06-20':'Día de la Bandera','07-09':'Independencia','12-08':'Inmaculada Concepción','12-25':'Navidad'};
+  // cfg: {tabla, campo, valor, que ('viaje'|'envío'), nombre, fecha, camion,
+  //       plantilla: objeto a copiar en cada fecha, idDe(fecha), recargar()}
+  function revisarRepeticion(cfg){
+    if(!state.sb || !cfg.valor || !cfg.fecha) return Promise.resolve();
+    var clave = 'repetir:'+cfg.tabla+':'+cfg.valor;
+    return memListo().then(function(){
+      if(!memPuede(clave)) return;
+      var desde = sumarDias(cfg.fecha, -182), hasta = sumarDias(cfg.fecha, 182);
+      return Promise.resolve(state.sb.from(cfg.tabla).select('*').eq(cfg.campo, cfg.valor).gte('date', desde).lte('date', hasta)).then(function(res){
+        if(!res || res.error) return;
+        var filas = (res.data||[]).filter(function(r){ return r[cfg.campo]===cfg.valor && r.date && r.date>=desde && r.date<=hasta; });
+        var pasadas = filas.filter(function(r){ return r.date < cfg.fecha; });
+        if(!pasadas.length) return;
+        // Semanas observadas: desde la primera vez (máximo 26). Un día de la
+        // semana "se repite" si salió en el 60% o más de esas semanas.
+        var primera = pasadas.reduce(function(m,r){ return r.date<m ? r.date : m; }, cfg.fecha);
+        var semanas = Math.min(26, Math.floor(difDias(primera, cfg.fecha)/7)+1);
+        if(semanas < 6) return;
+        var porDia = [0,0,0,0,0,0,0], vistos = {};
+        pasadas.forEach(function(r){ if(vistos[r.date]) return; vistos[r.date] = true; if(difDias(r.date, cfg.fecha) <= semanas*7) porDia[wdDe(r.date)]++; });
+        var umbral = Math.max(5, Math.ceil(semanas*0.6));
+        var dias = []; porDia.forEach(function(n, w){ if(n>=umbral) dias.push(w); });
+        if(dias.indexOf(wdDe(cfg.fecha))===-1) return;
+        var ocupadas = {}; filas.forEach(function(r){ if(r.date>cfg.fecha) ocupadas[r.date] = true; });
+        var cand = [];
+        for(var i=1;i<=182;i++){ var ds = sumarDias(cfg.fecha, i); if(dias.indexOf(wdDe(ds))!==-1 && !ocupadas[ds]) cand.push(ds); }
+        if(cand.length < 4) return;
+        // El mismo camión ya comprometido en otra ruta ese día → se propone destildado.
+        var pChoque = (cfg.tabla==='trips' && cfg.camion)
+          ? Promise.resolve(state.sb.from('trips').select('*').eq('truck', cfg.camion).gte('date', cand[0]).lte('date', cand[cand.length-1]))
+          : Promise.resolve({data:[]});
+        return pChoque.then(function(r2){
+          var choque = {};
+          ((r2 && r2.data)||[]).forEach(function(t){ if(t.truck===cfg.camion && t.route_id!==cfg.valor && t.date>=cand[0]) choque[t.date] = true; });
+          proponerRepeticion(cfg, clave, dias, porDia, semanas, cand, choque);
+        });
+      });
+    }).catch(function(err){ console.warn('Asistente (repetición):', err); });
+  }
+  function proponerRepeticion(cfg, clave, dias, porDia, semanas, cand, choque){
+    var cuerpo = document.createElement('div');
+    var porMes = {};
+    cand.forEach(function(ds){ (porMes[ds.slice(0,7)] = porMes[ds.slice(0,7)] || []).push(ds); });
+    var html = '<div class="sug-fechas">';
+    Object.keys(porMes).sort().forEach(function(m){
+      html += '<div><div class="sug-mes">'+MONTH_NAMES[Number(m.slice(5,7))-1]+' '+m.slice(0,4)+'</div><div class="sug-dias">';
+      porMes[m].forEach(function(ds){
+        var fer = FERIADOS_FIJOS[ds.slice(5)], ch = choque[ds];
+        var on = !fer && !ch;
+        var tit = fer ? 'Feriado: '+fer : (ch ? 'El camión ya tiene otro viaje ese día' : '');
+        html += '<label class="'+(on?'':'off')+(fer?' fer':'')+'" title="'+esc(tit)+'"><input type="checkbox" value="'+ds+'"'+(on?' checked':'')+'>'
+          +DIAS_CORTO[wdDe(ds)]+' '+Number(ds.slice(8))+(fer?' 🎌':'')+(ch?' 🚚':'')+'</label>';
+      });
+      html += '</div></div>';
+    });
+    html += '</div>';
+    var nf = cand.filter(function(ds){ return FERIADOS_FIJOS[ds.slice(5)]; }).length, nc = Object.keys(choque).filter(function(ds){ return cand.indexOf(ds)!==-1; }).length;
+    if(nf || nc) html += '<div class="sug-nota">Destildé '+[nf ? nf+' feriado'+(nf>1?'s':'')+' 🎌' : '', nc ? nc+' día'+(nc>1?'s':'')+' en que el camión ya tiene otro viaje 🚚' : ''].filter(Boolean).join(' y ')+'. Tocá un día para sacarlo o agregarlo.</div>';
+    else html += '<div class="sug-nota">Tocá un día para sacarlo (por ejemplo, un feriado puente).</div>';
+    cuerpo.innerHTML = html;
+    var plural = cfg.que==='viaje' ? 'viajes' : 'envíos';
+    var veces = dias.map(function(w){ return porDia[w]; });
+    var texto = (cfg.que==='viaje' ? 'La ruta <b>' : 'A <b>')+esc(cfg.nombre)+'</b> '+(cfg.que==='viaje' ? 'salió' : 'se mandó')+' los <b>'+listaNatural(dias.map(function(w){ return DIAS_PLURAL[w]; }))+'</b> casi todas las semanas'
+      +' (en las últimas '+semanas+' semanas: '+listaNatural(dias.map(function(w,i){ return veces[i]+' '+DIAS_PLURAL[w]; }))+'). '
+      +'¿Cargo '+(cfg.que==='viaje' ? 'el mismo viaje' : 'el mismo envío')+(cfg.camion ? ', con el camión '+esc(String(cfg.camion)) : '')+', para los próximos 6 meses?';
+    var op = conMemoria({id:clave, titulo:'Sifoncito: esto se repite', texto:texto, cuerpo:cuerpo, textoAhoraNo:'Ahora no'}, clave, 30);
+    var boton = {texto:'', pri:true, accion:function(card){
+      var fechas = Array.prototype.map.call(card.querySelectorAll('.sug-dias input:checked'), function(x){ return x.value; });
+      if(!fechas.length){ showToast('No quedó ningún día tildado.'); return false; }
+      var btns = card.querySelectorAll('.ayuda-sug-btns button');
+      Array.prototype.forEach.call(btns, function(b){ b.disabled = true; });
+      var i = 0, ok = 0;
+      (function sig(){
+        if(i>=fechas.length){
+          memGuardar(clave, 'aceptada', sumarDias(fechas[fechas.length-1], -30)); // vuelve a ofrecer cuando se esté terminando lo cargado
+          showToast('Listo: se cargaron '+ok+' '+plural+' hasta el '+fechas[fechas.length-1].split('-').reverse().join('/')+'.', 5000);
+          if(window.AyudaAnafer) window.AyudaAnafer.cerrarSugerencia();
+          if(cfg.recargar) cfg.recargar();
+          return;
+        }
+        var ds = fechas[i];
+        var payload = Object.assign({}, cfg.plantilla, {id:cfg.idDe(ds), date:ds, note:'', status:'actual', source:'repetido',
+          updated_by:whoName()+' (repetido)', updated_at:new Date().toISOString()});
+        btns[btns.length-1].textContent = 'Cargando '+(i+1)+' / '+fechas.length+'…';
+        Promise.resolve(state.sb.from(cfg.tabla).upsert(payload)).then(function(res){ if(res && !res.error) ok++; i++; sig(); }, function(){ i++; sig(); });
+      })();
+      return false;
+    }};
+    op.botones = [boton];
+    function actualizarBoton(){
+      var n = cuerpo.querySelectorAll('.sug-dias input:checked').length;
+      boton.texto = 'Cargar '+n+' '+plural;
+      var b = cuerpo.isConnected && document.querySelector('#ayuda-sug .ayuda-sug-btns button.pri'); if(b) b.textContent = boton.texto;
+    }
+    cuerpo.addEventListener('change', function(e){
+      if(e.target && e.target.type==='checkbox'){ e.target.parentNode.classList.toggle('off', !e.target.checked); actualizarBoton(); }
+    });
+    actualizarBoton();
+    sifSugerir(op);
+  }
+
+  // ---------- 2) Facturas ----------
+  function numComparable(n){ return String(n||'').replace(/\D/g,'').replace(/^0+/,''); }
+  function facturasVigentesProveedor(provId, excluirId){
+    return state.facturas.filter(function(f){ return f.proveedorId===provId && f.id!==excluirId && noAnulado(f); });
+  }
+  function revisarFacturaNueva(f){
+    return memListo().then(function(){
+      var otras = facturasVigentesProveedor(f.proveedorId, f.id);
+      var prov = proveedorNombre(f.proveedorId);
+      // a) ¿Ya está cargada?
+      var mismoNum = numComparable(f.numero) && otras.find(function(o){ return numComparable(o.numero)===numComparable(f.numero); });
+      var mismoMonto = !mismoNum && Number(f.monto)>0 && otras.find(function(o){
+        return Math.abs(Number(o.monto)-Number(f.monto)) <= Math.max(1, Number(f.monto)*0.005) && o.fecha && f.fecha && Math.abs(difDias(o.fecha, f.fecha))<=10;
+      });
+      var dup = mismoNum || mismoMonto;
+      if(dup){
+        sifSugerir({id:'dup:'+f.id, titulo:'Sifoncito: ¿está repetida?',
+          texto: mismoNum
+            ? 'Ya hay una factura <b>'+esc(dup.numero)+'</b> de <b>'+esc(prov)+'</b> cargada ('+esc(dup.fecha||'')+', '+fmtMoney(dup.monto)+'). ¿No será la misma?'
+            : 'Hace pocos días se cargó otra factura de <b>'+esc(prov)+'</b> por el mismo importe ('+esc(dup.numero)+' del '+esc(dup.fecha||'')+', '+fmtMoney(dup.monto)+'). ¿No es la misma cargada dos veces?',
+          textoAhoraNo:'Está bien, son distintas',
+          botones:[
+            {texto:'Ver la otra', accion:function(){ openFacturaModal(dup.id); }},
+            {texto:'Anular esta', pri:true, accion:function(){ openFacturaModal(f.id); document.getElementById('fm-delete').click(); }}
+          ]});
+      }
+      var previas = otras.filter(function(o){ return o.fecha && f.fecha && o.fecha<f.fecha && difDias(o.fecha, f.fecha)<=182 && Number(o.monto)>0; });
+      // b) Monto fuera de lo habitual
+      if(!dup && previas.length>=3 && Number(f.monto)>0 && memPuede('monto:'+f.proveedorId)){
+        var med = mediana(previas.map(function(o){ return Number(o.monto); }));
+        var r = med>0 ? Number(f.monto)/med : 1;
+        if(r>=1.6 || r<=0.4){
+          var pct = Math.round(Math.abs(r-1)*100);
+          sifSugerir(conMemoria({id:'monto:'+f.id, titulo:'Sifoncito: ojo con el importe',
+            texto:'Esta factura de <b>'+esc(prov)+'</b> es de <b>'+fmtMoney(f.monto)+'</b>, un '+pct+'% '+(r>1?'más alta':'más baja')+' que lo habitual: sus últimas '+previas.length+' facturas rondan los <b>'+fmtMoney(med)+'</b>. ¿Está bien el importe?',
+            textoAhoraNo:'Está bien', textoNunca:'No me avises más con este proveedor',
+            botones:[{texto:'Revisarla', pri:true, accion:function(){ openFacturaModal(f.id); }}]}, 'monto:'+f.proveedorId, 1));
+        }
+      }
+      // c) Imputación distinta de la de siempre
+      if(previas.length>=3 && f.centroCostoId && f.conceptoId && memPuede('imput:'+f.proveedorId)){
+        var cuenta = {};
+        previas.forEach(function(o){ var k = imputKey(o.centroCostoId, o.conceptoId); cuenta[k] = (cuenta[k]||0)+1; });
+        var top = Object.keys(cuenta).sort(function(a,b){ return cuenta[b]-cuenta[a]; })[0];
+        var kf = imputKey(f.centroCostoId, f.conceptoId);
+        if(top && top!==kf && cuenta[top]>=Math.ceil(previas.length*0.8)){
+          var pt = top.split('|');
+          sifSugerir(conMemoria({id:'imput:'+f.id, titulo:'Sifoncito: ¿esa imputación?',
+            texto:'Las últimas facturas de <b>'+esc(prov)+'</b> ('+cuenta[top]+' de '+previas.length+') fueron a <b>'+esc(centroCostoLabel(pt[0]))+' · '+esc(conceptoLabel(pt[1]))+'</b>, y esta la imputaste a <b>'+esc(centroCostoLabel(f.centroCostoId))+' · '+esc(conceptoLabel(f.conceptoId))+'</b>. ¿Está bien?',
+            textoAhoraNo:'Sí, está bien', textoNunca:'No me avises más con este proveedor',
+            botones:[{texto:'Revisarla', pri:true, accion:function(){ openFacturaModal(f.id); }}]}, 'imput:'+f.proveedorId, 1));
+        }
+      }
+    }).catch(function(err){ console.warn('Asistente (factura):', err); });
+  }
+  // Proveedores que facturan todos los meses y este mes todavía no llegó.
+  function facturasFaltantes(){
+    var hoy = todayStr(), mesHoy = hoy.slice(0,7), diaHoy = Number(hoy.slice(8));
+    var meses = []; for(var i=1;i<=6;i++){ var d = new Date(hoy+'T12:00:00'); d.setDate(1); d.setMonth(d.getMonth()-i); meses.push(dateStr(d.getFullYear(), d.getMonth(), 1).slice(0,7)); }
+    var porProv = {};
+    state.facturas.forEach(function(f){
+      if(esAnulado(f) || !f.fecha) return;
+      var p = porProv[f.proveedorId] = porProv[f.proveedorId] || {meses:{}, dias:[], montos:[], esteMes:false};
+      var m = f.fecha.slice(0,7);
+      if(m===mesHoy) p.esteMes = true;
+      if(meses.indexOf(m)!==-1 && !p.meses[m]){ p.meses[m] = true; p.dias.push(Number(f.fecha.slice(8))); p.montos.push(Number(f.monto||0)); }
+    });
+    var out = [];
+    Object.keys(porProv).forEach(function(id){
+      var p = porProv[id];
+      if(p.esteMes || Object.keys(p.meses).length<5 || !memPuede('falta:'+id)) return;
+      var dia = Math.round(mediana(p.dias));
+      if(diaHoy < dia+5) return;
+      out.push({id:id, nombre:proveedorNombre(id), dia:dia, monto:mediana(p.montos), meses:Object.keys(p.meses).length});
+    });
+    return out.sort(function(a,b){ return a.dia-b.dia; });
+  }
+  function revisarFacturasFaltantes(){
+    if(state.revisoFaltantes || !state.facturasCargadas || state.view!=='pagos') return;
+    state.revisoFaltantes = true;
+    memListo().then(function(){
+      if(!memPuede('faltantes')) return;
+      var lista = facturasFaltantes();
+      if(!lista.length) return;
+      var cuerpo = document.createElement('ul');
+      cuerpo.className = 'sug-lista';
+      lista.forEach(function(x){
+        var li = document.createElement('li');
+        li.innerHTML = '<span><b>'+esc(x.nombre)+'</b><small>Factura '+x.meses+' de los últimos 6 meses · suele llegar el día '+x.dia+' · ~'+fmtMoney(x.monto)+'</small></span>'
+          +'<button type="button" class="cargar">Cargar</button><button type="button" class="x" title="No avisar más de este proveedor">✕</button>';
+        li.querySelector('.cargar').addEventListener('click', function(){
+          window.AyudaAnafer.cerrarSugerencia();
+          openFacturaModal(null);
+          setProveedorComboValue('fm-proveedor', x.id);
+          document.getElementById('fm-proveedor').dispatchEvent(new Event('change'));
+        });
+        li.querySelector('.x').addEventListener('click', function(){
+          memGuardar('falta:'+x.id, 'nunca');
+          li.remove();
+          if(!cuerpo.children.length) window.AyudaAnafer.cerrarSugerencia();
+        });
+        cuerpo.appendChild(li);
+      });
+      sifSugerir(conMemoria({id:'faltantes', titulo:'Sifoncito: facturas que faltan',
+        texto: lista.length===1 ? 'Este proveedor te factura todos los meses y este mes todavía no cargaste su factura:' : 'Estos '+lista.length+' proveedores te facturan todos los meses y este mes todavía no cargaste su factura:',
+        cuerpo:cuerpo, textoAhoraNo:'Mañana me recordás', textoNunca:'No me avises más de esto'}, 'faltantes', 1));
+    });
+  }
+
+  // ---------- 3) Órdenes de pago: la forma de pago de siempre ----------
+  function formaHabitual(provId, excluirId){
+    var hoy = todayStr();
+    var ops = state.ordenesPago.filter(function(p){ return p.proveedorId===provId && p.id!==excluirId && p.estado==='pagada' && p.fecha && difDias(p.fecha, hoy)<=182; })
+      .sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); }).slice(0,6);
+    if(ops.length<2) return null;
+    var cuenta = {}, ej = {};
+    ops.forEach(function(p){
+      var fs = formasDePago(p).filter(function(f){ return f.medioId; });
+      if(!fs.length) return;
+      var f = fs.slice().sort(function(a,b){ return Number(b.importe||0)-Number(a.importe||0); })[0];
+      cuenta[f.medioId] = (cuenta[f.medioId]||0)+1;
+      (ej[f.medioId] = ej[f.medioId] || []).push({f:f, p:p});
+    });
+    var top = Object.keys(cuenta).sort(function(a,b){ return cuenta[b]-cuenta[a]; })[0];
+    if(!top || cuenta[top]<2 || cuenta[top] < Math.ceil(ops.length*0.6)) return null;
+    var md = medioById(top);
+    if(!md || md.activo===false) return null;
+    var cuentas = {}; ej[top].forEach(function(x){ if(x.f.cuentaId) cuentas[x.f.cuentaId] = (cuentas[x.f.cuentaId]||0)+1; });
+    var cuentaId = Object.keys(cuentas).sort(function(a,b){ return cuentas[b]-cuentas[a]; })[0] || md.cuentaId || '';
+    var dias = null;
+    if(md.cheque==='datos'){
+      var ds = ej[top].filter(function(x){ return x.f.chequeFecha && x.p.fecha; }).map(function(x){ return difDias(x.p.fecha, x.f.chequeFecha); });
+      if(ds.length){ dias = Math.round(mediana(ds)); var r30 = Math.round(dias/30)*30; if(Math.abs(dias-r30)<=3) dias = r30; }
+    }
+    return {medioId:top, cuentaId:cuentaId, dias:dias, veces:cuenta[top], de:ops.length, modo:md.cheque};
+  }
+  function sugerirFormaHabitual(){
+    var provId = document.getElementById('pom-proveedor').value;
+    if(!provId || document.getElementById('pom-estado').value!=='pagada') return;
+    var fs = state.editingFormas || [];
+    if(fs.length!==1 || fs[0].medioId) return;
+    var opId = state.editingPagoId;
+    memListo().then(function(){
+      if(!memPuede('pago:'+provId)) return;
+      var h = formaHabitual(provId, opId);
+      if(!h) return;
+      var md = medioById(h.medioId);
+      var como = '<b>'+esc(md.codigo+' — '+md.nombre)+'</b>'+(h.modo==='datos' && h.dias!=null ? (h.dias ? ' a <b>'+h.dias+' días</b>' : ' al día') : '')
+        +(h.cuentaId ? ' desde <b>'+esc(cuentaNombre(h.cuentaId))+'</b>' : '');
+      sifSugerir(conMemoria({id:'pago:'+provId, titulo:'Sifoncito: como siempre',
+        texto:'A <b>'+esc(proveedorNombre(provId))+'</b> le pagaste '+h.veces+' de las últimas '+h.de+' veces con '+como+'. ¿Lo armo así?'
+          +(h.modo==='cartera' ? ' (Después elegís qué cheques de la cartera.)' : ''),
+        textoNunca:'No me lo propongas con este proveedor',
+        botones:[{texto:'Sí, armalo así', pri:true, accion:function(){
+          if(!document.getElementById('pago-overlay').classList.contains('show') || document.getElementById('pom-proveedor').value!==provId) return;
+          var f = (state.editingFormas||[])[0]; if(!f) return;
+          f.medioId = h.medioId; f.cuentaId = h.cuentaId;
+          if(h.modo==='cartera'){ f.importe = 0; f.chequeIds = []; }
+          if(h.modo==='datos' && h.dias!=null) f.chequeFecha = sumarDias(document.getElementById('pom-fecha').value || todayStr(), h.dias);
+          renderPomFormas();
+        }}]}, 'pago:'+provId, 7));
+    });
+  }
 
   function fetchMonth(){
     if(!state.sb) return;

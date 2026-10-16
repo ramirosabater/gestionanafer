@@ -1084,3 +1084,18 @@ alter table ordenes_compra add column if not exists motivo_anulacion text not nu
 alter table movimientos    add column if not exists anulado_en timestamptz;
 alter table movimientos    add column if not exists anulado_por text not null default '';
 alter table movimientos    add column if not exists motivo_anulacion text not null default '';
+
+-- Memoria del ayudante (octubre 2026): ver ayudante-memoria.sql
+create table if not exists ayudante_memoria (
+  id text primary key,                 -- usuario|clave
+  usuario text not null default '',
+  clave text not null default '',
+  decision text not null default '',   -- 'nunca' | 'pospuesta' | 'aceptada'
+  hasta date,
+  actualizado timestamptz not null default now()
+);
+create index if not exists ayudante_memoria_usuario_idx on ayudante_memoria(usuario);
+alter table ayudante_memoria enable row level security;
+drop policy if exists "anon full access ayudante_memoria" on ayudante_memoria;
+create policy "anon full access ayudante_memoria" on ayudante_memoria for all using (true) with check (true);
+grant select, insert, update, delete on ayudante_memoria to authenticated;

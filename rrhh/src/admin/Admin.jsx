@@ -16,6 +16,7 @@ import Presentismo from "./Presentismo.jsx";
 import AusenciasAdmin from "./AusenciasAdmin.jsx";
 import Auditoria from "./Auditoria.jsx";
 import { LOGO } from "../lib/logo.js";
+import { avisarConSifoncito } from "./avisos.js";
 
 export default function Admin() {
   const [logueado, setLogueado] = useState(false);
@@ -58,6 +59,13 @@ export default function Admin() {
   };
 
   const salir = () => { logoutAdmin(); setLogueado(false); setPass(""); };
+
+  // Sifoncito avisa (una vez por día) si quedaron turnos sin fichar la salida.
+  useEffect(() => {
+    if (!logueado) return;
+    const t = setTimeout(() => { avisarConSifoncito((id) => setVista(id)); }, 1500);
+    return () => clearTimeout(t);
+  }, [logueado]);
 
   if (revisando && !logueado) {
     return <div className="min-h-screen w-full flex items-center justify-center text-[#94a1ab] text-sm">Cargando…</div>;

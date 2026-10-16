@@ -9,7 +9,12 @@
    atributo data-area del <script> (Comercial, RR.HH.).
    Cada paso puede:  ir: "selector"  → hace clic ahí antes (solo pestañas),
                      foco: "selector" o {texto:"…"} → lo marca en pantalla.
-   Nunca guarda, borra ni cambia datos.
+   Los circuitos nunca guardan, borran ni cambian datos.
+
+   Sugerencias: la app (Gestión, RR.HH.) le puede pedir a Sifoncito que
+   proponga algo según el historial, con AyudaAnafer.sugerir({...}). Sifoncito
+   solo muestra la propuesta y los botones; lo que se hace al tocarlos (y la
+   memoria de "no me lo preguntes más") lo decide la app.
    ===================================================================== */
 (function () {
   if (window.__ayudaAnafer) return;
@@ -24,6 +29,7 @@
         { t: "Acá elegís el área: Logística, Administración, Comercial o Recursos Humanos. Solo ves las que tu perfil tiene habilitadas.", foco: "#home-grid" },
         { t: "Desde cualquier área, <b>⌂ Inicio</b> te trae de vuelta a esta pantalla.", foco: "#home-btn" },
         { t: "El <b>⚙</b> abre la configuración: listas, perfiles y usuarios (si tu perfil lo permite).", foco: "#settings-btn" },
+        { t: "Mientras trabajás, a veces aparezco solo con una <b>sugerencia</b>: un viaje que se repite, una factura que no llegó o que parece repetida, cómo le pagás siempre a un proveedor. Me acuerdo de lo que me contestás: si me decís <b>No me lo preguntes más</b>, no insisto." },
         { t: "Y <b>Salir</b> cierra tu sesión. ¡Cuando entres a un área, tocame de nuevo y te muestro sus circuitos!", foco: "#logout-btn" },
       ] },
     ],
@@ -214,18 +220,43 @@
     ".ayuda-opc{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px;padding-top:8px;border-top:1px dashed rgba(24,22,15,.12)}" +
     ".ayuda-opc button{border:1px solid rgba(24,22,15,.15);background:transparent;border-radius:999px;padding:3px 10px;font:12px system-ui,sans-serif;cursor:pointer;color:inherit}" +
     ".ayuda-opc .ayuda-nota{margin:0}" +
+    ".ayuda-sug{position:fixed;right:18px;bottom:18px;z-index:9002;width:400px;max-width:calc(100vw - 32px);max-height:calc(100vh - 36px);display:flex;flex-direction:column;background:#fff;color:#18160f;border-radius:16px;box-shadow:0 18px 48px -12px rgba(0,0,0,.45);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;border:2px solid #ffc81e;animation:sugEntra .35s ease-out}" +
+    ".ayuda-sug[hidden]{display:none}" +
+    ".ayuda-sug .ayuda-top .sif-svg{animation:sifFlota 4.5s ease-in-out infinite}" +
+    ".ayuda-sug .ayuda-area{color:#b58300}" +
+    ".ayuda-sug-cuerpo{padding:0 14px;overflow:auto;flex:1 1 auto;min-height:0}" +
+    ".ayuda-sug-cuerpo:empty{display:none}" +
+    ".ayuda-sug-btns{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;padding:10px 14px 14px}" +
+    ".ayuda-sug-btns button{border:1px solid rgba(24,22,15,.15);background:#fff;border-radius:9px;padding:7px 12px;cursor:pointer;font:600 13px system-ui,sans-serif;color:#18160f}" +
+    ".ayuda-sug-btns button.pri{background:#1472cc;border-color:#1472cc;color:#fff}" +
+    ".ayuda-sug-btns button.sec{border:none;background:none;color:#8d8877;font-weight:500;padding:7px 6px}" +
+    ".ayuda-sug-btns button:disabled{opacity:.5;cursor:default}" +
+    ".sug-fechas{display:flex;flex-direction:column;gap:6px;margin:4px 0 6px}" +
+    ".sug-mes{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#8d8877;font-weight:700;margin-bottom:2px}" +
+    ".sug-dias{display:flex;flex-wrap:wrap;gap:4px}" +
+    ".sug-dias label{display:inline-flex;align-items:center;gap:3px;border:1px solid rgba(24,22,15,.15);border-radius:999px;padding:2px 8px 2px 4px;font-size:12px;cursor:pointer;user-select:none}" +
+    ".sug-dias label.off{opacity:.45;text-decoration:line-through}" +
+    ".sug-dias label.fer{border-color:#e1251b;color:#e1251b}" +
+    ".sug-lista{margin:4px 0 6px;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}" +
+    ".sug-lista li{display:flex;align-items:center;gap:8px;border:1px solid rgba(24,22,15,.1);border-radius:10px;padding:7px 10px}" +
+    ".sug-lista li span{flex:1}.sug-lista li small{display:block;color:#8d8877}" +
+    ".sug-lista li button{border:1px solid rgba(24,22,15,.15);background:#fff;border-radius:8px;padding:4px 9px;cursor:pointer;font:600 12px system-ui,sans-serif;color:#1472cc}" +
+    ".sug-lista li button.x{color:#8d8877;font-weight:500}" +
+    ".sug-nota{font-size:12px;color:#8d8877;margin:4px 0}" +
+    "@keyframes sugEntra{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}" +
     "@keyframes sifHabla{from{transform:scaleY(1)}to{transform:scaleY(2.2)}}" +
     "@keyframes sifFlota{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}" +
     "@keyframes sifSaludo{0%,100%{transform:rotate(0)}50%{transform:rotate(-14deg)}}" +
     "@keyframes sifBurbuja{0%{transform:translateY(0);opacity:0}15%{opacity:.85}100%{transform:translateY(-95px);opacity:0}}" +
     "@keyframes ayudaPulso{0%,100%{outline-color:#ff7a1a}50%{outline-color:rgba(255,122,26,.25)}}" +
     "@media (prefers-reduced-motion: reduce){.ayuda-top .sif-svg,.sif-saludo,.sif-burbujas circle,.ayuda-foco,.ayuda-panel.hablando .ayuda-top .sif-boca{animation:none}}" +
-    "@media (max-width:520px){.ayuda-panel{right:8px;left:8px;bottom:8px;width:auto;max-width:none}.ayuda-btn{right:10px;bottom:10px}}" +
-    "@media (prefers-color-scheme: dark){.ayuda-panel,.ayuda-btn{background:#23211c;color:#f2efe6}.ayuda-globo{background:#2f2c25}.ayuda-globo:after{border-right-color:#2f2c25}.ayuda-lista button,.ayuda-nav button{background:#23211c;color:#f2efe6;border-color:rgba(255,255,255,.15)}.ayuda-lista button:hover{background:#2b3440}}";
+    "@media (max-width:520px){.ayuda-sug{right:8px;left:8px;bottom:8px;width:auto;max-width:none}.ayuda-panel{right:8px;left:8px;bottom:8px;width:auto;max-width:none}.ayuda-btn{right:10px;bottom:10px}}" +
+    "@media (prefers-color-scheme: dark){.ayuda-sug,.ayuda-sug-btns button,.sug-lista li button{background:#23211c;color:#f2efe6}.ayuda-sug .ayuda-globo{background:#2f2c25}.ayuda-panel,.ayuda-btn{background:#23211c;color:#f2efe6}.ayuda-globo{background:#2f2c25}.ayuda-globo:after{border-right-color:#2f2c25}.ayuda-lista button,.ayuda-nav button{background:#23211c;color:#f2efe6;border-color:rgba(255,255,255,.15)}.ayuda-lista button:hover{background:#2b3440}}";
 
   // ---------------- Lógica ----------------
   var estado = { circuito: null, paso: 0 };
   var btn, panel, focoActual = null;
+  var sugEl = null, sugCola = [], sugActual = null;
 
   function areaActual() {
     var a = (document.body && document.body.dataset.area) || (scriptTag && scriptTag.dataset.area) || "";
@@ -370,14 +401,22 @@
       });
     });
   }
-  function abrir() { estado = { circuito: null, paso: 0, auto: false, saludar: true }; panel.hidden = false; btn.hidden = true; render(); }
-  function cerrar() { callar(); quitarFoco(); panel.hidden = true; actualizarBoton(); }
+  function abrir() {
+    if (sugActual) { sugCola.unshift(sugActual); sugActual = null; sugEl.hidden = true; }
+    estado = { circuito: null, paso: 0, auto: false, saludar: true }; panel.hidden = false; btn.hidden = true; render(); }
+  function cerrar() {
+    callar(); quitarFoco(); panel.hidden = true;
+    if (!sugActual && sugCola.length && !loginVisible()) { mostrarSug(sugCola.shift()); return; }
+    actualizarBoton();
+  }
   function actualizarBoton() {
     if (!btn) return;
     var area = areaActual();
     btn.innerHTML = sifon(area, 30) + "<span>Ayuda</span>";
     btn.title = "Ayuda de " + NOMBRES[area];
-    btn.hidden = !panel.hidden || loginVisible();
+    btn.hidden = !panel.hidden || loginVisible() || !!(sugEl && !sugEl.hidden);
+    if (sugEl && loginVisible() && sugActual) { sugCola.unshift(sugActual); sugActual = null; sugEl.hidden = true; }
+    if (sugEl && !sugActual && sugCola.length && panel.hidden && !loginVisible()) { mostrarSug(sugCola.shift()); return; }
     if (!panel.hidden && estado.circuito == null) render(); // cambió el área con el panel abierto
   }
 
@@ -387,6 +426,7 @@
     panel = document.createElement("div"); panel.className = "ayuda-panel"; panel.id = "ayuda-panel"; panel.hidden = true;
     panel.setAttribute("role", "dialog"); panel.setAttribute("aria-label", "Ayuda");
     document.body.appendChild(btn); document.body.appendChild(panel);
+    iniciarSug();
     btn.addEventListener("click", abrir);
     panel.addEventListener("click", function (e) {
       var b = e.target.closest("[data-acc]"); if (!b) return;
@@ -421,6 +461,56 @@
     if (login) new MutationObserver(actualizarBoton).observe(login, { attributes: true, attributeFilter: ["class"] });
     actualizarBoton();
   }
-  window.AyudaAnafer = { sifon: sifon, circuitos: CIRCUITOS, abrir: function () { abrir(); } };
+  // ---------------- Sugerencias ----------------
+  // AyudaAnafer.sugerir({
+  //   id: "clave única" (si ya está a la vista o en cola, no se repite),
+  //   titulo: "Sifoncito sugiere" (opcional), texto: "html",
+  //   cuerpo: "html" o un elemento (opcional: lista de fechas, etc.),
+  //   botones: [{ texto, pri, accion(card) }]  (si accion devuelve false, no se cierra),
+  //   ahoraNo: fn (botón "Ahora no" y la ✕), nunca: fn (botón "No me lo preguntes más"),
+  //   textoNunca: "No me lo preguntes más" (opcional)
+  // })
+  function sugerir(op) {
+    if (!op || !sugEl) return false;
+    if ((sugActual && sugActual.id === op.id) || sugCola.some(function (x) { return x.id === op.id; })) return false;
+    if (sugActual || !panel.hidden || loginVisible()) { sugCola.push(op); return true; }
+    mostrarSug(op);
+    return true;
+  }
+  function mostrarSug(op) {
+    sugActual = op;
+    var area = areaActual();
+    sugEl.innerHTML = '<button class="ayuda-x" title="Cerrar" data-sug="x">✕</button><div class="ayuda-top">' + sifon(area, 78) +
+      '<div class="ayuda-globo"><div class="ayuda-area">' + (op.titulo || "Sifoncito sugiere") + '</div><div class="ayuda-texto">' + op.texto + "</div></div></div>" +
+      '<div class="ayuda-sug-cuerpo"></div><div class="ayuda-sug-btns"></div>';
+    var cuerpo = sugEl.querySelector(".ayuda-sug-cuerpo");
+    if (op.cuerpo) { if (typeof op.cuerpo === "string") cuerpo.innerHTML = op.cuerpo; else cuerpo.appendChild(op.cuerpo); }
+    var bs = sugEl.querySelector(".ayuda-sug-btns");
+    function boton(txt, cls, fn) {
+      var b = document.createElement("button"); b.type = "button"; b.textContent = txt; if (cls) b.className = cls;
+      b.addEventListener("click", function () { var r = fn ? fn(sugEl) : undefined; if (r !== false) cerrarSug(); });
+      bs.appendChild(b); return b;
+    }
+    if (op.nunca) boton(op.textoNunca || "No me lo preguntes más", "sec", op.nunca);
+    if (op.ahoraNo !== false) boton(op.textoAhoraNo || "Ahora no", "", op.ahoraNo);
+    (op.botones || []).forEach(function (x) { boton(x.texto, x.pri ? "pri" : "", x.accion); });
+    sugEl.querySelector('[data-sug="x"]').addEventListener("click", function () { if (typeof op.ahoraNo === "function") op.ahoraNo(sugEl); cerrarSug(); });
+    sugEl.hidden = false;
+    actualizarBoton();
+  }
+  function cerrarSug() {
+    sugActual = null;
+    sugEl.hidden = true; sugEl.innerHTML = "";
+    if (sugCola.length && panel.hidden && !loginVisible()) { var sig = sugCola.shift(); setTimeout(function () { mostrarSug(sig); }, 300); return; }
+    actualizarBoton();
+  }
+  function iniciarSug() {
+    sugEl = document.createElement("div"); sugEl.className = "ayuda-sug"; sugEl.id = "ayuda-sug"; sugEl.hidden = true;
+    sugEl.setAttribute("role", "dialog"); sugEl.setAttribute("aria-label", "Sugerencia de Sifoncito");
+    document.body.appendChild(sugEl);
+  }
+
+  window.AyudaAnafer = { sifon: sifon, circuitos: CIRCUITOS, abrir: function () { abrir(); }, sugerir: sugerir,
+    cerrarSugerencia: function () { if (sugActual) cerrarSug(); }, sugerenciaActual: function () { return sugActual ? sugActual.id : null; } };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", iniciar); else iniciar();
 })();
