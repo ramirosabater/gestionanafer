@@ -15,7 +15,7 @@
 //
 // Secretos (Edge Functions > Secrets):
 //   ANTHROPIC_API_KEY        obligatorio
-//   ANTHROPIC_MODEL          opcional (por defecto claude-sonnet-5)
+//   ANTHROPIC_MODEL          opcional (por defecto claude-sonnet-4-5)
 //   ANTHROPIC_WORKSPACE_ID   opcional (solo si tu clave lo exige)
 // =====================================================================
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -103,7 +103,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // 3) Clave y modelo: solo del servidor
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) return json({ error: 'La lectura automática no está configurada en el servidor.' }, 500);
-  const model = Deno.env.get('ANTHROPIC_MODEL') || 'claude-sonnet-5';
+  const model = Deno.env.get('ANTHROPIC_MODEL') || 'claude-sonnet-4-5';
 
   const prompt =
     'Esta imagen es una foto o escaneo de una factura de proveedor. Leé los datos y devolvé SOLO un objeto JSON con esta forma exacta, sin texto adicional:\n' +

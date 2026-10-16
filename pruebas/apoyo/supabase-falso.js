@@ -56,6 +56,13 @@
         channel: function () { return canal; },
         removeChannel: function () {},
         rpc: function () { return Promise.resolve({ data: null, error: null }); },
+        // Edge Functions: la respuesta la pone la prueba en DB.__funciones[nombre]
+        functions: { invoke: function (nombre, op) {
+          S.escrituras.push(["__funciones", nombre, (op || {}).body]);
+          var r = (DB.__funciones || {})[nombre];
+          if (r) return Promise.resolve(JSON.parse(JSON.stringify(r)));
+          return Promise.resolve({ data: null, error: { message: "Function not found", context: { status: 404, json: function () { return Promise.resolve({ error: "not found" }); } } } });
+        } },
         storage: { from: function () { return { upload: function () { return Promise.resolve({}); }, getPublicUrl: function () { return { data: {} }; } }; } },
         auth: {
           getSession: function () { return Promise.resolve({ data: { session: sesion() } }); },

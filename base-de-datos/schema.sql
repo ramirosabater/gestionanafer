@@ -1099,3 +1099,28 @@ alter table ayudante_memoria enable row level security;
 drop policy if exists "anon full access ayudante_memoria" on ayudante_memoria;
 create policy "anon full access ayudante_memoria" on ayudante_memoria for all using (true) with check (true);
 grant select, insert, update, delete on ayudante_memoria to authenticated;
+
+-- Lectura de facturas (octubre 2026): ver leer-facturas.sql
+create or replace function puede_editar(secciones text[])
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from usuarios u
+    join app_config c on c.id = 'auth'
+    cross join lateral jsonb_array_elements(coalesce(c.roles, '[]'::jsonb)) r
+    where lower(u.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+      and u.activo is not false
+      and r ->> 'id' = u.perfil
+      and (
+        (r ->> 'manageAccess')::boolean is true
+        or exists (select 1 from unnest(secciones) s where r -> 'permisos' ->> s = 'editar')
+      )
+  );
+$$;
+revoke all on function puede_editar(text[]) from public, anon;
+grant execute on function puede_editar(text[]) to authenticated;

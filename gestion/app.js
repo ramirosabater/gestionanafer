@@ -3003,9 +3003,13 @@
     });
   }
 
+  // Lectura automática de facturas: la hace la función del servidor
+  // "leer-factura" (Supabase Edge Function), que es la única que tiene la
+  // clave de Anthropic. El navegador nunca ve la clave: config.js NO la lleva.
+  // Se muestra a quien entró con email (la función igual verifica permisos).
   function refreshFacturaReadAvailability(){
     var row = document.getElementById('fm-read-row');
-    if(row) row.hidden = !window.ANTHROPIC_API_KEY;
+    if(row) row.hidden = !(state.sb && state.sb.functions && state.sessionEmail) || window.LEER_FACTURAS===false;
   }
 
   wireAttachInput('pm-archivo-input', 'pm-archivos-list', function(){ return state.editingProveedorArchivos; });
@@ -3090,69 +3094,46 @@
     updateSplitTotal();
   }
 
+  var LECTURA_TIPOS = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
   async function readFacturaFromFile(file){
-    if(!window.ANTHROPIC_API_KEY){ showToast('La lectura automática no está configurada (falta la clave en config.js).'); return; }
-    showToast('Leyendo factura...');
+    if(!(state.sb && state.sb.functions)){ showToast('La lectura automática necesita conexión con la base.'); return; }
+    var label = document.getElementById('fm-read-label');
     try{
       var imageBlob = file;
       if(file.type === 'application/pdf'){
         imageBlob = await pdfFirstPageToImageBlob(file);
-      }else if(!/^image\//.test(file.type)){
-        showToast('Elegí un PDF o una imagen de la factura.');
+      }else if(LECTURA_TIPOS.indexOf(file.type)===-1){
+        showToast(/^image\//.test(file.type) ? 'Ese formato de imagen no se puede leer: usá PDF, JPG o PNG.' : 'Elegí un PDF o una imagen de la factura.');
         return;
       }
+      showToast('Leyendo factura...', 15000);
+      if(label) label.classList.add('leyendo');
       // el archivo original queda como adjunto pendiente; se sube a Drive
       // recién al Guardar, porque ahí ya sabemos a qué proveedor pertenece
       state.editingFacturaArchivos.push({ pending:true, file:file, name:file.name, contentType:file.type||'', sizeBytes:file.size||0 });
       renderAttachList('fm-archivos-list', function(){ return state.editingFacturaArchivos; });
 
       var base64 = await blobToBase64(imageBlob);
-      var proveedorNombres = state.proveedores.map(function(p){ return p.nombre; });
-      var prompt = 'Esta imagen es una foto o escaneo de una factura de proveedor. Leé los datos y devolvé SOLO un objeto JSON con esta forma exacta, sin texto adicional:\n'
-        + '{"proveedor_nombre": string o null, "numero": string o null, "fecha": "YYYY-MM-DD" o null, "monto": number o null, "notas": string o null}\n'
-        + 'Los proveedores ya cargados en el sistema son: ' + JSON.stringify(proveedorNombres) + '. '
-        + 'Si el nombre del proveedor de la factura coincide (aunque sea parcialmente) con alguno de esa lista, devolvé el nombre EXACTO tal como aparece en la lista. '
-        + 'Si no coincide con ninguno, devolvé el nombre tal como figura impreso en la factura. '
-        + '"monto" es el monto TOTAL de la factura, como número (sin separador de miles, con punto decimal, sin símbolo de moneda). '
-        + 'Si algún dato no se puede leer con confianza, devolvé null en ese campo en vez de inventarlo.';
-
-      var aiHeaders = {
-        'Content-Type': 'application/json',
-        'x-api-key': window.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      };
-      if(window.ANTHROPIC_WORKSPACE_ID) aiHeaders['anthropic-workspace-id'] = window.ANTHROPIC_WORKSPACE_ID;
-      var resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: aiHeaders,
-        body: JSON.stringify({
-          model: window.ANTHROPIC_MODEL || 'claude-sonnet-4-5',
-          max_tokens: 1024,
-          messages: [{
-            role: 'user',
-            content: [
-              {type:'image', source:{type:'base64', media_type:'image/png', data: base64}},
-              {type:'text', text: prompt}
-            ]
-          }]
-        })
-      });
-      var body = await resp.json();
-      if(!resp.ok){
-        var msg = (body && body.error && body.error.message) || ('HTTP '+resp.status);
-        if(resp.status===401) showToast('La clave de la API de Anthropic no es válida — revisá config.js.');
-        else if(resp.status===429) showToast('Demasiados pedidos por ahora — probá de nuevo en un momento.');
-        else showToast('No se pudo leer la factura automáticamente: '+msg);
+      var res = await state.sb.functions.invoke('leer-factura', { body: {
+        imagen: base64,
+        mediaType: imageBlob.type && LECTURA_TIPOS.indexOf(imageBlob.type)!==-1 ? imageBlob.type : 'image/png',
+        proveedores: state.proveedores.map(function(p){ return p.nombre; })
+      }});
+      if(res.error){
+        var msg = '', status = 0;
+        try{ var ctx = res.error.context; if(ctx){ status = ctx.status||0; var j = await ctx.json(); msg = (j && j.error) || ''; } }catch(e2){}
+        if(status===404 || /not found|failed to send/i.test(res.error.message||'')) showToast('La lectura automática todavía no está instalada en Supabase (falta la función leer-factura).', 8000);
+        else showToast('No se pudo leer la factura automáticamente: '+(msg || res.error.message || 'error')+' — completá los datos a mano.', 8000);
         return;
       }
-      var text = body && body.content && body.content[0] && body.content[0].text;
-      var data = extractJsonFromText(text);
+      var data = res.data && res.data.data;
       if(!data){ showToast('No se pudo interpretar la respuesta — completá los datos a mano.'); return; }
       applyFacturaReadResult(data);
       showToast('Factura leída — revisá los datos antes de guardar.');
     }catch(e){
       showToast('No se pudo leer la factura automáticamente — completá los datos a mano.');
+    }finally{
+      if(label) label.classList.remove('leyendo');
     }
   }
 
