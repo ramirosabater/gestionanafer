@@ -4373,6 +4373,7 @@
         codigo:Number(r.codigo), descripcion:r.descripcion||'', alicInsc:r.alic_insc==null?null:Number(r.alic_insc), escala:r.escala||'',
         alicNoInsc:r.alic_no_insc==null?null:Number(r.alic_no_insc), alicNoInscPH:r.alic_no_insc_ph==null?null:Number(r.alic_no_insc_ph),
         mnsr:Number(r.mnsr||0), mnsrNoInsc:!!r.mnsr_no_insc, minInsc:Number(r.min_insc||0), minNoInsc:Number(r.min_no_insc||0),
+        ivaPct:r.iva_pct==null?0:Number(r.iva_pct),
         activo:r.activo!==false, orden:r.orden||0 }; }).sort(function(a,b){ return (a.orden||0)-(b.orden||0) || a.codigo-b.codigo; });
       if(state.settingsTab==='retenciones') renderRetencionesSettings();
       renderPagos();
@@ -4429,9 +4430,13 @@
     return Math.round((ri ? Number(f.monto||0)/1.21 : Number(f.monto||0))*100)/100;
   }
   function facturaNeto(f){ return f.neto!=null && !isNaN(f.neto) ? Number(f.neto) : facturaNetoAuto(f); }
+  // Factura M: el régimen que además retiene IVA (iva_pct), si está activo.
+  function regimenFacturaM(){ var r = state.ganRegimenes.find(function(x){ return x.activo && x.ivaPct>0; }); return r ? r.codigo : null; }
+  function esFacturaM(f){ return /^\s*M\s*[-\s]?\s*\d{4,5}\s*-\s*\d+/i.test(String(f && f.numero || '')); }  // "M-0001-00001234"
   function facturaRegimen(f){
     if(f.regimenGan===0) return 0;
     if(f.regimenGan) return f.regimenGan;
+    if(esFacturaM(f) && regimenFacturaM()) return regimenFacturaM();   // número "M-0001-…": Factura M
     var p = state.proveedores.find(function(x){ return x.id===f.proveedorId; });
     return provGanRegimen(p) || 0;
   }
@@ -4464,11 +4469,12 @@
       var reg = regimenByCodigo(k), base = r2(porReg[k]);
       var out = {regimen:Number(k), base:base, acum_prev:0, ret_prev:0, importe:0, condicion:cond, detalle:''};
       if(!reg){ out.detalle = 'Régimen '+k+' no está en la tabla'; return out; }
+      if(!reg.activo){ out.detalle = 'Régimen '+k+' desactivado: no retiene (cambiá el régimen del proveedor o de la factura)'; return out; }
       if(cond==='exento' || cond==='monotributo' || cond==='no_retener'){ out.detalle = GAN_COND_LABEL[cond]+': no se retiene'; return out; }
       // Lo pagado y retenido en el mes al mismo proveedor por el mismo régimen.
       state.ordenesPago.forEach(function(o){
         if(o.id===opId || o.proveedorId!==proveedorId || o.estado!=='pagada' || mesDe(o.fecha)!==mes) return;
-        (o.retenciones||[]).forEach(function(e){ if(Number(e.regimen)===reg.codigo){ out.acum_prev += Number(e.base||0); out.ret_prev += Number(e.importe||0); } });
+        (o.retenciones||[]).forEach(function(e){ if(Number(e.regimen)===reg.codigo && e.impuesto!=='iva'){ out.acum_prev += Number(e.base||0); out.ret_prev += Number(e.importe||0); } });
       });
       out.acum_prev = r2(out.acum_prev); out.ret_prev = r2(out.ret_prev);
       var total, minimo;
@@ -4489,8 +4495,16 @@
       if(imp < minimo){ if(imp>0) out.detalle += ' → '+fmtMoney(imp)+' no llega al mínimo de '+fmtMoney(minimo); imp = 0; }
       out.importe = Math.max(0, imp);
       return out;
-    });
+    }).reduce(function(lista, out){
+      lista.push(out);
+      // Factura M: además se retiene el IVA (por defecto el 21% del neto).
+      var reg = regimenByCodigo(out.regimen);
+      if(reg && reg.ivaPct>0) lista.push({impuesto:'iva', regimen:reg.codigo, base:out.base, acum_prev:0, ret_prev:0,
+        importe:r2(out.base*reg.ivaPct/100), condicion:out.condicion, detalle:'IVA '+String(reg.ivaPct).replace('.',',')+'% sobre el neto '+fmtMoney(out.base)});
+      return lista;
+    }, []);
   }
+  function impuestoLabel(e){ return e && e.impuesto==='iva' ? 'IVA' : 'Ganancias'; }
   function proximoCertificado(){
     var max = 0;
     state.ordenesPago.forEach(function(o){ (o.retenciones||[]).forEach(function(e){ if(Number(e.certificado)>max) max = Number(e.certificado); }); });
@@ -4593,7 +4607,7 @@
             facts.map(function(f){ var l = facturaLineas(f)[0] || {}; return [esc(f.numero||''), impFecha(f.fecha), esc(l.centroCostoId ? centroCostoLabel(l.centroCostoId) : '—'), fmtMoney(f.monto)]; }),
             ['<b>Total comprobantes</b>','','',fmtMoney(totalFact)]) },
         rets.length ? { titulo:'Retenciones practicadas', html: impTabla([{t:'Impuesto'},{t:'Régimen'},{t:'Certificado'},{t:'Base',num:true},{t:'Retenido',num:true}],
-            rets.map(function(e){ return ['Ganancias', esc(regimenLabel(e.regimen)), e.certificado ? certNumeroLabel(e.certificado) : '—', fmtMoney(e.base), fmtMoney(e.importe)]; })) } : null,
+            rets.map(function(e){ return [impuestoLabel(e), esc(regimenLabel(e.regimen)), e.certificado ? certNumeroLabel(e.certificado) : '—', fmtMoney(e.base), fmtMoney(e.importe)]; })) } : null,
         { titulo:'Forma de pago', html: formas.length ? impTabla([{t:'Concepto'},{t:'Cuenta'},{t:'Cheque / echeq'},{t:'Fecha de cobro'},{t:'Importe',num:true}],
             formas.map(function(f){
               var chq = formaModo(f)==='cartera' ? (f.chequeIds||[]).map(chequeById).filter(Boolean).map(function(c){ return esc(chequeResumen(c)); }).join('<br>') : esc(f.chequeNumero||'');
@@ -4632,7 +4646,8 @@
     var reg = regimenByCodigo(e.regimen);
     var anul = esAnulado(op);
     imprimirDocumento({
-      tipo:'Certificado de retención', numero:'N° '+certNumeroLabel(e.certificado), fecha:op.fecha, codigo:'Impuesto a las Ganancias · RG (ARCA) 830',
+      tipo:'Certificado de retención', numero:'N° '+certNumeroLabel(e.certificado), fecha:op.fecha,
+      codigo: e.impuesto==='iva' ? 'Impuesto al Valor Agregado · Factura M · RG (AFIP) 1575' : 'Impuesto a las Ganancias · RG (ARCA) 830',
       estado: anul ? {texto:'Anulado', color:'#e1251b'} : null,
       anulado: anul ? 'Este certificado corresponde a la '+pagoNumeroLabel(op.numero)+', que fue anulada. '+anulacionTexto(op) : null,
       bloques:[
@@ -4640,7 +4655,9 @@
         { titulo:'Sujeto retenido', html: impKV([['Nombre / razón social', p.nombre||''], ['CUIT', p.cuit||''], ['Domicilio', [p.direccion, p.localidad, p.provincia].filter(Boolean).join(', ')], ['Condición', GAN_COND_LABEL[e.condicion]||e.condicion||'']]) },
         { titulo:'Retención', html: impKV([['Régimen', reg ? reg.codigo+' — '+reg.descripcion : String(e.regimen)], ['Orden de pago', pagoNumeroLabel(op.numero)],
             ['Comprobantes', facts.map(function(f){ return (f.numero||'')+' ('+impFecha(f.fecha)+')'; }).join(', ')]]) +
-          impTotales([['Importe neto de este pago', fmtMoney(e.base)], ['Pagos anteriores del mes', fmtMoney(e.acum_prev)], ['Retenido anteriormente en el mes', fmtMoney(e.ret_prev)], ['Importe retenido', fmtMoney(e.importe), 'total']]) }
+          impTotales(e.impuesto==='iva'
+            ? [['Neto gravado de los comprobantes', fmtMoney(e.base)], ['IVA retenido', fmtMoney(e.importe), 'total']]
+            : [['Importe neto de este pago', fmtMoney(e.base)], ['Pagos anteriores del mes', fmtMoney(e.acum_prev)], ['Retenido anteriormente en el mes', fmtMoney(e.ret_prev)], ['Importe retenido', fmtMoney(e.importe), 'total']]) }
       ],
       firmas:['Firma y aclaración · Agente de retención']
     });
@@ -4676,7 +4693,7 @@
       tr.className = 'day-row'+(anul ? ' anulado' : '');
       if(anul) tr.title = 'Certificado anulado — '+anulacionTexto(x.op);
       tr.innerHTML = '<td class="num">'+esc(x.op.fecha||'')+'</td><td class="num">'+certNumeroLabel(x.e.certificado)+'</td><td class="num">'+esc(pagoNumeroLabel(x.op.numero))+'</td>'
-        +'<td>'+esc(prov.nombre||'')+'</td><td class="num">'+esc(prov.cuit||'')+'</td><td class="num">'+esc(String(x.e.regimen))+'</td>'
+        +'<td>'+esc(prov.nombre||'')+'</td><td class="num">'+esc(prov.cuit||'')+'</td><td class="num">'+(x.e.impuesto==='iva' ? 'IVA · ' : '')+esc(String(x.e.regimen))+'</td>'
         +'<td class="num">'+fmtMoney(x.e.base)+'</td><td class="num"><b>'+fmtMoney(x.e.importe)+'</b></td>'
         +(anul ? '<td><span class="oc-badge anulada">Anulado</span></td>' : '<td><button type="button" class="btn">🖨</button></td>');
       if(!anul) tr.querySelector('button').addEventListener('click', function(ev){ ev.stopPropagation(); imprimirCertificado(x.op, x.e); });
@@ -4691,16 +4708,16 @@
     if(!lista.length){ showToast('No hay retenciones en ese mes.'); return; }
     var num = function(n){ return (Math.round(Number(n||0)*100)/100).toFixed(2).replace('.',','); };
     var q = function(t){ return '"'+String(t==null?'':t).replace(/"/g,'""')+'"'; };
-    var rows = [['Fecha','Certificado','Orden de pago','Proveedor','CUIT','Condición','Régimen','Descripción régimen','Importe neto pagado','Pagos anteriores del mes','Retenido anteriormente','Importe retenido'].map(q).join(';')];
+    var rows = [['Fecha','Certificado','Orden de pago','Proveedor','CUIT','Condición','Impuesto','Régimen','Descripción régimen','Importe neto pagado','Pagos anteriores del mes','Retenido anteriormente','Importe retenido'].map(q).join(';')];
     lista.forEach(function(x){
       var prov = state.proveedores.find(function(p){ return p.id===x.op.proveedorId; }) || {};
       var reg = regimenByCodigo(x.e.regimen);
       rows.push([x.op.fecha, certNumeroLabel(x.e.certificado), pagoNumeroLabel(x.op.numero), prov.nombre, prov.cuit, GAN_COND_LABEL[x.e.condicion]||x.e.condicion,
-        x.e.regimen, reg ? reg.descripcion : ''].map(q).concat([num(x.e.base), num(x.e.acum_prev), num(x.e.ret_prev), num(x.e.importe)]).join(';'));
+        impuestoLabel(x.e), x.e.regimen, reg ? reg.descripcion : ''].map(q).concat([num(x.e.base), num(x.e.acum_prev), num(x.e.ret_prev), num(x.e.importe)]).join(';'));
     });
     var blob = new Blob(['﻿'+rows.join('\r\n')], {type:'text/csv;charset=utf-8'});
     var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'retenciones-ganancias-'+state.retMes+'.csv';
+    a.href = URL.createObjectURL(blob); a.download = 'retenciones-'+state.retMes+'.csv';
     document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
   });
 
@@ -4718,7 +4735,7 @@
     state.ganRegimenes.forEach(function(r){
       var tr = document.createElement('tr');
       tr.dataset.codigo = r.codigo;
-      tr.innerHTML = '<td class="num">'+r.codigo+'</td><td class="desc">'+esc(r.descripcion)+(r.escala ? ' <span class="fm-hint">(escala '+esc(r.escala)+')</span>' : '')+'</td>'
+      tr.innerHTML = '<td class="num">'+r.codigo+'</td><td class="desc">'+esc(r.descripcion)+(r.escala ? ' <span class="fm-hint">(escala '+esc(r.escala)+')</span>' : '')+(r.ivaPct ? ' <span class="fm-hint">(+ retención de IVA '+String(r.ivaPct).replace('.',',')+'%)</span>' : '')+'</td>'
         +'<td>'+inp('ai', r.alicInsc)+'</td><td>'+inp('an', r.alicNoInsc)+'</td><td>'+inp('aph', r.alicNoInscPH)+'</td>'
         +'<td>'+inp('mn', r.mnsr)+'</td><td>'+inp('mi', r.minInsc)+'</td><td>'+inp('mni', r.minNoInsc)+'</td>'
         +'<td><input type="checkbox" class="act"'+(r.activo?' checked':'')+'></td>';
@@ -5410,7 +5427,7 @@
     rets.forEach(function(e){
       var d = document.createElement('div');
       d.className = 'ret-line';
-      d.innerHTML = '<div><div>'+esc(regimenLabel(e.regimen))+'</div><div class="det">Neto de este pago '+fmtMoney(e.base)+(e.detalle ? ' · '+esc(e.detalle) : '')+'</div></div><b>'+fmtMoney(e.importe)+'</b>';
+      d.innerHTML = '<div><div>'+(e.impuesto==='iva' ? '<b>IVA</b> · ' : '')+esc(regimenLabel(e.regimen))+'</div><div class="det">Neto de este pago '+fmtMoney(e.base)+(e.detalle ? ' · '+esc(e.detalle) : '')+'</div></div><b>'+fmtMoney(e.importe)+'</b>';
       lines.appendChild(d);
     });
     document.getElementById('pom-neto').textContent = fmtMoney(pomTotalFacturas() - rets.reduce(function(t,e){ return t+e.importe; }, 0));
@@ -5420,7 +5437,7 @@
     if(op && op.estado==='pagada') (op.retenciones||[]).filter(function(e){ return e.importe>0 && e.certificado; }).forEach(function(e){
       var b = document.createElement('button');
       b.type = 'button'; b.className = 'btn';
-      b.textContent = '🖨 Certificado N° '+certNumeroLabel(e.certificado);
+      b.textContent = '🖨 Certificado '+impuestoLabel(e)+' N° '+certNumeroLabel(e.certificado);
       b.addEventListener('click', function(){ imprimirCertificado(op, e); });
       certs.appendChild(b);
     });
@@ -5640,12 +5657,13 @@
     var retenciones = [], retenido = 0;
     if(estado==='pagada' && state.schemaV3){
       var prevCert = {};
-      (existing && existing.retenciones || []).forEach(function(e){ if(e.certificado) prevCert[e.regimen] = e.certificado; });
+      (existing && existing.retenciones || []).forEach(function(e){ if(e.certificado) prevCert[(e.impuesto||'gan')+e.regimen] = e.certificado; });
       var proxCert = proximoCertificado();
       retenciones = calcularRetenciones(proveedorId, facturaIds, document.getElementById('pom-fecha').value || todayStr(), id)
         .map(function(e){
           var o = {regimen:e.regimen, base:e.base, acum_prev:e.acum_prev, ret_prev:e.ret_prev, importe:e.importe, condicion:e.condicion};
-          if(e.importe>0) o.certificado = prevCert[e.regimen] || (proxCert++);
+          if(e.impuesto) o.impuesto = e.impuesto;
+          if(e.importe>0) o.certificado = prevCert[(e.impuesto||'gan')+e.regimen] || (proxCert++);
           return o;
         });
       retenido = r2(retenciones.reduce(function(t,e){ return t+e.importe; }, 0));
