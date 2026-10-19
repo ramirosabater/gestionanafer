@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { sbGet, sbPost, registrarAuditoria } from "./supabase-admin.js";
 import { calcularEstado } from "../lib/fichaje.js";
+import { contextoFichada } from "../lib/jornada.js";
 import { leerArchivoReloj, asignarTipos } from "./importar-reloj.js";
 
 const LS_LOCAL = "importar_reloj_local";
@@ -117,8 +118,9 @@ export default function ImportarReloj() {
     const filas = [];
     for (const p of validos) {
       const horario = horarios.find((h) => String(h.id) === String(p.emp.horario_id)) || null;
+      const ordenadas = p.nuevas.slice().sort((a, b) => a.ts - b.ts);
       for (const m of p.nuevas) {
-        const est = calcularEstado(m.tipo, m.ts, horario);
+        const est = calcularEstado(m.tipo, m.ts, horario, contextoFichada(ordenadas.filter((x) => x !== m), m.ts));
         filas.push({
           legajo: p.legajo, tipo: m.tipo, timestamp: m.ts.toISOString(),
           estado: est.estado, minutos_tarde: est.minutosTarde || 0,

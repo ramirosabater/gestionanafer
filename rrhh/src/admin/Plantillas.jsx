@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { sbGet, sbPost, sbPatch, sbDelete, registrarAuditoria } from "./supabase-admin.js";
+import { EXTRAS_CAMIONEROS, BLOQUES_CAMIONEROS } from "../lib/jornada.js";
 
 const DIAS = [
   { n: 1, l: "L" }, { n: 2, l: "M" }, { n: 3, l: "X" }, { n: 4, l: "J" },
@@ -24,6 +25,11 @@ export default function Plantillas() {
   const [horasDiarias, setHorasDiarias] = useState(8);
   const [horasSabado, setHorasSabado] = useState(4);
   const [guardando, setGuardando] = useState(false);
+  // Horas extras propias del horario (ej. Camioneros): si está apagado, rige la regla general de recargos.
+  const [extrasOn, setExtrasOn] = useState(false);
+  const [tramos, setTramos] = useState([]);
+  const [descansoH, setDescansoH] = useState(0);
+  const [teniaExtras, setTeniaExtras] = useState(false);
 
   const cargar = async () => {
     setCargando(true); setError(null);
@@ -44,7 +50,30 @@ export default function Plantillas() {
     setEditando(null); setNombre(""); setTolerancia(10);
     setDias([1, 2, 3, 4, 5]); setInicio("08:00"); setFin("17:00"); setBloques([]);
     setLibre(false); setHorasDiarias(8); setHorasSabado(4);
+    setExtrasOn(false); setTramos([]); setDescansoH(0); setTeniaExtras(false);
   };
+  const modeloCamioneros = () => {
+    setLibre(false);
+    if (!nombre.trim()) setNombre("Camioneros");
+    setTolerancia(10);
+    setBloques(BLOQUES_CAMIONEROS.map((b) => ({ ...b, dias: [...b.dias] })));
+    setExtrasOn(true);
+    setTramos(EXTRAS_CAMIONEROS.tramos.map((t) => ({ ...t, dias: [...t.dias] })));
+    setDescansoH(EXTRAS_CAMIONEROS.descanso_horas);
+  };
+  // Al prender las extras propias, propone un tramo por cada grupo de días del horario.
+  const prenderExtras = (on) => {
+    setExtrasOn(on);
+    if (on && !tramos.length) {
+      const base = bloques.length ? bloques : [{ dias, inicio, fin }];
+      const vistos = new Set(), ts = [];
+      base.forEach((b) => { const k = b.dias.join(","); if (vistos.has(k)) return; vistos.add(k);
+        const [h, m] = String(b.fin).split(":").map(Number); const hasta = `${String(Math.min(23, h + 5)).padStart(2, "0")}:${String(m || 0).padStart(2, "0")}`;
+        ts.push({ dias: [...b.dias], hasta_50: hasta, todo_100_si_pasa: false }); });
+      setTramos(ts);
+    }
+  };
+  const cambiarTramo = (i, campo, v) => setTramos((ts) => ts.map((t, j) => (j === i ? { ...t, [campo]: v } : t)));
 
   const abrirNuevo = () => { limpiar(); setMostrarForm(true); };
   const cancelar = () => { limpiar(); setMostrarForm(false); };
@@ -63,6 +92,10 @@ export default function Plantillas() {
       return;
     }
     setBloques(Array.isArray(h.bloques) ? h.bloques.map((b) => ({ dias: [...(b.dias || [])], inicio: b.inicio, fin: b.fin })) : []);
+    const ex = h.extras && Array.isArray(h.extras.tramos) && h.extras.tramos.length ? h.extras : null;
+    setTeniaExtras(!!ex); setExtrasOn(!!ex);
+    setTramos(ex ? ex.tramos.map((t) => ({ dias: [...(t.dias || [])], hasta_50: t.hasta_50, todo_100_si_pasa: !!t.todo_100_si_pasa })) : []);
+    setDescansoH(ex ? Number(ex.descanso_horas) || 0 : 0);
     setDias([1, 2, 3, 4, 5]); setInicio("08:00"); setFin("17:00");
     setMostrarForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -79,12 +112,18 @@ export default function Plantillas() {
       : (bloques.length ? bloques : (dias.length ? [{ dias: [...dias], inicio, fin }] : []));
     if (!bloquesFinales.length) return alert("Agregá al menos un bloque de horario.");
     setGuardando(true);
+    let conExtras = false;
     try {
       const datos = {
         nombre: nombre.trim(), bloques: bloquesFinales, tolerancia_minutos: libre ? 0 : (Number(tolerancia) || 0),
         tipo: libre ? "libre" : "fijo", horas_diarias: libre ? Number(horasDiarias) : null,
         horas_sabado: libre ? Number(horasSabado) : null,
       };
+      if (!libre && extrasOn) {
+        if (!tramos.length) { setGuardando(false); return alert("Agregá al menos un tramo de horas extras (o apagá las extras propias)."); }
+        datos.extras = { tramos: tramos.map((t) => ({ dias: t.dias, hasta_50: t.hasta_50, todo_100_si_pasa: !!t.todo_100_si_pasa })), descanso_horas: Number(descansoH) || 0 };
+      } else if (teniaExtras) datos.extras = null; // vuelve a la regla general
+      conExtras = "extras" in datos;
       if (editando) {
         await sbPatch(`horarios?id=eq.${editando}`, datos);
         setHorarios((h) => h.map((x) => (x.id === editando ? { ...x, ...datos } : x)));
@@ -96,7 +135,9 @@ export default function Plantillas() {
         registrarAuditoria(`Creó el horario "${datos.nombre}"`, null);
       }
       limpiar(); setMostrarForm(false);
-    } catch { alert("No se pudo guardar el horario."); }
+    } catch (e) {
+      alert(conExtras && /: 400$/.test(String(e && e.message)) ? "No se pudo guardar: falta correr horario-camioneros.sql en la base (agrega la columna de horas extras)." : "No se pudo guardar el horario.");
+    }
     finally { setGuardando(false); }
   };
 
@@ -120,7 +161,10 @@ export default function Plantillas() {
 
       {mostrarForm && (
         <div className="bg-[#ffffff] border border-[#e3e8ed] rounded-xl p-4 mb-5 shadow-sm">
-          <p className="text-sm font-bold mb-3">{editando ? "Editar horario" : "Nuevo horario"}</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-bold">{editando ? "Editar horario" : "Nuevo horario"}</p>
+            <button onClick={modeloCamioneros} className="text-xs font-semibold text-[#223c7e] px-2 py-1 rounded-lg border border-[#223c7e]/40" title="Lun a vie 08–16, sáb 08–12, extras y descanso de 12 h">🚛 Usar modelo Camioneros</button>
+          </div>
           <label className="text-[10px] uppercase tracking-wider text-[#94a1ab]">Nombre</label>
           <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Mañana Lun-Vie"
             className="w-full bg-[#f1f4f7] border border-[#cfd6dd] rounded-lg px-3 py-2 text-sm outline-none mb-3 mt-1" />
@@ -187,6 +231,44 @@ export default function Plantillas() {
             </div>
           )}
           {bloques.length === 0 && <p className="text-[11px] text-[#94a1ab] mb-3">Si no agregás bloques, se usa el día/horario de arriba. Para un turno partido o días con horarios distintos, agregá cada bloque.</p>}
+
+          <div className="rounded-xl border border-[#e3e8ed] bg-[#f8fafc] p-3 mb-3">
+            <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+              <input type="checkbox" checked={extrasOn} onChange={(e) => prenderExtras(e.target.checked)} />
+              Horas extras propias de este horario
+            </label>
+            <p className="text-[11px] text-[#94a1ab] mt-1">Si está apagado, rige la regla general de recargos (Configuración). Prendido: lo trabajado después de la salida del horario es extra al 50% hasta la hora que pongas, y después al 100%. Domingos y feriados, todo al 100%.</p>
+            {extrasOn && (<div className="mt-3 space-y-2">
+              {tramos.map((t, i) => (
+                <div key={i} className="bg-white border border-[#e3e8ed] rounded-lg p-2">
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {DIAS.map((d) => (
+                      <button key={d.n} onClick={() => cambiarTramo(i, "dias", t.dias.includes(d.n) ? t.dias.filter((x) => x !== d.n) : [...t.dias, d.n].sort())}
+                        className="w-7 h-7 rounded-md text-[11px] font-bold border"
+                        style={{ backgroundColor: t.dias.includes(d.n) ? "#223c7e" : "#f1f4f7", color: t.dias.includes(d.n) ? "#fff" : "#5c6b78", borderColor: t.dias.includes(d.n) ? "#223c7e" : "#cfd6dd" }}>{d.l}</button>
+                    ))}
+                    <button onClick={() => setTramos((ts) => ts.filter((_, j) => j !== i))} className="ml-auto text-[#e5484d] text-xs">✕</button>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2 flex-wrap text-xs text-[#5c6b78]">
+                    <span>Extras al 50% hasta las</span>
+                    <input type="time" value={t.hasta_50} onChange={(e) => cambiarTramo(i, "hasta_50", e.target.value)} className="bg-[#f1f4f7] border border-[#cfd6dd] rounded-lg px-2 py-1 text-sm outline-none" />
+                    <span>· después, al 100%</span>
+                  </div>
+                  <label className="flex items-center gap-2 mt-2 text-xs text-[#5c6b78] cursor-pointer">
+                    <input type="checkbox" checked={!!t.todo_100_si_pasa} onChange={(e) => cambiarTramo(i, "todo_100_si_pasa", e.target.checked)} />
+                    <span>Si se pasa de esa hora, <b>todas</b> las extras del día van al 100%</span>
+                  </label>
+                </div>
+              ))}
+              <button onClick={() => setTramos((ts) => [...ts, { dias: [], hasta_50: "21:00", todo_100_si_pasa: false }])} className="text-xs text-[#223c7e]">+ Agregar tramo (para días con otra regla)</button>
+              <div className="flex items-center gap-2 text-xs text-[#5c6b78] pt-1">
+                <span>Descanso mínimo entre jornadas</span>
+                <input type="number" min="0" step="0.5" value={descansoH} onChange={(e) => setDescansoH(e.target.value)} className="w-20 bg-[#f1f4f7] border border-[#cfd6dd] rounded-lg px-2 py-1 text-sm outline-none" />
+                <span>horas (0 = no aplica)</span>
+              </div>
+              <p className="text-[11px] text-[#94a1ab]">Con descanso: si terminó tarde (ej. volvió 00:05), puede entrar recién al cumplir el descanso (12:05) y esa llegada <b>no</b> es tarde.</p>
+            </div>)}
+          </div>
           </>)}
 
           <button onClick={guardar} disabled={guardando} className="w-full py-2.5 rounded-lg font-bold text-sm bg-[#16a34a] text-white disabled:opacity-50">
@@ -209,6 +291,11 @@ export default function Plantillas() {
                   </span>
                 ))}
                 {h.tipo !== "libre" && <span className="text-[11px] text-[#94a1ab]">· tol. {h.tolerancia_minutos ?? 0}m</span>}
+                {h.extras && (h.extras.tramos || []).length > 0 && (
+                  <span className="text-[11px] font-bold text-[#b45309] bg-[#fef3c7] rounded px-1.5 py-0.5" title={(h.extras.tramos || []).map((t) => `${(t.dias || []).map((n) => DIAS.find((d) => d.n === n)?.l).join("")}: 50% hasta ${t.hasta_50}${t.todo_100_si_pasa ? " (si pasa, todo al 100%)" : ""}`).join(" · ")}>
+                    EXTRAS PROPIAS{Number(h.extras.descanso_horas) ? ` · descanso ${h.extras.descanso_horas} h` : ""}
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex gap-2 shrink-0">

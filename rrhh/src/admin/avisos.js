@@ -1,7 +1,7 @@
 // Avisos del ayudante en RR.HH.: quién dejó turnos sin fichar la salida.
 // Una "entrada" sin "salida" después (o seguida de otra entrada) que ya tiene
 // más de 16 horas es una salida que falta fichar o corregir.
-import { sbGet, sbGetAll } from "./supabase-admin.js";
+import { sbGet, sbGetAll, sbFuncion } from "./supabase-admin.js";
 
 const HORAS_TURNO_MAX = 16;
 
@@ -71,4 +71,11 @@ export async function avisarConSifoncito(irA) {
     textoNunca: "No me avises más de esto",
     botones: [{ texto: "Ir a corregir fichadas", pri: true, accion: () => { guardar(manana); irA("fichadas"); } }],
   });
+}
+
+// La voz de Sifoncito (mujer, español de Argentina del interior) la arma el
+// servidor (Edge Function sifoncito-voz). Si no está, usa la del navegador.
+export function registrarVozSifoncito() {
+  const A = window.AyudaAnafer;
+  if (A && A.usarVozServidor) A.usarVozServidor((texto) => sbFuncion("sifoncito-voz", { texto }));
 }

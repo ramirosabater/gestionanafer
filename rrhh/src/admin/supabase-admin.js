@@ -215,3 +215,15 @@ export async function registrarAuditoria(accion, detalle) {
     });
   } catch { /* la auditoría no debe romper la acción principal */ }
 }
+
+// Llama a una Edge Function con la sesión del usuario (sin el aviso de "sesión expirada":
+// quien la usa decide qué hacer si falla).
+export async function sbFuncion(nombre, body) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${nombre}`, {
+    method: "POST",
+    headers: { apikey: SUPABASE_KEY, Authorization: authHeader(), "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  if (!res.ok) throw new Error(`${nombre}: ${res.status}`);
+  return res.json();
+}

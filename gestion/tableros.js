@@ -796,6 +796,8 @@
     };
     var A = window.AyudaAnafer;
     var habla = A && A.hablar ? A.hablar(p.texto, hecho) : false;
+    var prox = n.pasos[n.i + 1];
+    if (habla && prox && A.precargar) A.precargar(prox.texto);   // la próxima frase ya se va preparando
     if (!habla) n.t = setTimeout(function () { hecho(true); }, esperaPaso(p.texto)); // sin voz: lo muestra el tiempo de leerlo
   }
   function detener() {

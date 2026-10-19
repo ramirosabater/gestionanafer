@@ -171,3 +171,60 @@ test("Escuchar en Logística: recorre los gráficos que corresponden y vuelve a 
   await page.click('#subtabs-tableros [data-tb="resumen"]');
   await expect(page.locator(".tb-actor")).toHaveCount(0);
 });
+
+// Audio simulado: registra lo que suena y "termina" solo.
+async function audioFalso(page, ms = 300) {
+  await page.addInitScript((ms) => {
+    window.__audios = []; window.__pausados = 0;
+    window.Audio = function (src) {
+      const a = this; a.src = src; a.playbackRate = 1;
+      a.play = () => { window.__audios.push(src); setTimeout(() => a.onplaying && a.onplaying(), 20); a._t = setTimeout(() => a.onended && a.onended(), ms); return Promise.resolve(); };
+      a.pause = () => { window.__pausados++; clearTimeout(a._t); };
+    };
+  }, ms);
+}
+
+test("voz de Sifoncito: usa la voz del servidor (mujer, acento del interior) y Detener la corta", async ({ page }) => {
+  await vozFalsa(page, 300);
+  await audioFalso(page, 1500);
+  const db = datos();
+  db.__funciones["sifoncito-voz"] = { data: { audio: "SUQz", tipo: "audio/mpeg" }, error: null };
+  await abrirGestion(page, db, { email: "admin@anafer.test" });
+  await entrar(page);
+  await expect(page.locator(".tb-kpis-resumen .cq-kpi")).toHaveCount(5);
+  await page.click('.tb-btn-escuchar[data-modulo="resumen"]');
+  await expect.poll(() => page.evaluate(() => window.__audios.length)).toBeGreaterThanOrEqual(1);
+  const pedidos = (await escrituras(page, "__funciones")).filter((x) => x[1] === "sifoncito-voz");
+  expect(pedidos[0][2].texto).toBe((await page.locator('.tb-sif[data-modulo="resumen"] .tb-sif-estado').textContent()).trim());
+  expect(pedidos.length).toBeGreaterThanOrEqual(2);                         // ya pidió la frase siguiente
+  expect(await page.evaluate(() => window.__dichos.length)).toBe(0);         // no usó la voz robótica del navegador
+  await page.click('.tb-btn-escuchar[data-modulo="resumen"]');
+  await expect(page.locator(".tb-actor")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__pausados)).toBeGreaterThanOrEqual(1);
+});
+
+test("voz de Sifoncito: si el servidor no tiene voz, usa la del navegador eligiendo una de mujer en español", async ({ page }) => {
+  await page.addInitScript(() => {
+    const voces = [
+      { name: "Microsoft Tomas Online (Natural) - Spanish (Argentina)", lang: "es-AR", localService: false },
+      { name: "Microsoft Elena Online (Natural) - Spanish (Argentina)", lang: "es-AR", localService: false },
+      { name: "Google español de Estados Unidos", lang: "es-US", localService: false },
+      { name: "Google US English", lang: "en-US", localService: false },
+    ];
+    window.__dichos = [];
+    Object.defineProperty(window, "SpeechSynthesisUtterance", { configurable: true, writable: true, value: function (t) { this.text = t; } });
+    Object.defineProperty(window, "speechSynthesis", { configurable: true, value: {
+      getVoices: () => voces, addEventListener() {},
+      speak(u) { window.__dichos.push({ t: u.text, voz: u.voice && u.voice.name }); setTimeout(() => u.onend && u.onend(), 200); },
+      cancel() {},
+    } });
+  });
+  await abrirGestion(page, datos(), { email: "admin@anafer.test" });   // sin "sifoncito-voz": el servidor no contesta
+  await entrar(page);
+  expect(await page.evaluate(() => window.AyudaAnafer.vozNavegador())).toContain("Elena");
+  await expect(page.locator(".tb-kpis-resumen .cq-kpi")).toHaveCount(5);
+  await page.click('.tb-btn-escuchar[data-modulo="resumen"]');
+  await expect.poll(() => page.evaluate(() => window.__dichos.length)).toBeGreaterThanOrEqual(1);
+  expect(await page.evaluate(() => window.__dichos[0].voz)).toContain("Elena");
+  await page.click('.tb-btn-escuchar[data-modulo="resumen"]');
+});

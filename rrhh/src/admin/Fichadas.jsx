@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { sbGet, sbPost, sbPatch, sbDelete, registrarAuditoria } from "./supabase-admin.js";
 import { calcularPeriodo, etiquetaPeriodo, calcularEstado } from "../lib/fichaje.js";
+import { contextoFichada } from "../lib/jornada.js";
 
 // Convierte un input datetime-local a Date, y una Date a valor de input
 const aInput = (d) => {
@@ -48,8 +49,10 @@ export default function Fichadas() {
   };
   useEffect(() => { cargarFichajes(); /* eslint-disable-next-line */ }, [legajo, refMes]);
 
-  const estadoDe = (tipo, fecha) => {
-    const est = calcularEstado(tipo, fecha, horario);
+  // El contexto (salida anterior / entrada abierta) sale de las otras fichadas del empleado.
+  const estadoDe = (tipo, fecha, sinId) => {
+    const otras = fichajes.filter((x) => x.id !== sinId).map((x) => ({ tipo: x.tipo, ts: new Date(x.timestamp) })).sort((a, b) => a.ts - b.ts);
+    const est = calcularEstado(tipo, fecha, horario, contextoFichada(otras, fecha));
     return { estado: est.estado, minutos_tarde: est.minutosTarde || 0 };
   };
 
@@ -74,7 +77,7 @@ export default function Fichadas() {
     const fecha = campo === "timestamp" ? new Date(valor) : new Date(f.timestamp);
     const tipo = campo === "tipo" ? valor : f.tipo;
     if (campo === "timestamp" && isNaN(fecha)) return;
-    const e = estadoDe(tipo, fecha);
+    const e = estadoDe(tipo, fecha, f.id);
     const patch = campo === "timestamp"
       ? { timestamp: fecha.toISOString(), estado: e.estado, minutos_tarde: e.minutos_tarde }
       : { tipo, estado: e.estado, minutos_tarde: e.minutos_tarde };
@@ -94,8 +97,13 @@ export default function Fichadas() {
       const horarioDe = {};
       empleados.forEach((e) => { horarioDe[e.legajo] = horarios.find((h) => String(h.id) === String(e.horario_id)) || null; });
       const cambios = [];
+      const porLeg = {};
+      todas.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)).forEach((f) => (porLeg[f.legajo] = porLeg[f.legajo] || []).push({ ...f, ts: new Date(f.timestamp) }));
+      const previasDe = {};
+      Object.keys(porLeg).forEach((k) => porLeg[k].forEach((f, i) => { previasDe[f.id] = porLeg[k].slice(0, i); }));
       todas.forEach((f) => {
-        const est = calcularEstado(f.tipo, new Date(f.timestamp), horarioDe[f.legajo]);
+        const t = new Date(f.timestamp);
+        const est = calcularEstado(f.tipo, t, horarioDe[f.legajo], contextoFichada(previasDe[f.id] || [], t));
         const min = est.minutosTarde || 0;
         if (est.estado !== f.estado || min !== (Number(f.minutos_tarde) || 0)) cambios.push({ id: f.id, estado: est.estado, minutos_tarde: min });
       });

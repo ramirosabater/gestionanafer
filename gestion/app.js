@@ -7206,6 +7206,7 @@
   // ---------- Login por perfiles (contraseña propia y permisos por pestaña) ----------
   function updateAuthVisibility(){
     var loggedIn = isLoggedIn();
+    var arr = document.getElementById('arranque'); if(arr) arr.hidden = true;   // ya se sabe si hay sesión
     document.getElementById('login-overlay').classList.toggle('show', !loggedIn);
     document.querySelector('.shell').hidden = !loggedIn;
   }
@@ -7261,15 +7262,16 @@
   // ---------- Ingreso: email (Supabase) o contraseña de perfil (anterior) ----------
   function updateAuthVisibility(){
     var loggedIn = isLoggedIn();
+    var arr = document.getElementById('arranque'); if(arr) arr.hidden = true;   // ya se sabe si hay sesión
     document.getElementById('login-overlay').classList.toggle('show', !loggedIn);
     document.querySelector('.shell').hidden = !loggedIn;
   }
 
   function enterApp(){
     document.getElementById('who-fields').style.display = canEditAnything() ? 'contents' : 'none';
-    updateAuthVisibility();
     var areas = visibleAreas();
-    if(areas.length===1 && areas[0].href && state.sessionEmail){ state.redirigiendo = true; window.location.href = areas[0].href; return; }
+    if(areas.length===1 && areas[0].href && state.sessionEmail){ state.redirigiendo = true; window.location.href = areas[0].href; return; } // sin mostrar nada antes de irse
+    updateAuthVisibility();
     var saved = null;
     try{ saved = localStorage.getItem('hdr_area'); }catch(e){}
     var internas = areas.filter(function(a){ return !a.href; });
@@ -7369,6 +7371,16 @@
   document.getElementById('login-email').addEventListener('keydown', function(e){ if(e.key==='Enter') document.getElementById('login-password').focus(); });
   document.getElementById('logout-btn').addEventListener('click', logout);
 
+  // La voz de Sifoncito (mujer, español de Argentina del interior) la arma el
+  // servidor (Edge Function sifoncito-voz); si no está o falla, usa la del navegador.
+  function registrarVozSifoncito(){
+    if(!state.sb || !state.sb.functions) return;
+    if(!(window.AyudaAnafer && window.AyudaAnafer.usarVozServidor)){ document.addEventListener('DOMContentLoaded', registrarVozSifoncito, {once:true}); return; }
+    window.AyudaAnafer.usarVozServidor(function(texto){
+      return state.sb.functions.invoke('sifoncito-voz', { body: { texto: texto } }).then(function(r){ if(r.error) throw r.error; return r.data; });
+    });
+  }
+
   // ---------- Init ----------
   renderAll();
   initSupabase();
@@ -7376,10 +7388,14 @@
   // directo; si no, el ingreso anterior por perfil guardado en el navegador.
   var sesionPromesa = (state.sb && state.sb.auth) ? state.sb.auth.getSession().then(function(r){ return r && r.data && r.data.session; }, function(){ return null; }) : Promise.resolve(null);
   sesionPromesa.then(function(session){
+    if(session) registrarVozSifoncito();
     if(session) return resolverSesion(session).then(function(ok){ if(!ok){ state.roleId = null; updateAuthVisibility(); } });
     (state.configPromise || Promise.resolve()).then(function(){
       if(isLoggedIn()) enterApp(); else updateAuthVisibility();
     });
   });
-  updateAuthVisibility();
+  // No se muestra nada (ni el sistema ni el login) hasta saber si hay una sesión
+  // abierta: así F5 no "flashea" el menú ni el login. Por las dudas, si la base
+  // no contesta, a los 10 segundos se muestra el login igual.
+  setTimeout(function(){ var arr = document.getElementById('arranque'); if(arr && !arr.hidden && !state.redirigiendo) updateAuthVisibility(); }, 10000);
 })();

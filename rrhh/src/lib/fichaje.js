@@ -3,9 +3,6 @@ export function diaISO(d) {
   const dia = d.getDay(); // 0=domingo..6=sábado
   return dia === 0 ? 7 : dia; // 1=lunes..7=domingo
 }
-function minutosDesdeMedianoche(d) {
-  return d.getHours() * 60 + d.getMinutes();
-}
 function hhmmAMinutos(hhmm) {
   const [h, m] = hhmm.split(":").map(Number);
   return h * 60 + m;
@@ -43,21 +40,37 @@ export function esHorarioLibre(horario) {
   return !!horario && horario.tipo === "libre";
 }
 
-export function calcularEstado(tipo, hora, horario) {
+// ctx (opcional) = { ultimaSalida, entradaAbierta } del mismo empleado:
+//  - una SALIDA de una jornada que empezó el día anterior (volvió pasada la
+//    medianoche) se compara con el horario del día en que entró;
+//  - si el horario pide descanso entre jornadas (ej. 12 h para Camioneros) y
+//    terminó tarde, la ENTRADA siguiente se espera recién al cumplir ese
+//    descanso: llegar a esa hora no es llegada tarde.
+export function calcularEstado(tipo, hora, horario, ctx) {
   // Horario libre: no hay hora de entrada/salida fija, solo se cuentan las horas trabajadas.
   if (esHorarioLibre(horario)) {
     return { estado: "a_horario", label: "Horario libre", color: "#16a34a", minutosTarde: 0 };
   }
-  const bloques = bloquesDeHoy(horario, hora);
+  const c = ctx || {};
+  const otroDia = tipo === "salida" && c.entradaAbierta && c.entradaAbierta.toDateString() !== hora.toDateString();
+  const ref = otroDia ? c.entradaAbierta : hora;               // día cuyo horario se usa
+  const bloques = bloquesDeHoy(horario, ref);
   if (!bloques.length) {
     return { estado: "sin_turno", label: "Sin turno hoy (franco o sin asignar)", color: "#5c6b78", minutosTarde: 0 };
   }
   const tolerancia = horario.tolerancia_minutos ?? 10;
-  const min = minutosDesdeMedianoche(hora);
-  const bloque = tramoParaFichada(bloques, tipo, min);
+  const base = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  const min = Math.round((hora - base) / 60000);                // minutos desde la medianoche del día de referencia (puede pasar de 1440)
+  const bloque = tramoParaFichada(bloques, tipo, Math.min(min, 1439));
   if (tipo === "entrada") {
-    const inicio = hhmmAMinutos(bloque.inicio);
-    if (min <= inicio + tolerancia) return { estado: "a_horario", label: "A horario", color: "#16a34a", minutosTarde: 0 };
+    let inicio = hhmmAMinutos(bloque.inicio);
+    const descanso = horario.extras ? Number(horario.extras.descanso_horas) || 0 : 0;
+    let porDescanso = false;
+    if (descanso && c.ultimaSalida) {
+      const permitido = Math.round((c.ultimaSalida.getTime() + descanso * 3600000 - base) / 60000);
+      if (permitido > inicio) { inicio = permitido; porDescanso = true; }
+    }
+    if (min <= inicio + tolerancia) return { estado: "a_horario", label: porDescanso ? "A horario (después del descanso)" : "A horario", color: "#16a34a", minutosTarde: 0 };
     return { estado: "tarde", label: `Tarde · +${min - inicio} min`, color: "#e5484d", minutosTarde: min - inicio };
   }
   const fin = hhmmAMinutos(bloque.fin);

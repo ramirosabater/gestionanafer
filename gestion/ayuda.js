@@ -362,15 +362,27 @@
   var lento = ls("ayuda_lento", "0") === "1";
   var vozElegida = null, timers = [], hablando = false, finHablar = null;
   var hayVoz = typeof window.speechSynthesis !== "undefined" && typeof window.SpeechSynthesisUtterance !== "undefined";
+  // Voz del navegador (respaldo): preferimos una voz de MUJER en español de
+  // Argentina / Latinoamérica, y las "naturales" (Edge: "Elena Online (Natural)").
+  var MUJERES = /elena|paloma|sabina|helena|laura|dalia|paulina|m[oó]nica|valentina|camila|isabela|isabella|lupe|penélope|penelope|conchita|lucia|lucía|marisol|soledad|salome|salomé|female|mujer|google español de estados unidos/i;
+  var VARONES = /tom[aá]s|jorge|pablo|ra[uú]l|[aá]lvaro|diego|enrique|juan|carlos|gonzalo|\bmale\b|hombre/i;
   function elegirVoz() {
     if (!hayVoz) return null;
     var vs = window.speechSynthesis.getVoices() || [];
-    var pref = ["es-AR", "es-419", "es-US", "es-MX", "es-ES", "es"];
-    for (var i = 0; i < pref.length; i++) {
-      var v = vs.filter(function (x) { return (x.lang || "").replace("_", "-").toLowerCase().indexOf(pref[i].toLowerCase()) === 0; });
-      if (v.length) return v.sort(function (a, b) { return (b.localService ? 0 : 1) - (a.localService ? 0 : 1); })[0];
-    }
-    return null;
+    var pref = ["es-ar", "es-419", "es-us", "es-mx", "es-co", "es-cl", "es-uy", "es-es", "es"];
+    var mejor = null, puntos = -1e9;
+    vs.forEach(function (v) {
+      var lang = (v.lang || "").replace("_", "-").toLowerCase();
+      var i = pref.findIndex(function (p) { return lang.indexOf(p) === 0; });
+      if (i === -1) return;
+      var n = v.name || "";
+      var pts = (pref.length - i) * 10;
+      if (MUJERES.test(n)) pts += 60;
+      if (VARONES.test(n)) pts -= 80;
+      if (/natural|online|neural|premium|enhanced|google/i.test(n)) pts += 25;
+      if (pts > puntos) { puntos = pts; mejor = v; }
+    });
+    return mejor;
   }
   if (hayVoz) {
     vozElegida = elegirVoz();
@@ -385,31 +397,82 @@
   function limpiarTimers() { timers.forEach(clearTimeout); timers = []; }
   function callar() {
     limpiarTimers();
+    turno = null;
+    if (audioActual) { try { audioActual.pause(); } catch (e) {} audioActual = null; }
     if (hayVoz) { try { window.speechSynthesis.cancel(); } catch (e) {} }
     hablando = false; if (panel) panel.classList.remove("hablando");
     var f = finHablar; finHablar = null; if (f) f(false);   // quien pidió hablar() se entera de que lo cortaron
   }
   function esperar(ms, fn) { timers.push(setTimeout(fn, ms)); }
   function tiempoLectura(txt) { return Math.max(4500, txt.length * (lento ? 85 : 65)); }
-  // Habla (si corresponde) y después llama a fn; si no hay voz, espera el tiempo de lectura.
+  // ---- Voz de Sifoncito ----
+  // Primero la voz "de verdad" que arma el servidor (mujer, español de
+  // Argentina del interior; la app la registra con AyudaAnafer.usarVozServidor).
+  // Si no está configurada o falla, la voz del navegador como respaldo.
+  var vozServidor = null, servidorCaidoHasta = 0, cacheAudio = {}, ordenCache = [], audioActual = null, turno = null;
+  function servidorListo() { return !!vozServidor && Date.now() >= servidorCaidoHasta; }
+  function pedirAudio(txt) {
+    if (!servidorListo() || !txt) return Promise.resolve(null);
+    if (cacheAudio[txt]) return cacheAudio[txt];
+    var p = Promise.resolve().then(function () { return vozServidor(txt); }).then(function (r) {
+      if (!r || !r.audio) throw new Error("sin audio");
+      var bin = atob(r.audio), arr = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return URL.createObjectURL(new Blob([arr], { type: r.tipo || "audio/mpeg" }));
+    }).catch(function () {
+      servidorCaidoHasta = Date.now() + 5 * 60000; // no insiste por 5 minutos: usa la del navegador
+      delete cacheAudio[txt];
+      return null;
+    });
+    cacheAudio[txt] = p; ordenCache.push(txt);
+    if (ordenCache.length > 120) delete cacheAudio[ordenCache.shift()];
+    return p;
+  }
+  function precargar(html) { pedirAudio(textoPlano(html)); }
+  // Dice txt; alEmpezar() cuando empieza a sonar; alTerminar(ok): ok=false si lo cortaron.
+  function pronunciar(txt, alEmpezar, alTerminar) {
+    var yo = {}; turno = yo;
+    var listo = false;
+    var terminar = function (ok) { if (listo || turno !== yo) return; listo = true; turno = null; audioActual = null; if (alTerminar) alTerminar(ok); };
+    var empezo = function () { if (turno === yo && alEmpezar) alEmpezar(); };
+    var porNavegador = function () {
+      if (turno !== yo) return;
+      audioActual = null;
+      if (!hayVoz) { empezo(); esperar(tiempoLectura(txt), function () { terminar(true); }); return; }
+      esperar(120, function () { // Chrome a veces no habla si se llama justo después de cancel()
+        if (turno !== yo) return;
+        try {
+          var u = new SpeechSynthesisUtterance(txt);
+          if (vozElegida) u.voice = vozElegida;
+          u.lang = vozElegida ? vozElegida.lang : "es-AR";
+          u.rate = lento ? 0.85 : 1; u.pitch = 1.08;
+          u.onstart = empezo;
+          u.onend = function () { terminar(true); };
+          u.onerror = function (ev) { var e = ev && ev.error; terminar(!(e === "interrupted" || e === "canceled")); };
+          window.speechSynthesis.speak(u);
+          esperar(tiempoLectura(txt) + 6000, function () { terminar(true); }); // seguro
+        } catch (e) { esperar(tiempoLectura(txt), function () { terminar(true); }); }
+      });
+    };
+    pedirAudio(txt).then(function (url) {
+      if (turno !== yo) return;
+      if (!url) { porNavegador(); return; }
+      var a = new Audio(url); audioActual = a;
+      a.playbackRate = lento ? 0.9 : 1;
+      a.onplaying = empezo;
+      a.onended = function () { terminar(true); };
+      a.onerror = function () { if (audioActual === a) porNavegador(); };
+      var pr = a.play();
+      if (pr && pr.catch) pr.catch(function () { if (audioActual === a) porNavegador(); });
+      esperar(tiempoLectura(txt) * 2 + 15000, function () { terminar(true); }); // seguro
+    });
+  }
+  // Habla (si corresponde) y después llama a fn; si la voz está apagada, espera el tiempo de lectura.
   function decir(html, fn) {
     var txt = textoPlano(html);
-    if (!vozOn || !hayVoz) { if (fn) esperar(tiempoLectura(txt), fn); return; }
-    esperar(120, function () { // Chrome a veces no habla si se llama justo después de cancel()
-      try {
-        var u = new SpeechSynthesisUtterance(txt);
-        if (vozElegida) u.voice = vozElegida;
-        u.lang = vozElegida ? vozElegida.lang : "es-AR";
-        u.rate = lento ? 0.82 : 0.95; u.pitch = 1.15;
-        var listo = false;
-        var fin = function () { if (listo) return; listo = true; hablando = false; panel.classList.remove("hablando"); if (fn) esperar(1400, fn); };
-        u.onstart = function () { hablando = true; panel.classList.add("hablando"); };
-        u.onend = fin; u.onerror = fin;
-        window.speechSynthesis.speak(u);
-        // Seguro: si el navegador no avisa que terminó, sigue igual.
-        esperar(tiempoLectura(txt) + 6000, fin);
-      } catch (e) { if (fn) esperar(tiempoLectura(txt), fn); }
-    });
+    if (!vozOn || (!hayVoz && !servidorListo())) { if (fn) esperar(tiempoLectura(txt), fn); return; }
+    pronunciar(txt, function () { hablando = true; if (panel) panel.classList.add("hablando"); },
+      function (ok) { hablando = false; if (panel) panel.classList.remove("hablando"); if (ok && fn) esperar(1400, fn); });
   }
 
   function aplicarPaso(p, alListo) {
@@ -436,8 +499,8 @@
     return '<div class="ayuda-opc">' +
       '<button data-acc="voz" title="' + (vozOn ? "Silenciar" : "Activar la voz") + '">' + (vozOn ? "🔊 Voz" : "🔇 Sin voz") + "</button>" +
       '<button data-acc="lento" title="Hablar y avanzar más despacio">' + (lento ? "🐢 Despacio" : "🐇 Normal") + "</button>" +
-      (vozOn && hayVoz && !vozElegida ? '<span class="ayuda-nota">Tu navegador no tiene una voz en español instalada.</span>' : "") +
-      (vozOn && !hayVoz ? '<span class="ayuda-nota">Este navegador no puede hablar.</span>' : "") + "</div>";
+      (vozOn && hayVoz && !vozElegida && !vozServidor ? '<span class="ayuda-nota">Tu navegador no tiene una voz en español instalada.</span>' : "") +
+      (vozOn && !hayVoz && !vozServidor ? '<span class="ayuda-nota">Este navegador no puede hablar.</span>' : "") + "</div>";
   }
   function render() {
     callar();
@@ -465,6 +528,7 @@
       (!ultimo ? '<button class="pri" data-acc="sig">Siguiente</button>' : '<button class="pri" data-acc="fin">¡Listo!</button>') + "</span></div>" +
       controlesVoz() + "</div>";
     panel.innerHTML = html;
+    if (!ultimo && vozOn) precargar(c.pasos[estado.paso + 1].t);   // así el próximo paso suena sin demora
     aplicarPaso(p, function () {
       decir(p.t, function () {
         if (!estado.auto || panel.hidden) return;
@@ -586,25 +650,17 @@
   // fin(ok) se llama una sola vez: ok=true cuando terminó de hablar, false si lo cortaron (callar).
   // Devuelve false si el navegador no puede hablar (y entonces no llama a fin).
   function hablar(texto, fin) {
-    if (!hayVoz) return false;
+    if (!hayVoz && !servidorListo()) return false;
     callar();
-    try {
-      var u = new SpeechSynthesisUtterance(textoPlano(texto));
-      if (vozElegida) u.voice = vozElegida;
-      u.lang = vozElegida ? vozElegida.lang : "es-AR";
-      u.rate = lento ? 0.82 : 0.95; u.pitch = 1.15;
-      var listo = false;
-      var terminar = function (ok) { if (listo) return; listo = true; if (finHablar === terminar) finHablar = null; if (fin) fin(ok); };
-      finHablar = terminar;
-      u.onend = function () { terminar(true); };
-      u.onerror = function (ev) { var e = ev && ev.error; terminar(!(e === "interrupted" || e === "canceled")); };
-      esperar(120, function () { window.speechSynthesis.speak(u); });
-      // Seguro: si el navegador no avisa que terminó, sigue igual.
-      esperar(tiempoLectura(texto) + 6000, function () { terminar(true); });
-      return true;
-    } catch (e) { return false; }
+    var listo = false;
+    var terminar = function (ok) { if (listo) return; listo = true; if (finHablar === terminar) finHablar = null; if (fin) fin(ok); };
+    finHablar = terminar;
+    pronunciar(textoPlano(texto), null, terminar);
+    return true;
   }
   window.AyudaAnafer = { sifon: sifon, circuitos: CIRCUITOS, abrir: function () { abrir(); }, sugerir: sugerir, hablar: hablar, callar: callar,
+    vozNavegador: function () { return vozElegida ? vozElegida.name : null; },
+    precargar: precargar, usarVozServidor: function (fn) { vozServidor = typeof fn === "function" ? fn : null; servidorCaidoHasta = 0; },
     cerrarSugerencia: function () { if (sugActual) cerrarSug(); }, sugerenciaActual: function () { return sugActual ? sugActual.id : null; } };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", iniciar); else iniciar();
 })();

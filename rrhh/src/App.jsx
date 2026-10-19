@@ -8,6 +8,7 @@ import Equipo from "./screens/Equipo.jsx";
 import Ausencias from "./screens/Ausencias.jsx";
 import { LOGO } from "./lib/logo.js";
 import { cargarConfig } from "./lib/cumplimiento.js";
+import { contextoFichada, tieneExtrasPropias } from "./lib/jornada.js";
 
 export default function App() {
   // Identificación
@@ -43,6 +44,9 @@ export default function App() {
   const [ahora, setAhora] = useState(new Date());
   const [enTurno, setEnTurno] = useState(false);
   const [historial, setHistorial] = useState([]);
+  // Fichadas de las últimas 30 h: para el descanso entre jornadas y las jornadas que terminan pasada la medianoche.
+  const [recientes, setRecientes] = useState([]);
+  const [jornadaDeAyer, setJornadaDeAyer] = useState(null); // hora de entrada de una jornada que sigue abierta desde ayer
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg] = useState(null);
   const [ubic, setUbic] = useState(null); // { tipo, local, distancia }
@@ -94,10 +98,26 @@ export default function App() {
         setDebeCambiar(!!r.debe_cambiar_pin);
         setVista("fichaje");
         const hoy = Array.isArray(r.fichajes_hoy) ? r.fichajes_hoy : [];
+        let rec = hoy;
+        try {
+          const h = await sbRpc("mi_historial", { p_legajo: nro, p_pin: pin, p_desde: new Date(Date.now() - 30 * 3600000).toISOString(), p_hasta: new Date().toISOString() });
+          if (h && h.ok && Array.isArray(h.fichajes)) rec = h.fichajes;
+        } catch { /* sin historial: solo lo de hoy */ }
+        setRecientes(rec.map((f) => ({ tipo: f.tipo, ts: new Date(f.timestamp) })));
         if (hoy.length) {
           const ultimo = hoy[hoy.length - 1];
           setEnTurno(ultimo.tipo === "entrada");
           setHistorial(hoy.slice().reverse().map((f) => ({ tipo: f.tipo, hora: new Date(f.timestamp), estado: f.estado })));
+        } else {
+          // Camioneros y otros horarios con jornada larga: si la entrada de ayer sigue
+          // abierta (volvió pasada la medianoche), el botón registra la SALIDA de esa jornada.
+          const hor = hs.find((x) => String(x.id) === String(r.empleado.horario_id));
+          const ult = rec[rec.length - 1];
+          if (tieneExtrasPropias(hor) && ult && ult.tipo === "entrada" && (Date.now() - new Date(ult.timestamp)) < 20 * 3600000) {
+            setEnTurno(true);
+            setJornadaDeAyer(new Date(ult.timestamp));
+            setHistorial([{ tipo: "entrada", hora: new Date(ult.timestamp), estado: ult.estado }]);
+          }
         }
       }
     } catch {
@@ -132,7 +152,7 @@ export default function App() {
 
   const salir = () => {
     setEmpleado(null); setPinAuth(null); setLegajo(""); setPin("");
-    setEnTurno(false); setHistorial([]); setMsg(null); setTardanzas(0); setACargo(0); setAusenciasPend(0); setDebeCambiar(false); setVista("fichaje");
+    setEnTurno(false); setHistorial([]); setRecientes([]); setJornadaDeAyer(null); setMsg(null); setTardanzas(0); setACargo(0); setAusenciasPend(0); setDebeCambiar(false); setVista("fichaje");
   };
 
   const fichar = async () => {
@@ -145,7 +165,7 @@ export default function App() {
       const eu = estadoUbicacion(pos, locales, empleado?.locales_asignados);
       setUbic(eu);
       const dentro = eu.tipo === "dentro";
-      const est = calcularEstado(tipo, hora, horarioEmpleado);
+      const est = calcularEstado(tipo, hora, horarioEmpleado, contextoFichada(recientes, hora));
       const r = await sbRpc("registrar_fichaje", {
         p_legajo: empleado.legajo,
         p_pin: pinAuth,
@@ -164,6 +184,8 @@ export default function App() {
       });
       if (!r || !r.ok) throw new Error("rechazado");
       setHistorial((h) => [{ tipo, hora, estado: est.estado }, ...h]);
+      setRecientes((x) => [...x, { tipo, ts: hora }]);
+      setJornadaDeAyer(null);
       if (est.estado === "tarde") setTardanzas((n) => n + 1);
       setEnTurno(!enTurno);
       setMsg({ ok: true, texto: `${tipo === "entrada" ? "Entrada" : "Salida"} registrada · ${est.label}` });
@@ -325,6 +347,12 @@ export default function App() {
             {enTurno ? `EN TURNO · ${duracion()}` : "FUERA DE TURNO"}
           </span>
           {!horarioEmpleado && <p className="text-[11px] text-[#94a1ab] mt-3">Sin turno asignado</p>}
+          {jornadaDeAyer && (
+            <div className="mt-3 text-[11px] text-[#5c6b78] bg-[#f1f4f7] rounded-xl px-3 py-2">
+              Tu jornada empezó {jornadaDeAyer.toLocaleDateString("es-AR", { weekday: "long" })} a las {jornadaDeAyer.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}: el botón registra la <b>salida</b> de esa jornada.
+              <button onClick={() => { setEnTurno(false); setJornadaDeAyer(null); setHistorial([]); }} className="block mx-auto mt-1 text-[#223c7e] underline">No, empiezo una jornada nueva</button>
+            </div>
+          )}
         </div>
 
         {msg && <p className={`mx-6 mb-3 text-xs text-center font-semibold ${msg.ok ? "text-[#16a34a]" : "text-[#e5484d]"}`}>{msg.texto}</p>}

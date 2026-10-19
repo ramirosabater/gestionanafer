@@ -336,6 +336,12 @@ function onSession(session){
     sb.auth.signOut({scope:'local'});
   });
 }
+// La voz de Sifoncito (mujer, español de Argentina del interior) la arma el servidor; si no está, usa la del navegador.
+function registrarVozSifoncito(){
+  if(window.AyudaAnafer && window.AyudaAnafer.usarVozServidor)
+    window.AyudaAnafer.usarVozServidor(function(texto){ return sb.functions.invoke('sifoncito-voz',{body:{texto:texto}}).then(function(r){ if(r.error) throw r.error; return r.data; }); });
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', registrarVozSifoncito); else registrarVozSifoncito();
 sb.auth.getSession().then(function(res){
   const s=res&&res.data&&res.data.session;
   if(s){ onSession(s); } else { document.getElementById('login-overlay').classList.add('show'); }

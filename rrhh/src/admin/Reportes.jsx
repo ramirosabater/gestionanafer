@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { sbGet } from "./supabase-admin.js";
 import { calcularPeriodo, etiquetaPeriodo } from "../lib/fichaje.js";
-import { computarCumplimiento, cargarConfig } from "../lib/cumplimiento.js";
+import { computarCumplimiento, cargarConfig, minutosRecargo } from "../lib/cumplimiento.js";
+import { jornadasDe, tieneExtrasPropias } from "../lib/jornada.js";
 import { generarXlsx, descargarBytes } from "./xlsx.js";
 
 export default function Reportes() {
@@ -29,8 +30,11 @@ export default function Reportes() {
     })();
   }, []);
 
-  async function traerFichajes(desde, hasta, filtroLegajo) {
-    let q = `fichajes?timestamp=gte.${desde.toISOString()}&timestamp=lte.${hasta.toISOString()}&order=timestamp.asc&limit=200000`;
+  // conMargen: trae también el día anterior y la mañana siguiente, para ver el
+  // descanso entre jornadas y las salidas pasada la medianoche del último día.
+  async function traerFichajes(desde, hasta, filtroLegajo, conMargen) {
+    const d = conMargen ? new Date(desde.getTime() - 24 * 3600000) : desde, h = conMargen ? new Date(hasta.getTime() + 20 * 3600000) : hasta;
+    let q = `fichajes?timestamp=gte.${d.toISOString()}&timestamp=lte.${h.toISOString()}&order=timestamp.asc&limit=200000`;
     if (filtroLegajo) q += `&legajo=eq.${filtroLegajo}`;
     return sbGet(q);
   }
@@ -70,25 +74,66 @@ export default function Reportes() {
     setBajando("resumen");
     try {
       const { desde, hasta } = calcularPeriodo(refMes);
-      const [fichajes, horarios] = await Promise.all([traerFichajes(desde, hasta, null), sbGet("horarios?select=*")]);
+      const [fichajes, horarios] = await Promise.all([traerFichajes(desde, hasta, null, true), sbGet("horarios?select=*")]);
       const porEmp = {}; fichajes.forEach((f) => (porEmp[f.legajo] = porEmp[f.legajo] || []).push(f));
       const mapHor = {}; horarios.forEach((h) => (mapHor[h.id] = h));
       let lista = datos.empleados.filter((e) => e.activo !== false);
       if (alcance === "sector" && sector) lista = lista.filter((e) => e.sector === sector);
       if (alcance === "empleado" && legajo) lista = lista.filter((e) => String(e.legajo) === String(legajo));
-      const headers = ["Legajo", "Empleado", "Sector", "Días esperados", "Días trabajados", "Sin registro", "Sin entrada", "Sin salida", "Min. tarde", "Min. retiro", "Horas trabajadas", "Descuento (min)", "Horas 50%", "Horas 100%", "Horas esperadas (libre)", "Diferencia horas (libre)"];
+      const headers = ["Legajo", "Empleado", "Sector", "Horario", "Días esperados", "Días trabajados", "Sin registro", "Sin entrada", "Sin salida", "Min. tarde", "Min. retiro", "Horas trabajadas", "Descuento (min)", "Horas normales", "Horas 50%", "Horas 100%", "Horas esperadas (libre)", "Diferencia horas (libre)"];
       const rows = lista.map((e) => {
         const c = computarCumplimiento(porEmp[e.legajo] || [], mapHor[e.horario_id] || null, desde, hasta, config);
-        return [e.legajo, `${e.apellido}, ${e.nombre}`, e.sector || "",
+        const hor = mapHor[e.horario_id];
+        return [e.legajo, `${e.apellido}, ${e.nombre}`, e.sector || "", hor ? hor.nombre + (tieneExtrasPropias(hor) ? " (extras propias)" : "") : "",
           c.sinTurno ? "" : c.diasEsperados, c.sinTurno ? "" : c.diasTrabajados,
           c.sinTurno ? "" : c.sinRegistro, c.sinTurno ? "" : c.sinEntrada, c.sinTurno ? "" : c.sinSalida,
-          Math.round(c.trabajadoMin / 6) / 10, c.minTarde, c.minRetiro, c.descuentoMin, Math.round(c.horas50Min / 6) / 10, Math.round(c.horas100Min / 6) / 10,
+          Math.round(c.trabajadoMin / 6) / 10, c.minTarde, c.minRetiro, c.descuentoMin, Math.round(c.normalMin / 6) / 10, Math.round(c.horas50Min / 6) / 10, Math.round(c.horas100Min / 6) / 10,
           c.libre ? Math.round(c.esperadoMin / 6) / 10 : "", c.libre ? Math.round(c.diferenciaMin / 6) / 10 : ""];
       });
       if (!rows.length) { setError("No hay empleados para ese filtro."); setBajando(""); return; }
       descargarBytes(generarXlsx(headers, rows), `resumen_${desde.toISOString().slice(0, 10)}_a_${hasta.toISOString().slice(0, 10)}.xlsx`);
       setOk(`Resumen generado: ${rows.length} empleados.`);
     } catch { setError("No se pudo generar el resumen."); }
+    finally { setBajando(""); }
+  };
+
+  // Una fila por jornada (entrada → salida), con normales / 50% / 100% y por qué.
+  const descargarJornadas = async () => {
+    setError(null); setOk(null);
+    if (alcance === "empleado" && !legajo) return setError("Elegí un empleado.");
+    if (alcance === "sector" && !sector) return setError("Elegí un sector.");
+    setBajando("jornadas");
+    try {
+      const { desde, hasta } = calcularPeriodo(refMes);
+      const [fichajes, horarios] = await Promise.all([traerFichajes(desde, hasta, alcance === "empleado" ? legajo : null, true), sbGet("horarios?select=*")]);
+      const porEmp = {}; fichajes.forEach((f) => (porEmp[f.legajo] = porEmp[f.legajo] || []).push(f));
+      const mapHor = {}; horarios.forEach((h) => (mapHor[h.id] = h));
+      let lista = datos.empleados.filter((e) => e.activo !== false && porEmp[e.legajo]);
+      if (alcance === "sector") lista = lista.filter((e) => e.sector === sector);
+      if (alcance === "empleado") lista = lista.filter((e) => String(e.legajo) === String(legajo));
+      const hs = (m) => Math.round(m / 6) / 10;
+      const hora = (d) => (d ? d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" }) : "");
+      const headers = ["Legajo", "Empleado", "Horario", "Fecha", "Día", "Entrada", "Salida", "Horas trabajadas", "Normales", "Extras 50%", "Extras 100%", "Descanso previo (h)", "Observaciones"];
+      const rows = [];
+      const tot = {};
+      lista.forEach((e) => {
+        const hor = mapHor[e.horario_id] || null;
+        jornadasDe(porEmp[e.legajo], hor, config, (a, b) => minutosRecargo(a, b, config))
+          .filter((j) => j.entrada >= desde && j.entrada <= hasta)
+          .forEach((j) => {
+            const sal = j.salida ? hora(j.salida) + (j.salida.toDateString() !== j.entrada.toDateString() ? " (+1)" : "") : "—";
+            rows.push([e.legajo, `${e.apellido}, ${e.nombre}`, hor ? hor.nombre : "", j.entrada.toLocaleDateString("es-AR"), j.entrada.toLocaleDateString("es-AR", { weekday: "long" }),
+              hora(j.entrada), sal, hs(j.total), hs(j.normal), hs(j.min50), hs(j.min100), j.descansoPrevioMin != null ? hs(j.descansoPrevioMin) : "", (j.observaciones || []).join(" · ")]);
+            const t = (tot[e.legajo] = tot[e.legajo] || { n: `${e.apellido}, ${e.nombre}`, h: hor ? hor.nombre : "", total: 0, normal: 0, m50: 0, m100: 0 });
+            t.total += j.total; t.normal += j.normal; t.m50 += j.min50; t.m100 += j.min100;
+          });
+      });
+      if (!rows.length) { setError("No hay jornadas para ese filtro."); setBajando(""); return; }
+      rows.push([]);
+      Object.keys(tot).forEach((k) => { const t = tot[k]; rows.push([k, t.n, t.h, "TOTAL DEL MES", "", "", "", hs(t.total), hs(t.normal), hs(t.m50), hs(t.m100), "", ""]); });
+      descargarBytes(generarXlsx(headers, rows), `jornadas_y_extras_${desde.toISOString().slice(0, 10)}_a_${hasta.toISOString().slice(0, 10)}.xlsx`);
+      setOk(`Jornadas generadas: ${rows.length - Object.keys(tot).length - 1} jornadas de ${Object.keys(tot).length} empleados.`);
+    } catch { setError("No se pudo generar el detalle de jornadas."); }
     finally { setBajando(""); }
   };
 
@@ -139,6 +184,9 @@ export default function Reportes() {
         </button>
         <button onClick={descargarResumen} disabled={!!bajando} className="w-full mt-2 py-3 rounded-xl font-bold text-sm bg-[#f1f4f7] border border-[#cfd6dd] disabled:opacity-50">
           {bajando === "resumen" ? "Generando…" : "📊 Resumen por empleado (descuentos, 100%, faltantes)"}
+        </button>
+        <button onClick={descargarJornadas} disabled={!!bajando} className="w-full mt-2 py-3 rounded-xl font-bold text-sm bg-[#f1f4f7] border border-[#cfd6dd] disabled:opacity-50">
+          {bajando === "jornadas" ? "Generando…" : "⏱ Jornadas y horas extras (una fila por día: normales, 50%, 100%)"}
         </button>
       </div>
     </div>
