@@ -433,7 +433,7 @@ export default function App() {
         <div className="px-6 pb-3">
           <button onClick={() => setVista("ausencias")}
             className="w-full py-3 rounded-xl font-semibold text-sm bg-[#f1f4f7] border border-[#e3e8ed] hover:border-[#cfd6dd]">
-            📅 Ausencias / días libres
+            📅 Vacaciones y ausencias
           </button>
         </div>
 

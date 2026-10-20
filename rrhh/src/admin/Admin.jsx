@@ -14,6 +14,8 @@ import Fichadas from "./Fichadas.jsx";
 import ImportarReloj from "./ImportarReloj.jsx";
 import Presentismo from "./Presentismo.jsx";
 import AusenciasAdmin from "./AusenciasAdmin.jsx";
+import Vacaciones from "./Vacaciones.jsx";
+import MapaVacaciones from "./MapaVacaciones.jsx";
 import Auditoria from "./Auditoria.jsx";
 import { LOGO } from "../lib/logo.js";
 import { avisarConSifoncito, registrarVozSifoncito, avisarEquiposPendientes } from "./avisos.js";
@@ -99,12 +101,14 @@ export default function Admin() {
       { id: "dashboard", label: "Dashboard" },
       { id: "indicadores", label: "Indicadores" },
       { id: "presentismo", label: "En vivo" },
+      { id: "mapa-vacaciones", label: "Mapa de vacaciones" },
     ] },
     { id: "asistencia", label: "Asistencia", icono: "🕒", items: [
       { id: "fichadas", label: "Corrección de fichadas" },
       { id: "importar", label: "Importar reloj" },
       { id: "aprobaciones", label: "Aprobaciones" },
       { id: "ausencias", label: "Ausencias" },
+      { id: "vacaciones", label: "Vacaciones" },
     ] },
     { id: "personal", label: "Personal", icono: "👥", items: [
       { id: "empleados", label: "Empleados" },
@@ -191,6 +195,8 @@ export default function Admin() {
         {vista === "dispositivos" && <Dispositivos />}
         {vista === "aprobaciones" && <Aprobaciones />}
         {vista === "ausencias" && <AusenciasAdmin />}
+        {vista === "vacaciones" && <Vacaciones />}
+        {vista === "mapa-vacaciones" && <MapaVacaciones />}
         {vista === "auditoria" && <Auditoria />}
         {vista === "config" && <Configuracion />}
       </div>

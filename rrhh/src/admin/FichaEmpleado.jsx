@@ -49,6 +49,7 @@ const normalizar = (k, v) => {
 export default function FichaEmpleado({ empleado, onCerrar, onGuardado, tabInicial = "datos" }) {
   const [tab, setTab] = useState(tabInicial);
   const [form, setForm] = useState(() => Object.fromEntries(EDITABLES.map((k) => [k, empleado[k] ?? ""])));
+  const [vacApp, setVacApp] = useState(empleado.vacaciones_por_app !== false);
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -81,6 +82,7 @@ export default function FichaEmpleado({ empleado, onCerrar, onGuardado, tabInici
       const nuevo = normalizar(k, form[k]);
       if (nuevo !== (empleado[k] ?? null)) cambios[k] = nuevo;
     });
+    if (vacApp !== (empleado.vacaciones_por_app !== false)) cambios.vacaciones_por_app = vacApp;
     if (!Object.keys(cambios).length) return setMsg({ tipo: "ok", texto: "No hay cambios para guardar." });
     setGuardando(true); setMsg(null);
     try {
@@ -179,6 +181,13 @@ export default function FichaEmpleado({ empleado, onCerrar, onGuardado, tabInici
                     value={form[c.k] ?? ""} onChange={(ev) => setForm({ ...form, [c.k]: ev.target.value })} className={inputCls} />
                 </div>
               ))}
+              <div className="sm:col-span-2 rounded-lg border border-[#e3e8ed] bg-[#f8fafc] p-3">
+                <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+                  <input type="checkbox" checked={vacApp} onChange={(ev) => setVacApp(ev.target.checked)} data-vac-app />
+                  Pide sus vacaciones por la app
+                </label>
+                <p className="text-[11px] text-[#94a1ab] mt-1">Si no las pide por la app (o no ficha), se las carga RR.HH. en Asistencia → Vacaciones y en el fichaje no le aparece la opción de pedirlas.</p>
+              </div>
               <div className="sm:col-span-2">
                 <label className={labelCls}>Observaciones</label>
                 <textarea rows={3} value={form.observaciones ?? ""} onChange={(ev) => setForm({ ...form, observaciones: ev.target.value })} className={inputCls} />

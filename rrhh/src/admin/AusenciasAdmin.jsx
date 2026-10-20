@@ -59,7 +59,8 @@ export default function AusenciasAdmin() {
                 <span className="text-sm font-semibold">{nombre(s.legajo)}</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded capitalize" style={{ color: col, backgroundColor: bg }}>{s.estado}</span>
               </div>
-              <p className="text-xs">{TIPOS[s.tipo] || s.tipo} · {fechaCorta(s.fecha_desde)}{s.fecha_hasta !== s.fecha_desde ? ` al ${fechaCorta(s.fecha_hasta)}` : ""}</p>
+              <p className="text-xs">{TIPOS[s.tipo] || s.tipo} · {fechaCorta(s.fecha_desde)}{s.fecha_hasta !== s.fecha_desde ? ` al ${fechaCorta(s.fecha_hasta)}` : ""}
+                {s.tipo === "vacaciones" && <span className="text-[#5c6b78]"> · {Math.round((new Date(s.fecha_hasta + "T12:00:00") - new Date(s.fecha_desde + "T12:00:00")) / 86400000) + 1} días corridos{s.periodo ? ` del período ${s.periodo}` : ""}</span>}</p>
               {s.motivo && <p className="text-xs text-[#94a1ab] mt-1">{s.motivo}</p>}
               {s.estado === "pendiente" && (
                 <div className="flex gap-2 mt-2">

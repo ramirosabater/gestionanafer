@@ -156,6 +156,16 @@ export async function sbPost(path, body) {
   if (!res.ok) throw new Error(`Error guardando en ${path}: ${res.status}`);
   return res.json();
 }
+// Inserta o actualiza (si ya existe la clave): POST con merge-duplicates.
+export async function sbUpsert(tabla, filas, onConflict) {
+  const res = await sbFetch(`${tabla}${onConflict ? `?on_conflict=${onConflict}` : ""}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates,return=representation" },
+    body: JSON.stringify(filas),
+  });
+  if (!res.ok) throw new Error(`Error guardando en ${tabla}: ${res.status}`);
+  return res.json();
+}
 export async function sbDelete(path) {
   const res = await sbFetch(path, { method: "DELETE" });
   if (!res.ok) throw new Error(`Error borrando ${path}: ${res.status}`);
