@@ -6,7 +6,9 @@ const BUCKET = "legajos";
 export const TIPOS_DOC = [
   "DNI frente", "DNI dorso", "Constancia de CUIL", "Alta temprana (AFIP)",
   "Contrato", "Apto médico / preocupacional", "Certificado de domicilio",
-  "Licencia de conducir", "Certificado de antecedentes", "Título / certificado", "Otro",
+  "Licencia de conducir", "Psicofísico / LINTI", "Carnet de manipulador de alimentos / libreta sanitaria",
+  "Credencial ART", "Curso / capacitación", "Certificado médico",
+  "Certificado de antecedentes", "Título / certificado", "Otro",
 ];
 
 const CAMPOS = [

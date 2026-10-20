@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { sbRpc } from "../lib/supabase.js";
+import { sbRpc, sbSubirCertificado, achicarFoto } from "../lib/supabase.js";
 
-const TIPOS = { dia_libre: "Día libre", ausencia: "Ausencia", vacaciones: "Vacaciones", otro: "Otro" };
+const TIPOS = { dia_libre: "Día libre", ausencia: "Ausencia", vacaciones: "Vacaciones", enfermedad: "Enfermedad (con certificado)", licencia: "Licencia especial", otro: "Otro" };
+const CON_CERTIFICADO = ["enfermedad", "licencia"];
 const diasCorridos = (d1, d2) => (d1 ? Math.max(0, Math.round((new Date((d2 || d1) + "T12:00:00") - new Date(d1 + "T12:00:00")) / 86400000) + 1) : 0);
 const MOTIVOS_VAC = { por_rrhh: "Tus vacaciones las carga RR.HH.: consultá con ellos.", no_alcanza: "No te alcanzan los días", superpuesto: "Ya tenés vacaciones pedidas o aprobadas en esas fechas.", sin_saldo: "No tenés días cargados para ese período. Consultá con RR.HH.", fechas: "Revisá las fechas." };
 const fechaCorta = (f) => (f ? new Date(f + "T00:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" }) : "");
@@ -23,6 +24,8 @@ export default function Ausencias({ empleado, pin, esJefe, onVolver }) {
   const [hasta, setHasta] = useState("");
   const [motivo, setMotivo] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [archivo, setArchivo] = useState(null); // certificado (foto o PDF)
+  const [subiendoId, setSubiendoId] = useState(null);
   // Vacaciones: saldo por período (lo carga RR.HH.)
   const [saldos, setSaldos] = useState(null); // null = la base todavía no tiene vacaciones
   const [periodo, setPeriodo] = useState(null);
@@ -51,6 +54,26 @@ export default function Ausencias({ empleado, pin, esJefe, onVolver }) {
   };
   useEffect(() => { cargar(); /* eslint-disable-next-line */ }, []);
 
+  // Sube el certificado de una solicitud y lo deja asentado (solicitud + legajo)
+  const subirCertificado = async (id, file) => {
+    const f = await achicarFoto(file);
+    if (f.size > 10 * 1048576) throw new Error("grande");
+    const ext = ((f.name || "").split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const path = `certificados/${empleado.legajo}/${Date.now()}-${id.slice(0, 8)}.${ext}`;
+    await sbSubirCertificado(path, f);
+    const r = await sbRpc("adjuntar_certificado", { p_legajo: empleado.legajo, p_pin: pin, p_id: id, p_path: path, p_nombre: f.name || "certificado", p_mime: f.type || null, p_tamano: f.size });
+    if (!r?.ok) throw new Error(r?.motivo || "error");
+  };
+
+  const certificadoDespues = async (s, ev) => {
+    const file = ev.target.files?.[0]; ev.target.value = "";
+    if (!file) return;
+    setSubiendoId(s.id); setMsg(null);
+    try { await subirCertificado(s.id, file); setMsg({ ok: true, t: "Certificado subido ✓" }); cargar(); }
+    catch (e) { setMsg({ ok: false, t: e.message === "grande" ? "El archivo pesa más de 10 MB." : "No se pudo subir el certificado. Probá de nuevo." }); }
+    finally { setSubiendoId(null); }
+  };
+
   const pedir = async () => {
     setMsg(null);
     if (!desde) return setMsg({ ok: false, t: "Elegí la fecha desde." });
@@ -68,6 +91,22 @@ export default function Ausencias({ empleado, pin, esJefe, onVolver }) {
         setMsg({ ok: true, t: `Pediste ${r.dias} días de vacaciones. Te quedarían ${r.quedan}. Tu jefe lo va a revisar.` });
         cargar();
       } catch (e) { setMsg({ ok: false, t: e.message === "sin_saldo" ? MOTIVOS_VAC.sin_saldo : "No se pudo enviar el pedido." }); }
+      finally { setEnviando(false); }
+      return;
+    }
+    if (CON_CERTIFICADO.includes(tipo)) {
+      try {
+        const r = await sbRpc("crear_licencia", { p_legajo: empleado.legajo, p_pin: pin, p_tipo: tipo, p_desde: desde, p_hasta: hasta || desde, p_motivo: motivo.trim() || null });
+        if (!r?.ok || !r.id) throw new Error();
+        let aviso = "Solicitud enviada. Tu jefe la va a revisar.";
+        if (archivo) {
+          try { await subirCertificado(r.id, archivo); aviso = "Solicitud enviada con el certificado ✓. Tu jefe la va a revisar."; }
+          catch { aviso = "La solicitud se envió, pero el certificado no se pudo subir: subilo desde la lista de abajo."; }
+        } else aviso = "Solicitud enviada. Acordate de subir el certificado desde la lista de abajo.";
+        setDesde(""); setHasta(""); setMotivo(""); setArchivo(null);
+        setMsg({ ok: true, t: aviso });
+        cargar();
+      } catch { setMsg({ ok: false, t: "No se pudo enviar la solicitud." }); }
       finally { setEnviando(false); }
       return;
     }
@@ -147,6 +186,14 @@ export default function Ausencias({ empleado, pin, esJefe, onVolver }) {
                     </div>
                   ) : <p className="text-xs text-[#e5484d] mb-2">Todavía no tenés días de vacaciones cargados. Consultá con RR.HH.</p>
                 )}
+                {CON_CERTIFICADO.includes(tipo) && (
+                  <label className="flex items-center gap-2 w-full bg-white border border-dashed border-[#2ba9e0] rounded-lg px-3 py-2 text-sm mb-2 cursor-pointer" data-certificado>
+                    <span>📎</span>
+                    <span className="flex-1 truncate">{archivo ? archivo.name : "Sacale una foto al certificado (o subí el PDF)"}</span>
+                    {archivo && <button type="button" onClick={(e) => { e.preventDefault(); setArchivo(null); }} className="text-[#94a1ab]">×</button>}
+                    <input type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => { setArchivo(e.target.files?.[0] || null); e.target.value = ""; }} />
+                  </label>
+                )}
                 <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={2} placeholder="Motivo (opcional)" className="w-full bg-white border border-[#cfd6dd] rounded-lg px-3 py-2 text-sm outline-none resize-none" />
                 {msg && <p className={`text-xs mt-2 ${msg.ok ? "text-[#16a34a]" : "text-[#e5484d]"}`}>{msg.t}</p>}
                 <button onClick={pedir} disabled={enviando} className="w-full mt-2 py-2.5 rounded-lg font-bold text-sm bg-[#e1251b] text-white disabled:opacity-50">{enviando ? "Enviando…" : "Enviar solicitud"}</button>
@@ -163,6 +210,14 @@ export default function Ausencias({ empleado, pin, esJefe, onVolver }) {
                       </div>
                       {s.motivo && <p className="text-xs text-[#94a1ab] mt-1">{s.motivo}</p>}
                       {s.resolucion && <p className="text-xs text-[#e5484d] mt-1">Nota: {s.resolucion}</p>}
+                      {CON_CERTIFICADO.includes(s.tipo) && (s.tiene_certificado
+                        ? <p className="text-xs text-[#16a34a] mt-1">📎 Certificado subido</p>
+                        : s.estado !== "rechazada" && (
+                          <label className="inline-flex items-center gap-1 mt-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border border-[#2ba9e0] text-[#2ba9e0] cursor-pointer" data-subir-cert>
+                            {subiendoId === s.id ? "Subiendo…" : "📎 Subir certificado"}
+                            <input type="file" accept="image/*,application/pdf" className="hidden" disabled={subiendoId === s.id} onChange={(e) => certificadoDespues(s, e)} />
+                          </label>
+                        ))}
                     </div>
                   ); })}
                 </div>

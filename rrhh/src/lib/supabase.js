@@ -33,3 +33,33 @@ export async function sbRpc(fn, body) {
   if (!res.ok) throw new Error(`Error RPC ${fn}: ${res.status}`);
   return res.json();
 }
+
+// Sube un archivo al bucket privado de legajos, solo en la carpeta
+// certificados/<legajo>/ (la base no deja subir a otro lado ni leer nada).
+export async function sbSubirCertificado(path, file) {
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/legajos/${path.split("/").map(encodeURIComponent).join("/")}`, {
+    method: "POST",
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": file.type || "application/octet-stream", "x-upsert": "false" },
+    body: file,
+  });
+  if (!res.ok) throw new Error(`No se pudo subir el certificado: ${res.status}`);
+  return res.json();
+}
+
+// Achica una foto (máx. 1600 px, JPEG) para que suba rápido desde el celular.
+// Los PDF y lo que no se pueda leer como imagen se suben tal cual.
+export async function achicarFoto(file, max = 1600) {
+  if (!file || !/^image\//.test(file.type || "") || typeof document === "undefined") return file;
+  try {
+    const url = URL.createObjectURL(file);
+    const img = await new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = mal; i.src = url; });
+    URL.revokeObjectURL(url);
+    const k = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    const blob = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.82));
+    if (!blob) return file;
+    return new File([blob], (file.name || "certificado").replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch { return file; }
+}

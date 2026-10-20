@@ -2,6 +2,7 @@
 // Una "entrada" sin "salida" después (o seguida de otra entrada) que ya tiene
 // más de 16 horas es una salida que falta fichar o corregir.
 import { sbGet, sbGetAll, sbFuncion } from "./supabase-admin.js";
+import { analizarVencimientos, licenciasSinCertificado } from "./vencimientos.js";
 
 const HORAS_TURNO_MAX = 16;
 
@@ -92,5 +93,51 @@ export async function avisarEquiposPendientes(irA) {
     titulo: "Sifoncito: computadoras para aprobar",
     texto: `Hay <b>${l.length} computadora${l.length === 1 ? "" : "s"}</b> esperando que la apruebes para fichar.`,
     botones: [{ texto: "Revisarlas", pri: true, accion: () => irA("dispositivos") }],
+  });
+}
+
+// Documentos vencidos o por vencer y licencias sin certificado (una vez por día).
+export async function avisarVencimientos(irA) {
+  const A = window.AyudaAnafer;
+  if (!A || !A.sugerir) return;
+  const hoy = diaLocal(new Date());
+  let mem = {};
+  try { mem = JSON.parse(localStorage.getItem("rrhh_ayudante") || "{}") || {}; } catch { /* sin storage */ }
+  if (mem.vencimientos === "nunca" || (mem.vencimientos && mem.vencimientos > hoy)) return;
+  let r, lic = [];
+  try {
+    const [emps, docs] = await Promise.all([
+      sbGet("empleados?select=legajo,apellido,nombre,sector,activo"),
+      sbGet("empleado_documentos?select=id,legajo,tipo,vencimiento&vencimiento=not.is.null&limit=10000"),
+    ]);
+    let reqs = [];
+    try { reqs = await sbGet("documentos_requeridos?select=*"); } catch { /* sin la tabla todavía */ }
+    try { lic = licenciasSinCertificado(await sbGet("solicitudes?select=id,legajo,tipo,estado,certificado_path&tipo=in.(enfermedad,licencia)&limit=2000")); } catch { /* sin columnas */ }
+    r = analizarVencimientos({ empleados: emps, docs, requeridos: reqs, hoy });
+    const activos = new Set(emps.filter((e) => e.activo !== false).map((e) => e.legajo));
+    lic = lic.filter((s) => activos.has(s.legajo));
+  } catch { return; }
+  const filas = [...r.vencidos, ...r.porVencer];
+  if (!filas.length && !lic.length) return;
+  const guardar = (v) => { mem.vencimientos = v; try { localStorage.setItem("rrhh_ayudante", JSON.stringify(mem)); } catch { /* sin storage */ } };
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const items = filas.slice(0, 8).map((f) =>
+    `<li><span><b>${esc(f.empleado.apellido)}, ${esc(f.empleado.nombre)}</b><small>${esc(f.tipo)}: ${f.dias < 0 ? `venció hace ${-f.dias} días` : f.dias === 0 ? "vence hoy" : `vence en ${f.dias} días`}</small></span></li>`).join("");
+  const mas = filas.length > 8 ? `<div class="sug-nota">…y ${filas.length - 8} más.</div>` : "";
+  const partes = [];
+  if (r.vencidos.length) partes.push(`<b>${r.vencidos.length} documento${r.vencidos.length === 1 ? "" : "s"} vencido${r.vencidos.length === 1 ? "" : "s"}</b>`);
+  if (r.porVencer.length) partes.push(`<b>${r.porVencer.length}</b> por vencer`);
+  if (lic.length) partes.push(`<b>${lic.length} licencia${lic.length === 1 ? "" : "s"} sin certificado</b>`);
+  const manana = diaLocal(new Date(Date.now() + 86400000));
+  A.sugerir({
+    id: "rrhh-vencimientos",
+    titulo: "Sifoncito: vencimientos",
+    texto: `Ojo con los legajos: hay ${partes.join(", ").replace(/, ([^,]*)$/, " y $1")}.`,
+    cuerpo: items ? `<ul class="sug-lista">${items}</ul>${mas}` : "",
+    textoAhoraNo: "Mañana me recordás",
+    ahoraNo: () => guardar(manana),
+    nunca: () => guardar("nunca"),
+    textoNunca: "No me avises más de esto",
+    botones: [{ texto: "Ver vencimientos", pri: true, accion: () => { guardar(manana); irA("vencimientos"); } }],
   });
 }

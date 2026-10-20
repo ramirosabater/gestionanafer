@@ -16,9 +16,10 @@ import Presentismo from "./Presentismo.jsx";
 import AusenciasAdmin from "./AusenciasAdmin.jsx";
 import Vacaciones from "./Vacaciones.jsx";
 import MapaVacaciones from "./MapaVacaciones.jsx";
+import Vencimientos from "./Vencimientos.jsx";
 import Auditoria from "./Auditoria.jsx";
 import { LOGO } from "../lib/logo.js";
-import { avisarConSifoncito, registrarVozSifoncito, avisarEquiposPendientes } from "./avisos.js";
+import { avisarConSifoncito, registrarVozSifoncito, avisarEquiposPendientes, avisarVencimientos } from "./avisos.js";
 
 export default function Admin() {
   const [logueado, setLogueado] = useState(false);
@@ -65,7 +66,7 @@ export default function Admin() {
   // Sifoncito avisa (una vez por día) si quedaron turnos sin fichar la salida.
   useEffect(() => {
     if (!logueado) return;
-    const t = setTimeout(() => { registrarVozSifoncito(); avisarConSifoncito((id) => setVista(id)); avisarEquiposPendientes((id) => setVista(id)); }, 1500);
+    const t = setTimeout(() => { registrarVozSifoncito(); avisarConSifoncito((id) => setVista(id)); avisarEquiposPendientes((id) => setVista(id)); avisarVencimientos((id) => setVista(id)); }, 1500);
     return () => clearTimeout(t);
   }, [logueado]);
 
@@ -114,6 +115,7 @@ export default function Admin() {
       { id: "empleados", label: "Empleados" },
       { id: "sectores", label: "Sectores" },
       { id: "plantillas", label: "Horarios" },
+      { id: "vencimientos", label: "Vencimientos" },
     ] },
     { id: "control", label: "Reportes y control", icono: "📊", items: [
       { id: "reportes", label: "Exportar a Excel" },
@@ -197,6 +199,7 @@ export default function Admin() {
         {vista === "ausencias" && <AusenciasAdmin />}
         {vista === "vacaciones" && <Vacaciones />}
         {vista === "mapa-vacaciones" && <MapaVacaciones />}
+        {vista === "vencimientos" && <Vencimientos />}
         {vista === "auditoria" && <Auditoria />}
         {vista === "config" && <Configuracion />}
       </div>
