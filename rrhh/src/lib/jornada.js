@@ -38,6 +38,10 @@ const MAX_JORNADA_H = 20; // una entrada sin salida por más de esto se toma com
 export function tieneExtrasPropias(horario) {
   return !!(horario && horario.tipo !== "libre" && horario.extras && Array.isArray(horario.extras.tramos) && horario.extras.tramos.length);
 }
+export function tramoDelDia(horario, d) {
+  const iso = d.getDay() === 0 ? 7 : d.getDay();
+  return ((horario && horario.extras && horario.extras.tramos) || []).find((t) => (t.dias || []).includes(iso)) || null;
+}
 export function descansoHoras(horario) {
   return horario && horario.extras ? Number(horario.extras.descanso_horas) || 0 : 0;
 }
@@ -126,7 +130,10 @@ export function jornadasDe(fichajes, horario, config, liquidarGeneral) {
   const propias = tieneExtrasPropias(horario);
   const cerrar = (e, s) => {
     let l;
-    if (propias) l = liquidarJornada(e.t, s, horario, (config && config.feriados) || {});
+    // La regla propia se usa en los días con tramo de extras y en los días sin
+    // horario (domingo: todo al 100%); los demás días con horario pero sin tramo
+    // (ej. si solo el sábado tiene regla propia) van por la regla general.
+    if (propias && (tramoDelDia(horario, e.t) || !bloquesDeHoy(horario, e.t).length)) l = liquidarJornada(e.t, s, horario, (config && config.feriados) || {});
     else {
       const total = Math.round((s - e.t) / MIN);
       const g = liquidarGeneral ? liquidarGeneral(e.t, s) : { min50: 0, min100: 0 };

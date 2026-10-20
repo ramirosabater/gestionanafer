@@ -105,7 +105,7 @@ export function computarCumplimiento(fichajes, horario, desde, hasta, config) {
   if (libre) { res.sinTurno = false; res.minTarde = 0; res.minRetiro = 0; res.descuentoMin = 0; }
 
   if (res.extrasPropias) {
-    res.jornadas = jornadasDe(fichajes, horario, config).filter((j) => enPeriodo(j.entrada));
+    res.jornadas = jornadasDe(fichajes, horario, config, (a, b) => minutosRecargo(a, b, config)).filter((j) => enPeriodo(j.entrada));
     res.jornadas.forEach((j) => { res.horas50Min += j.min50; res.horas100Min += j.min100; res.trabajadoMin += j.total; res.normalMin += j.normal; });
   } else {
     let pend = null;

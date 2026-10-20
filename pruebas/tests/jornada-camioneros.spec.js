@@ -84,3 +84,21 @@ test("jornada sin salida queda marcada", () => {
   expect(js[0].observaciones[0]).toContain("Sin salida");
   expect(js[1].normal).toBe(480);
 });
+
+// Horarios de Administración con extras propias solo algunos días
+test("extras propias solo el sábado (Caja/Administración): sábado 12–13 al 50% y después 100%; entre semana rige la regla general", () => {
+  const Hs = { tipo: "fijo", tolerancia_minutos: 10, bloques: [{ dias: [1, 2, 3, 4, 5], inicio: "08:00", fin: "17:00" }, { dias: [6], inicio: "08:00", fin: "12:00" }],
+    extras: { tramos: [{ dias: [6], hasta_50: "13:00", todo_100_si_pasa: false }], descanso_horas: 0 } };
+  const f = (dia, h, m, tipo) => ({ timestamp: t(dia, h, m).toISOString(), tipo });
+  const c = computarCumplimiento([f(24, 8, 0, "entrada"), f(24, 15, 0, "salida"), f(19, 8, 0, "entrada"), f(19, 18, 0, "salida")], Hs, t(19, 0), t(24, 23, 59), { recargos: [], feriados: {} });
+  // sábado: 4 normales + 1 al 50 + 2 al 100 (de 13 a 15) · lunes 8–18: la regla general por defecto no tiene recargo entre semana
+  expect(c.horas50Min).toBe(60);
+  expect(c.horas100Min).toBe(120);
+  expect(c.normalMin).toBe(4 * 60 + 10 * 60);
+});
+
+test("Décima: 8 a 16 y de 16 a 17 extra al 50%", () => {
+  const Hd = { tipo: "fijo", tolerancia_minutos: 10, bloques: [{ dias: [1, 2, 3, 4, 5], inicio: "08:00", fin: "16:00" }], extras: { tramos: [{ dias: [1, 2, 3, 4, 5], hasta_50: "17:00", todo_100_si_pasa: false }], descanso_horas: 0 } };
+  expect(horas(liquidarJornada(t(19, 8), t(19, 17), Hd, {}))).toEqual({ normal: 8, al50: 1, al100: 0 });
+  expect(calcularEstado("salida", t(19, 17), Hd).estado).toBe("a_horario");
+});
