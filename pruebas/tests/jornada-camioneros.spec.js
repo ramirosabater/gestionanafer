@@ -102,3 +102,20 @@ test("Décima: 8 a 16 y de 16 a 17 extra al 50%", () => {
   expect(horas(liquidarJornada(t(19, 8), t(19, 17), Hd, {}))).toEqual({ normal: 8, al50: 1, al100: 0 });
   expect(calcularEstado("salida", t(19, 17), Hd).estado).toBe("a_horario");
 });
+
+test("turno rotativo por semana (Maldonado): una semana 9 a 17 y la otra 10 a 18", async () => {
+  const { bloquesDeHoy, semanaDeRotacion } = await import("../../rrhh/src/lib/fichaje.js");
+  const sem1 = [{ dias: [1, 2, 3, 4, 5], inicio: "09:00", fin: "17:00" }, { dias: [6], inicio: "08:00", fin: "12:00" }];
+  const sem2 = [{ dias: [1, 2, 3, 4, 5], inicio: "10:00", fin: "18:00" }, { dias: [6], inicio: "08:00", fin: "12:00" }];
+  const Hm = { tipo: "fijo", tolerancia_minutos: 10, bloques: sem1, extras: { tramos: [{ dias: [6], hasta_50: "13:00" }], descanso_horas: 0, rotacion: { desde: "2026-10-21", semanas: [sem1, sem2] } } };
+  expect(semanaDeRotacion(Hm, t(19, 9))).toBe(0);          // semana del 19/10 (el "desde" puede ser cualquier día de esa semana)
+  expect(semanaDeRotacion(Hm, new Date(2026, 9, 26))).toBe(1);
+  expect(semanaDeRotacion(Hm, new Date(2026, 10, 2))).toBe(0);
+  expect(semanaDeRotacion(Hm, new Date(2026, 9, 12))).toBe(1); // la semana anterior también alterna
+  expect(bloquesDeHoy(Hm, new Date(2026, 9, 27, 10))[0].inicio).toBe("10:00");
+  // llegar 10:00 es tarde la semana 1 y a horario la semana 2
+  expect(calcularEstado("entrada", t(20, 10, 0), Hm).estado).toBe("tarde");
+  expect(calcularEstado("entrada", new Date(2026, 9, 27, 10, 0), Hm).estado).toBe("a_horario");
+  // salir a las 17 la semana 2 es salida anticipada
+  expect(calcularEstado("salida", new Date(2026, 9, 27, 17, 0), Hm).estado).toBe("salida_anticipada");
+});

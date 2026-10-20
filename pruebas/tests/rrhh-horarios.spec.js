@@ -53,3 +53,22 @@ test("un horario sin extras propias se guarda como siempre (sin tocar la columna
   await expect.poll(() => posts.length).toBe(1);
   expect("extras" in posts[0][1]).toBe(false);
 });
+
+test("turno rotativo por semana: se guarda la semana 2 y desde qué semana arranca", async ({ page }) => {
+  const posts = await panelRrhh(page);
+  await page.getByRole("button", { name: "+ Nuevo horario" }).click();
+  await page.getByPlaceholder("Ej: Mañana Lun-Vie").fill("Caja rotativo");
+  await page.locator('input[type="time"]').nth(0).fill("09:00");
+  await page.locator('input[type="time"]').nth(1).fill("17:00");
+  await page.getByLabel("Turno rotativo por semana").check();
+  await page.getByRole("button", { name: "+ Agregar bloque a la semana 2" }).click();
+  await expect(page.getByText("LMXJV · 10:00–18:00")).toBeVisible();
+  await page.getByRole("button", { name: "Guardar horario" }).click();
+  await expect.poll(() => posts.length).toBe(1);
+  const h = posts[0][1];
+  expect(h.extras.tramos).toEqual([]);
+  expect(h.extras.rotacion.semanas[1]).toEqual([{ dias: [1, 2, 3, 4, 5], inicio: "10:00", fin: "18:00" }]);
+  expect(h.extras.rotacion.semanas[0][0]).toMatchObject({ inicio: "09:00", fin: "17:00" });
+  expect(h.extras.rotacion.desde).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  await expect(page.getByText(/ROTA POR SEMANA/)).toBeVisible();
+});

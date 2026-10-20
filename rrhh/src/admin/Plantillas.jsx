@@ -30,6 +30,14 @@ export default function Plantillas() {
   const [tramos, setTramos] = useState([]);
   const [descansoH, setDescansoH] = useState(0);
   const [teniaExtras, setTeniaExtras] = useState(false);
+  // Turno rotativo por semana (ej. una semana 9 a 17 y la otra 10 a 18)
+  const [rotaOn, setRotaOn] = useState(false);
+  const [bloques2, setBloques2] = useState([]);
+  const [rotaDesde, setRotaDesde] = useState("");
+  const [d2, setD2] = useState([1, 2, 3, 4, 5]);
+  const [ini2, setIni2] = useState("10:00");
+  const [fin2, setFin2] = useState("18:00");
+  const lunesDeEstaSemana = () => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
   const cargar = async () => {
     setCargando(true); setError(null);
@@ -51,6 +59,7 @@ export default function Plantillas() {
     setDias([1, 2, 3, 4, 5]); setInicio("08:00"); setFin("17:00"); setBloques([]);
     setLibre(false); setHorasDiarias(8); setHorasSabado(4);
     setExtrasOn(false); setTramos([]); setDescansoH(0); setTeniaExtras(false);
+    setRotaOn(false); setBloques2([]); setRotaDesde(""); setD2([1, 2, 3, 4, 5]); setIni2("10:00"); setFin2("18:00");
   };
   const modeloCamioneros = () => {
     setLibre(false);
@@ -93,7 +102,10 @@ export default function Plantillas() {
     }
     setBloques(Array.isArray(h.bloques) ? h.bloques.map((b) => ({ dias: [...(b.dias || [])], inicio: b.inicio, fin: b.fin })) : []);
     const ex = h.extras && Array.isArray(h.extras.tramos) && h.extras.tramos.length ? h.extras : null;
-    setTeniaExtras(!!ex); setExtrasOn(!!ex);
+    setTeniaExtras(!!h.extras); setExtrasOn(!!ex);
+    const rot = h.extras && h.extras.rotacion && Array.isArray(h.extras.rotacion.semanas) ? h.extras.rotacion : null;
+    setRotaOn(!!rot); setRotaDesde(rot ? rot.desde : "");
+    setBloques2(rot && rot.semanas[1] ? rot.semanas[1].map((b) => ({ dias: [...(b.dias || [])], inicio: b.inicio, fin: b.fin })) : []);
     setTramos(ex ? ex.tramos.map((t) => ({ dias: [...(t.dias || [])], hasta_50: t.hasta_50, todo_100_si_pasa: !!t.todo_100_si_pasa })) : []);
     setDescansoH(ex ? Number(ex.descanso_horas) || 0 : 0);
     setDias([1, 2, 3, 4, 5]); setInicio("08:00"); setFin("17:00");
@@ -119,9 +131,14 @@ export default function Plantillas() {
         tipo: libre ? "libre" : "fijo", horas_diarias: libre ? Number(horasDiarias) : null,
         horas_sabado: libre ? Number(horasSabado) : null,
       };
-      if (!libre && extrasOn) {
-        if (!tramos.length) { setGuardando(false); return alert("Agregá al menos un tramo de horas extras (o apagá las extras propias)."); }
-        datos.extras = { tramos: tramos.map((t) => ({ dias: t.dias, hasta_50: t.hasta_50, todo_100_si_pasa: !!t.todo_100_si_pasa })), descanso_horas: Number(descansoH) || 0 };
+      if (!libre && extrasOn && !tramos.length) { setGuardando(false); return alert("Agregá al menos un tramo de horas extras (o apagá las extras propias)."); }
+      if (!libre && rotaOn && !bloques2.length) { setGuardando(false); return alert("Agregá los bloques de la semana 2 (o apagá el turno rotativo)."); }
+      if (!libre && (extrasOn || rotaOn)) {
+        datos.extras = {
+          tramos: extrasOn ? tramos.map((t) => ({ dias: t.dias, hasta_50: t.hasta_50, todo_100_si_pasa: !!t.todo_100_si_pasa })) : [],
+          descanso_horas: extrasOn ? Number(descansoH) || 0 : 0,
+        };
+        if (rotaOn) datos.extras.rotacion = { desde: rotaDesde || lunesDeEstaSemana(), semanas: [bloquesFinales, bloques2] };
       } else if (teniaExtras) datos.extras = null; // vuelve a la regla general
       conExtras = "extras" in datos;
       if (editando) {
@@ -269,6 +286,43 @@ export default function Plantillas() {
               <p className="text-[11px] text-[#94a1ab]">Con descanso: si terminó tarde (ej. volvió 00:05), puede entrar recién al cumplir el descanso (12:05) y esa llegada <b>no</b> es tarde.</p>
             </div>)}
           </div>
+
+          <div className="rounded-xl border border-[#e3e8ed] bg-[#f8fafc] p-3 mb-3">
+            <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+              <input type="checkbox" checked={rotaOn} onChange={(e) => { setRotaOn(e.target.checked); if (e.target.checked && !rotaDesde) setRotaDesde(lunesDeEstaSemana()); }} />
+              Turno rotativo por semana
+            </label>
+            <p className="text-[11px] text-[#94a1ab] mt-1">Una semana se usa el horario de arriba (semana 1) y la siguiente el de la semana 2, y así se van alternando.</p>
+            {rotaOn && (<div className="mt-3">
+              <div className="flex items-center gap-2 text-xs text-[#5c6b78] mb-2 flex-wrap">
+                <span>La semana 1 es la del</span>
+                <input type="date" value={rotaDesde} onChange={(e) => setRotaDesde(e.target.value)} className="bg-[#f1f4f7] border border-[#cfd6dd] rounded-lg px-2 py-1 text-sm outline-none" />
+              </div>
+              <p className="text-[10px] uppercase tracking-wider text-[#94a1ab] mb-1">Semana 2</p>
+              <div className="flex gap-1 flex-wrap mb-2">
+                {DIAS.map((d) => (
+                  <button key={d.n} onClick={() => setD2((x) => (x.includes(d.n) ? x.filter((y) => y !== d.n) : [...x, d.n].sort()))} className="w-7 h-7 rounded-md text-[11px] font-bold border"
+                    style={{ backgroundColor: d2.includes(d.n) ? "#223c7e" : "#f1f4f7", color: d2.includes(d.n) ? "#fff" : "#5c6b78", borderColor: d2.includes(d.n) ? "#223c7e" : "#cfd6dd" }}>{d.l}</button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap text-xs text-[#5c6b78]">
+                <input type="time" value={ini2} onChange={(e) => setIni2(e.target.value)} className="bg-[#f1f4f7] border border-[#cfd6dd] rounded-lg px-2 py-1 text-sm outline-none" />
+                <span>a</span>
+                <input type="time" value={fin2} onChange={(e) => setFin2(e.target.value)} className="bg-[#f1f4f7] border border-[#cfd6dd] rounded-lg px-2 py-1 text-sm outline-none" />
+                <button onClick={() => { if (!d2.length) return alert("Elegí al menos un día."); setBloques2((b) => [...b, { dias: [...d2], inicio: ini2, fin: fin2 }]); }} className="text-xs text-[#223c7e]">+ Agregar bloque a la semana 2</button>
+              </div>
+              {bloques2.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {bloques2.map((b, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-[#5c6b78] bg-white border border-[#e3e8ed] rounded-lg px-2 py-1">
+                      <span>{b.dias.map((n) => DIAS.find((d) => d.n === n)?.l).join("")} · {b.inicio}–{b.fin}</span>
+                      <button onClick={() => setBloques2((bs) => bs.filter((_, j) => j !== i))} className="text-[#e5484d]">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>)}
+          </div>
           </>)}
 
           <button onClick={guardar} disabled={guardando} className="w-full py-2.5 rounded-lg font-bold text-sm bg-[#16a34a] text-white disabled:opacity-50">
@@ -291,6 +345,11 @@ export default function Plantillas() {
                   </span>
                 ))}
                 {h.tipo !== "libre" && <span className="text-[11px] text-[#94a1ab]">· tol. {h.tolerancia_minutos ?? 0}m</span>}
+                {h.extras && h.extras.rotacion && (h.extras.rotacion.semanas || [])[1] && (
+                  <span className="text-[11px] font-bold text-[#0d9488] bg-[#ccfbf1] rounded px-1.5 py-0.5">
+                    ROTA POR SEMANA · sem. 2: {h.extras.rotacion.semanas[1].map((b) => `${(b.dias || []).map((n) => DIAS.find((d) => d.n === n)?.l).join("")} ${b.inicio}–${b.fin}`).join(" · ")}
+                  </span>
+                )}
                 {h.extras && (h.extras.tramos || []).length > 0 && (
                   <span className="text-[11px] font-bold text-[#b45309] bg-[#fef3c7] rounded px-1.5 py-0.5" title={(h.extras.tramos || []).map((t) => `${(t.dias || []).map((n) => DIAS.find((d) => d.n === n)?.l).join("")}: 50% hasta ${t.hasta_50}${t.todo_100_si_pasa ? " (si pasa, todo al 100%)" : ""}`).join(" · ")}>
                     EXTRAS PROPIAS{Number(h.extras.descanso_horas) ? ` · descanso ${h.extras.descanso_horas} h` : ""}

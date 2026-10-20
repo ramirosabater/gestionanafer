@@ -9,10 +9,29 @@ function hhmmAMinutos(hhmm) {
 }
 // Todos los bloques (tramos) del día, ordenados por hora de inicio.
 // Un turno partido tiene 2 o más bloques el mismo día (ej. 08-12 y 16-20).
+// Turno rotativo por semana: horario.extras.rotacion = { desde: "AAAA-MM-DD" (un
+// día de la semana 1), semanas: [bloques semana 1, bloques semana 2, …] }. La
+// semana 1 usa horario.bloques si no se la carga aparte.
+export function semanaDeRotacion(horario, fecha) {
+  const r = horario && horario.extras && horario.extras.rotacion;
+  if (!r || !Array.isArray(r.semanas) || r.semanas.length < 2 || !r.desde) return -1;
+  const [y, m, d] = String(r.desde).split("-").map(Number);
+  const base = new Date(y, m - 1, d); base.setDate(base.getDate() - (diaISO(base) - 1));   // lunes de esa semana
+  const f = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+  const semanas = Math.floor(Math.round((f - base) / 86400000) / 7);
+  const n = r.semanas.length;
+  return ((semanas % n) + n) % n;
+}
+export function bloquesDelHorario(horario, fecha) {
+  if (!horario) return [];
+  const i = fecha ? semanaDeRotacion(horario, fecha) : -1;
+  if (i > 0 && Array.isArray(horario.extras.rotacion.semanas[i]) && horario.extras.rotacion.semanas[i].length) return horario.extras.rotacion.semanas[i];
+  return horario.bloques || [];
+}
 export function bloquesDeHoy(horario, fecha) {
   if (!horario || !horario.bloques) return [];
   const hoy = diaISO(fecha);
-  return horario.bloques
+  return bloquesDelHorario(horario, fecha)
     .filter((b) => (b.dias || []).includes(hoy) && b.inicio && b.fin)
     .sort((a, b) => hhmmAMinutos(a.inicio) - hhmmAMinutos(b.inicio));
 }
