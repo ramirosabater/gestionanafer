@@ -280,6 +280,16 @@ export default function Empleados() {
             </div>
 
             <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-wider text-[#94a1ab]">Ficha con</label>
+              <select value={e.modo_fichaje || "gps"} onChange={(ev) => cambiarCampo(e.legajo, "modo_fichaje", ev.target.value)}
+                className="bg-[#f1f4f7] border border-[#cfd6dd] rounded-lg px-2.5 py-2 text-xs outline-none min-w-[150px]"
+                title="Su computadora: solo puede fichar desde la PC que apruebe RR.HH. (en Dispositivos), sin GPS">
+                <option value="gps">📍 Celular con GPS</option>
+                <option value="pc">💻 Su computadora</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
               <label className="text-[10px] uppercase tracking-wider text-[#94a1ab]">Depósitos / sucursales (hasta 3)</label>
               {[0,1,2].map((i) => (
                 <select key={i} value={(e.locales_asignados||[])[i] || ""} onChange={(ev) => cambiarLocales(e.legajo, i, ev.target.value)}

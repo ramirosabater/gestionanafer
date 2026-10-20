@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { sbGet } from "./supabase-admin.js";
+import { sbGet, sbPatch, sbDelete, registrarAuditoria, getAdminEmail } from "./supabase-admin.js";
 import { calcularPeriodo, etiquetaPeriodo } from "../lib/fichaje.js";
 import { parseUA, generarXlsx, descargarBytes } from "./xlsx.js";
 
@@ -35,6 +35,84 @@ function computarDispositivos(fichajes, empleados) {
   }).sort((a, b) => b.veces - a.veces);
 
   return { compartidos, multi, remotos };
+}
+
+// ---------- Computadoras para fichar (empleados que fichan desde su PC, sin GPS) ----------
+function EquiposFichaje() {
+  const [eqs, setEqs] = useState(null);
+  const [emps, setEmps] = useState({});
+  const [locales, setLocales] = useState([]);
+  const [sinTabla, setSinTabla] = useState(false);
+  const [ubic, setUbic] = useState({});
+  const cargar = async () => {
+    try {
+      const [e, em, ls] = await Promise.all([
+        sbGet("equipos_fichaje?select=*&order=pedido_en.desc"),
+        sbGet("empleados?select=legajo,nombre,apellido,modo_fichaje"),
+        sbGet("locales?select=id,nombre&order=nombre.asc").catch(() => []),
+      ]);
+      const m = {}; em.forEach((x) => (m[x.legajo] = x));
+      setEqs(e); setEmps(m); setLocales(ls);
+    } catch { setSinTabla(true); }
+  };
+  useEffect(() => { cargar(); }, []);
+  const clave = (q) => `device_id=eq.${encodeURIComponent(q.device_id)}&legajo=eq.${q.legajo}`;
+  const nom = (lg) => { const e = emps[lg]; return e ? `${e.apellido}, ${e.nombre}` : `Legajo ${lg}`; };
+  const resolver = async (q, estado) => {
+    const local_id = ubic[q.device_id + "|" + q.legajo] ?? q.local_id ?? null;
+    try {
+      await sbPatch(`equipos_fichaje?${clave(q)}`, { estado, local_id: local_id || null, resuelto_por: getAdminEmail(), resuelto_en: new Date().toISOString() });
+      registrarAuditoria(`${estado === "aprobado" ? "Aprobó" : "Rechazó"} la computadora para fichar de ${nom(q.legajo)}`, parseUA(q.aparato));
+      cargar();
+    } catch { alert("No se pudo guardar."); }
+  };
+  const quitar = async (q) => {
+    if (!confirm(`¿Quitar esta computadora de ${nom(q.legajo)}? Ya no va a poder fichar desde ahí.`)) return;
+    try { await sbDelete(`equipos_fichaje?${clave(q)}`); registrarAuditoria(`Quitó la computadora para fichar de ${nom(q.legajo)}`, parseUA(q.aparato)); cargar(); }
+    catch { alert("No se pudo quitar."); }
+  };
+  if (sinTabla) return <p className="text-[11px] text-[#94a1ab] mb-5">Para que algunos empleados fichen desde su computadora (sin GPS) hay que correr <b>fichar-desde-pc.sql</b> en Supabase.</p>;
+  if (!eqs) return null;
+  const pend = eqs.filter((q) => q.estado === "pendiente"), aprob = eqs.filter((q) => q.estado === "aprobado");
+  const cuantosPC = Object.values(emps).filter((e) => e.modo_fichaje === "pc").length;
+  const fecha = (t) => new Date(t).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return (
+    <div className="bg-[#ffffff] border border-[#e3e8ed] rounded-xl overflow-hidden mb-6">
+      <div className="px-4 py-3 border-b border-[#e3e8ed]">
+        <p className="text-sm font-bold">💻 Computadoras para fichar</p>
+        <p className="text-[11px] text-[#94a1ab]">{cuantosPC} empleado(s) fichan desde su computadora, sin GPS (se elige en Personal → Empleados → "Ficha con"). La primera vez que fichan desde una PC queda acá para aprobarla.</p>
+      </div>
+      {pend.length > 0 && (
+        <div className="divide-y divide-[#f1f4f7]" data-equipos="pendientes">
+          {pend.map((q) => (
+            <div key={q.device_id + q.legajo} className="px-4 py-3 flex items-center gap-3 flex-wrap" style={{ backgroundColor: "rgba(242,169,0,.07)" }}>
+              <div className="min-w-[180px] flex-1">
+                <p className="text-xs font-semibold">⏳ {nom(q.legajo)}</p>
+                <p className="text-[11px] text-[#5c6b78]">{parseUA(q.aparato) || "Aparato desconocido"} · <span className="font-mono">…{String(q.device_id).slice(-8)}</span> · pidió el {fecha(q.pedido_en)}</p>
+              </div>
+              <select value={ubic[q.device_id + "|" + q.legajo] ?? q.local_id ?? ""} onChange={(e) => setUbic((u) => ({ ...u, [q.device_id + "|" + q.legajo]: e.target.value }))}
+                className="bg-[#f1f4f7] border border-[#cfd6dd] rounded-lg px-2 py-1.5 text-xs outline-none" title="Dónde está esta computadora">
+                <option value="">— Ubicación (opcional) —</option>
+                {locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+              </select>
+              <button onClick={() => resolver(q, "aprobado")} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#16a34a] text-white">Aprobar</button>
+              <button onClick={() => resolver(q, "rechazado")} className="px-3 py-1.5 rounded-lg text-xs font-bold border border-[#e5484d] text-[#e5484d]">Rechazar</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {aprob.length > 0 ? (
+        <div className="divide-y divide-[#f1f4f7]" data-equipos="aprobados">
+          {aprob.map((q) => (
+            <div key={q.device_id + q.legajo} className="px-4 py-2.5 flex items-center gap-3 flex-wrap">
+              <p className="text-xs flex-1 min-w-[180px]">✅ {nom(q.legajo)} <span className="text-[#94a1ab]">· {parseUA(q.aparato)}{q.local_id ? ` · ${(locales.find((l) => l.id === q.local_id) || {}).nombre || q.local_id}` : ""}</span></p>
+              <button onClick={() => quitar(q)} className="text-[11px] text-[#e5484d]">Quitar</button>
+            </div>
+          ))}
+        </div>
+      ) : pend.length === 0 && <p className="text-[#94a1ab] text-xs italic px-4 py-4">Todavía no hay computadoras aprobadas.</p>}
+    </div>
+  );
 }
 
 export default function Dispositivos() {
@@ -78,6 +156,7 @@ export default function Dispositivos() {
 
   return (
     <div>
+      <EquiposFichaje />
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div className="max-w-[280px] grow rounded-xl bg-[#ffffff] border border-[#e3e8ed] p-3 flex items-center justify-between">
           <button onClick={() => setRefMes((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1))} className="text-[#5c6b78] px-2 text-lg">‹</button>

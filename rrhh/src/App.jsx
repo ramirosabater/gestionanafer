@@ -50,6 +50,9 @@ export default function App() {
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg] = useState(null);
   const [ubic, setUbic] = useState(null); // { tipo, local, distancia }
+  // Quien ficha "desde su computadora" (sin GPS): { modo: 'gps' | 'pc', estado: 'aprobado' | 'pendiente' | 'rechazado' | 'sin_id', local_id, local_nombre }
+  const [equipo, setEquipo] = useState({ modo: "gps" });
+  const desdePC = equipo.modo === "pc";
   const [ubicCargando, setUbicCargando] = useState(false);
 
   useEffect(() => {
@@ -70,9 +73,15 @@ export default function App() {
 
   // Al entrar al fichaje, obtener la ubicación para mostrarla
   useEffect(() => {
-    if (empleado && vista === "fichaje") refrescarUbicacion();
+    if (empleado && vista === "fichaje" && !desdePC) refrescarUbicacion();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empleado, vista, locales]);
+  }, [empleado, vista, locales, desdePC]);
+  const consultarEquipo = async (nro, pinUsado) => {
+    try {
+      const r = await sbRpc("mi_equipo", { p_legajo: nro, p_pin: pinUsado, p_device_id: obtenerDeviceId(), p_aparato: navigator.userAgent.slice(0, 300) });
+      if (r && r.ok) setEquipo(r); else setEquipo({ modo: "gps" });
+    } catch { setEquipo({ modo: "gps" }); } // la base todavía no tiene esta función: se ficha como siempre
+  };
 
   const ingresar = async () => {
     setErrorLogin(null);
@@ -90,6 +99,7 @@ export default function App() {
         setLocales(ls);
         // La config de recargos es opcional: si falla, se usan los valores por defecto y el login igual funciona.
         try { setConfig(await cargarConfig(sbGet)); } catch { /* usa defaults */ }
+        await consultarEquipo(nro, pin);
         setEmpleado(r.empleado);
         setPinAuth(pin);
         setTardanzas(r.tardanzas_periodo || 0);
@@ -152,7 +162,7 @@ export default function App() {
 
   const salir = () => {
     setEmpleado(null); setPinAuth(null); setLegajo(""); setPin("");
-    setEnTurno(false); setHistorial([]); setRecientes([]); setJornadaDeAyer(null); setMsg(null); setTardanzas(0); setACargo(0); setAusenciasPend(0); setDebeCambiar(false); setVista("fichaje");
+    setEnTurno(false); setHistorial([]); setRecientes([]); setJornadaDeAyer(null); setMsg(null); setEquipo({ modo: "gps" }); setTardanzas(0); setACargo(0); setAusenciasPend(0); setDebeCambiar(false); setVista("fichaje");
   };
 
   const fichar = async () => {
@@ -161,9 +171,14 @@ export default function App() {
     setMsg(null);
     try {
       const hora = new Date();
-      const pos = await obtenerPosicion();
-      const eu = estadoUbicacion(pos, locales, empleado?.locales_asignados);
-      setUbic(eu);
+      if (desdePC && equipo.estado !== "aprobado") {
+        setMsg({ ok: false, texto: equipo.estado === "pendiente" ? "Esta computadora todavía no fue aprobada por RR.HH." : "Desde este equipo no podés fichar: usá tu computadora del escritorio." });
+        setGuardando(false); return;
+      }
+      // Desde la computadora no se usa el GPS: la ubicación es la de la computadora aprobada.
+      const pos = desdePC ? null : await obtenerPosicion();
+      const eu = desdePC ? (equipo.local_id ? { tipo: "dentro", local: { id: equipo.local_id, nombre: equipo.local_nombre }, distancia: null } : { tipo: "remoto" }) : estadoUbicacion(pos, locales, empleado?.locales_asignados);
+      if (!desdePC) setUbic(eu);
       const dentro = eu.tipo === "dentro";
       const est = calcularEstado(tipo, hora, horarioEmpleado, contextoFichada(recientes, hora));
       const r = await sbRpc("registrar_fichaje", {
@@ -190,7 +205,7 @@ export default function App() {
       setEnTurno(!enTurno);
       setMsg({ ok: true, texto: `${tipo === "entrada" ? "Entrada" : "Salida"} registrada · ${est.label}` });
     } catch {
-      setMsg({ ok: false, texto: "No se pudo guardar el fichaje. Probá de nuevo." });
+      setMsg({ ok: false, texto: desdePC ? "No se pudo guardar el fichaje (¿esta computadora sigue aprobada?). Avisale a RR.HH." : "No se pudo guardar el fichaje. Probá de nuevo." });
     } finally {
       setGuardando(false);
     }
@@ -357,9 +372,23 @@ export default function App() {
 
         {msg && <p className={`mx-6 mb-3 text-xs text-center font-semibold ${msg.ok ? "text-[#16a34a]" : "text-[#e5484d]"}`}>{msg.texto}</p>}
 
-        {/* Estado de ubicación */}
+        {/* Estado de ubicación (o de la computadora, para quien ficha desde su PC) */}
         <div className="px-6 pb-3">
-          {(() => {
+          {desdePC ? (() => {
+            const c = {
+              aprobado: { bg: "rgba(22,163,74,.1)", bd: "rgba(22,163,74,.4)", col: "#16a34a", ico: "💻", txt: `Fichás desde tu computadora${equipo.local_nombre ? ` · ${equipo.local_nombre}` : ""}` },
+              pendiente: { bg: "rgba(242,169,0,.12)", bd: "rgba(242,169,0,.5)", col: "#b9820b", ico: "⏳", txt: "Esta computadora está esperando que RR.HH. la apruebe. Cuando la aprueben vas a poder fichar desde acá." },
+              rechazado: { bg: "rgba(229,72,77,.1)", bd: "rgba(229,72,77,.4)", col: "#e5484d", ico: "⛔", txt: "Desde este equipo no podés fichar: usá tu computadora del escritorio." },
+              sin_id: { bg: "rgba(229,72,77,.1)", bd: "rgba(229,72,77,.4)", col: "#e5484d", ico: "⛔", txt: "Este navegador no permite identificar la computadora (¿modo incógnito?)." },
+            }[equipo.estado] || { bg: "#f1f4f7", bd: "#e3e8ed", col: "#5c6b78", ico: "💻", txt: "Revisando la computadora…" };
+            return (
+              <div className="rounded-xl p-3 flex items-center gap-2 border" style={{ backgroundColor: c.bg, borderColor: c.bd }}>
+                <span>{c.ico}</span>
+                <span className="text-xs flex-1" style={{ color: c.col }}>{c.txt}</span>
+                {equipo.estado !== "aprobado" && <button onClick={() => consultarEquipo(empleado.legajo, pinAuth)} className="text-[11px] text-[#5c6b78] hover:text-[#1f2d38]" title="Volver a fijarse">↻</button>}
+              </div>
+            );
+          })() : (() => {
             const cfg = {
               sin_gps: { bg: "rgba(148,161,171,.12)", bd: "#cfd6dd", col: "#5c6b78", ico: "📍", txt: "Ubicación no disponible (revisá el permiso del navegador)" },
               remoto: { bg: "rgba(43,169,224,.1)", bd: "rgba(43,169,224,.4)", col: "#2ba9e0", ico: "📡", txt: "Ubicación remota — sin depósitos cargados cerca" },
@@ -378,7 +407,7 @@ export default function App() {
         </div>
 
         <div className="px-6 pb-3">
-          <button onClick={fichar} disabled={guardando}
+          <button onClick={fichar} disabled={guardando || (desdePC && equipo.estado !== "aprobado")}
             className="w-full py-4 rounded-xl font-bold text-base transition active:scale-[0.98] disabled:opacity-50"
             style={{ backgroundColor: enTurno ? "#e5484d" : "#e1251b", color: enTurno ? "#fff" : "#ffffff" }}>
             {guardando ? "Registrando…" : enTurno ? "FICHAR SALIDA" : "FICHAR ENTRADA"}

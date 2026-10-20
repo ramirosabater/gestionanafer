@@ -79,3 +79,18 @@ export function registrarVozSifoncito() {
   const A = window.AyudaAnafer;
   if (A && A.usarVozServidor) A.usarVozServidor((texto) => sbFuncion("sifoncito-voz", { texto }));
 }
+
+// Computadoras que esperan aprobación para fichar (empleados que fichan desde su PC).
+export async function avisarEquiposPendientes(irA) {
+  const A = window.AyudaAnafer;
+  if (!A || !A.sugerir) return;
+  let l;
+  try { l = await sbGet("equipos_fichaje?select=legajo&estado=eq.pendiente"); } catch { return; }
+  if (!l || !l.length) return;
+  A.sugerir({
+    id: "rrhh-equipos",
+    titulo: "Sifoncito: computadoras para aprobar",
+    texto: `Hay <b>${l.length} computadora${l.length === 1 ? "" : "s"}</b> esperando que la apruebes para fichar.`,
+    botones: [{ texto: "Revisarlas", pri: true, accion: () => irA("dispositivos") }],
+  });
+}
