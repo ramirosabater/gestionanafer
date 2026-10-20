@@ -423,6 +423,7 @@
 
   .crew-fields{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .crew-fields.crew-fields-3{grid-template-columns:1fr 1fr 1fr;}
+  @media (max-width:560px){ .crew-fields, .crew-fields.crew-fields-3{grid-template-columns:minmax(0,1fr);} .attach-add-row input[type=file]{width:100%;} }
 
   .cargo-header{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:5px;}
   .cargo-unit-wrap{display:flex; align-items:center; gap:6px;}
@@ -451,6 +452,20 @@
   .topbar .who .btn.ghost:hover{color:var(--menu-navy);}
   .who-email{font-size:12px; color:var(--menu-ink2); background:var(--menu-soft); border:1px solid var(--menu-line); border-radius:999px; padding:6px 12px; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .who-email[hidden]{display:none;}
+  /* Celular: la barra de arriba se acomoda en renglones y nada queda cortado */
+  @media (max-width:640px){
+    .topbar{padding:16px 14px 12px; gap:10px;}
+    .topbar .brand{width:100%;}
+    .brand-logo{height:34px;}
+    .brand h1{font-size:20px;}
+    .topbar .who{width:100%; flex-wrap:wrap; gap:6px 8px;}
+    .who label{flex:none;}
+    .who input{flex:1 1 140px; width:auto; min-width:0;}
+    .who-email{flex:1 1 120px; min-width:0; max-width:none; text-align:center;}
+    .topbar .who .btn.ghost{padding:6px 10px;}
+    /* tablas anchas: renglones de una línea y se deslizan de costado */
+    .prov-wrap .day-table td, .prov-wrap .day-table th, .cal-wrap .day-table td, .cal-wrap .day-table th{white-space:nowrap;}
+  }
   .menu-card{background:var(--surface); border:1px solid var(--menu-line); border-radius:16px; box-shadow:0 1px 3px rgba(31,45,56,.06); margin-bottom:18px; overflow:hidden;}
   .menu-card:has(> .viewtabs[hidden]):has(> .menu-sub[hidden]){display:none;}
   .viewtabs{display:flex; flex-wrap:wrap; gap:4px; padding:8px; margin:0; border:none;}
