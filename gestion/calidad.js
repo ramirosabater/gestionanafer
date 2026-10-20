@@ -20,7 +20,8 @@
   // Las opciones salen de la planilla. Los nombres de personas (responsables
   // y controladores) no van en el código: se cargan en ⚙ o con la importación.
   var LISTAS = [
-    { id: 'productos', nombre: 'Productos', para: 'Reclamos', def: ['Bx8Azul', 'Bx12Azul', 'Bx20Azul', 'Bx8Verde', 'Bx12Verde', 'Bx20Verde', 'Soda Descartable', 'Soda Retornable', 'Otro'] },
+    { id: 'productos', nombre: 'Productos', para: 'Reclamos', def: ['Bx5Azul', 'Bx8Azul', 'Bx12Azul', 'Bx20Azul', 'Bx5Verde', 'Bx8Verde', 'Bx12Verde', 'Bx20Verde', 'Soda Descartable', 'Soda retornable 1.5L', 'Soda retornable 650ml', 'Otro'] },
+    { id: 'origenes_reclamo', nombre: 'Origen del reclamo', para: 'Reclamos', def: ['Planta', 'Sucursal', 'Distribuidor', 'Reparto', 'Atención al cliente'] },
     { id: 'desvios', nombre: 'Desvío informado', para: 'Reclamos', def: ['Mal gusto', 'Otros', 'Pinchado', 'No pasó repartidor'] },
     { id: 'reclamos_cliente', nombre: 'Reclamo del cliente', para: 'Reclamos', def: ['MG: plastico', 'MG: cloro', 'MG: otro', 'EE: insecto', 'EE: precinto/tapa', 'EE: otro', 'Pierde por tapa', 'Pinchado'] },
     { id: 'desvios_reales', nombre: 'Desvío real', para: 'Reclamos', def: ['SIN GUSTO', 'MG: plastico', 'MG: cloro', 'MG: otro', 'EE: insecto', 'EE: precinto/tapa', 'EE: otro', 'Pierde por tapa', 'Pinchado'] },
@@ -28,12 +29,12 @@
     { id: 'tapas', nombre: 'Proveedores de tapa', para: 'Reclamos', def: ['PRIVA', 'SP Plasticos', 'Mastertap', 'Pedernera', 'sin dato/sin tapa'] },
     { id: 'destinos', nombre: 'Destino del envase', para: 'Reclamos', def: ['A la linea', 'Lavado manual', 'Para devolucion', 'Tirar', 'No aplica'] },
     { id: 'controladores', nombre: 'Controló', para: 'Reclamos', def: [] },
-    { id: 'origenes', nombre: 'Origen', para: 'NC/PAC', def: ['AUDITORIA INTERNA', 'AUDITORIA EXTERNA/INSPECCIÓN', 'PROCESO (SGC)', 'RECLAMO DE CLIENTE', 'PROVEEDOR', 'PNC'] },
-    { id: 'clasificaciones', nombre: 'Clasificación', para: 'NC/PAC', def: ['OPORTUNIDAD DE MEJORA', 'OBSERVACIÓN', 'NC MENOR', 'NC MAYOR'] },
-    { id: 'procesos', nombre: 'Procesos', para: 'NC/PAC', def: ['DIRECCIÓN', 'CALIDAD', 'PRODUCCIÓN', 'SOPLADORA', 'MANTENIMIENTO', 'LOGISTICA/DEPOSITO', 'COMPRAS', 'ADMINISTRACIÓN', 'VENTAS/SUCURSALES', 'RRHH'] },
-    { id: 'riesgos', nombre: 'Riesgo', para: 'NC/PAC', def: ['ALTO', 'MEDIO', 'BAJO'] },
-    { id: 'opciones_riesgo', nombre: 'Opciones para abordar riesgos', para: 'NC/PAC', def: ['Cambiar la probabilidad o consecuencia', 'Eliminar el riesgo', 'Evitar el riesgo', 'Compartir o mantener el riesgo mediante decisiones informadas', 'Asumir el riesgo para perseguir una oportunidad'] },
-    { id: 'responsables', nombre: 'Responsables', para: 'NC/PAC', def: [] },
+    { id: 'origenes', nombre: 'Origen', para: 'Acciones de mejora', def: ['AUDITORIA INTERNA', 'AUDITORIA EXTERNA/INSPECCIÓN', 'PROCESO (SGC)', 'RECLAMO DE CLIENTE', 'PROVEEDOR', 'PNC'] },
+    { id: 'clasificaciones', nombre: 'Clasificación', para: 'Acciones de mejora', def: ['OPORTUNIDAD DE MEJORA', 'OBSERVACIÓN', 'NC MENOR', 'NC MAYOR'] },
+    { id: 'procesos', nombre: 'Procesos', para: 'Acciones de mejora', def: ['DIRECCIÓN', 'CALIDAD', 'PRODUCCIÓN', 'SOPLADORA', 'MANTENIMIENTO', 'LOGISTICA/DEPOSITO', 'COMPRAS', 'ADMINISTRACIÓN', 'VENTAS/SUCURSALES', 'RRHH'] },
+    { id: 'riesgos', nombre: 'Riesgo', para: 'Acciones de mejora', def: ['ALTO', 'MEDIO', 'BAJO'] },
+    { id: 'opciones_riesgo', nombre: 'Opciones para abordar riesgos', para: 'Acciones de mejora', def: ['Cambiar la probabilidad o consecuencia', 'Eliminar el riesgo', 'Evitar el riesgo', 'Compartir o mantener el riesgo mediante decisiones informadas', 'Asumir el riesgo para perseguir una oportunidad'] },
+    { id: 'responsables', nombre: 'Responsables', para: 'Acciones de mejora', def: [] },
   ];
   var ESTADOS_RECLAMO = ['Abierto', 'Cerrado justificado', 'Cerrado No justificado'];
   var ESTADOS_PAC = ['Abierta', 'En gestión', 'Cerrada'];
@@ -54,6 +55,17 @@
     return d ? d.def : [];
   }
   function anulado(x) { return !!(x && x.anulado_en); }
+  // Quién carga reclamos y desde dónde (⚙ → Calidad): [{ email, origen }]
+  function cargadores() { return (S.listas.cargadores || []).filter(function (c) { return c && c.email; }); }
+  function origenDe(email) {
+    var e = String(email || '').toLowerCase();
+    var c = cargadores().find(function (x) { return String(x.email).toLowerCase() === e; });
+    return c ? c.origen || '' : '';
+  }
+  function quien(email) { return String(email || '').split('@')[0]; }
+  // Quien está en "Quién carga reclamos" carga solo la 1ª parte (recepción);
+  // el control en fábrica (2ª parte, con las fotos) lo completa Calidad.
+  function esRecepcion() { return !!origenDe(G.usuario()); }
   function fmtFecha(d) { return d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—'; }
   function codigoPac(p) { return (p.numero || 0) + '-' + String(p.anio || '').slice(-2); }
   function nuevoId(pref) { return pref + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -80,7 +92,7 @@
     }).catch(function (e) { console.error('Calidad: error cargando', e); }).then(function () { S.cargando = null; });
     return S.cargando;
   }
-  var COLS_REC = ['id', 'numero', 'anio', 'fecha', 'hora', 'producto', 'lote', 'vencimiento', 'vencimiento_ilegible', 'desvio', 'reclamo_cliente', 'desvio_real', 'observaciones', 'envase', 'lote_envase', 'tapa', 'cantidad', 'destino_envase', 'estado', 'controlo', 'pac_id', 'creado_por', 'actualizado', 'anulado_en', 'anulado_por', 'motivo_anulacion'];
+  var COLS_REC = ['id', 'numero', 'anio', 'fecha', 'hora', 'producto', 'lote', 'vencimiento', 'vencimiento_ilegible', 'desvio', 'reclamo_cliente', 'desvio_real', 'observaciones', 'envase', 'lote_envase', 'tapa', 'cantidad', 'destino_envase', 'estado', 'controlo', 'pac_id', 'origen', 'cliente', 'comentarios', 'adjuntos', 'control_por', 'control_en', 'creado_por', 'actualizado', 'anulado_en', 'anulado_por', 'motivo_anulacion'];
   var COLS_PAC = ['id', 'numero', 'anio', 'fecha', 'origen', 'clasificacion', 'proceso', 'hallazgo', 'riesgo', 'opcion_riesgo', 'causa', 'correccion', 'resp_correccion', 'fecha_correccion', 'accion', 'resp_accion', 'fecha_accion', 'resp_seguimiento', 'fecha_seguimiento', 'comentarios', 'eficacia_criterio', 'eficacia_resultado', 'resp_eficacia', 'fecha_eficacia', 'eficacia_detalle', 'estado', 'reclamo_ids', 'creado_por', 'actualizado', 'anulado_en', 'anulado_por', 'motivo_anulacion'];
   function soloCols(o, cols) { var r = {}; cols.forEach(function (c) { if (o[c] !== undefined) r[c] = (o[c] === '' && /^(fecha|vencimiento|anulado_en)/.test(c)) ? null : o[c]; }); return r; }
   function guardar(tabla, obj, cols, coleccion) {
@@ -138,7 +150,7 @@
   // =====================================================================
   // RECLAMOS DE PRODUCTO TERMINADO
   // =====================================================================
-  var F = { anio: null, mes: '', producto: '', desvio: '', estado: '', buscar: '' };
+  var F = { anio: null, mes: '', producto: '', origen: '', desvio: '', estado: '', buscar: '' };
   function armarFiltrosReclamos() {
     var anios = aniosDe(S.reclamos);
     if (F.anio == null) F.anio = anios[0];
@@ -146,6 +158,7 @@
     var m = $('rq-f-mes'); m.innerHTML = '<option value="">Todos los meses</option>' + MESES.map(function (x, i) { return '<option value="' + (i + 1) + '">' + x + '</option>'; }).join(''); m.value = F.mes;
     llenarSelect('rq-f-producto', lista('productos'), F.producto, 'Todos los productos');
     llenarSelect('rq-f-desvio', lista('desvios_reales'), F.desvio, 'Todo desvío real');
+    llenarSelect('rq-f-origen', lista('origenes_reclamo'), F.origen, 'Todo origen');
     var e = $('rq-f-estado'); e.innerHTML = '<option value="">Todos los estados</option>' + ESTADOS_RECLAMO.map(function (x) { return '<option>' + esc(x) + '</option>'; }).join('') + '<option value="__anulados">Anulados</option>'; e.value = F.estado;
   }
   function reclamosFiltrados() {
@@ -157,7 +170,8 @@
       if (F.mes && Number(String(r.fecha || '').slice(5, 7)) !== Number(F.mes)) return false;
       if (F.producto && r.producto !== F.producto) return false;
       if (F.desvio && r.desvio_real !== F.desvio) return false;
-      if (b && [r.lote, r.lote_envase, r.envase, r.tapa, r.observaciones, r.reclamo_cliente, r.controlo, String(r.numero)].join(' ').toLowerCase().indexOf(b) === -1) return false;
+      if (F.origen && (r.origen || '') !== F.origen) return false;
+      if (b && [r.lote, r.lote_envase, r.envase, r.tapa, r.observaciones, r.reclamo_cliente, r.controlo, r.cliente, r.creado_por, String(r.numero)].join(' ').toLowerCase().indexOf(b) === -1) return false;
       return true;
     }).sort(function (a, c) { return String(c.fecha || '').localeCompare(String(a.fecha || '')) || (c.numero || 0) - (a.numero || 0); });
   }
@@ -169,25 +183,34 @@
   function renderReclamos() {
     setTimeout(G.marcarFiltros, 0);
     var tb = $('rq-body');
-    if (!S.cargado || S.sinTablas) { mensajeSinTablas(tb, 12); return; }
+    if (!S.cargado || S.sinTablas) { mensajeSinTablas(tb, 15); return; }
     var l = reclamosFiltrados();
     $('rq-count').textContent = '(' + l.length + ')';
-    if (!l.length) { tb.innerHTML = '<tr class="day-row empty"><td colspan="12">No hay reclamos con esos filtros.</td></tr>'; return; }
+    if (!l.length) { tb.innerHTML = '<tr class="day-row empty"><td colspan="15">No hay reclamos con esos filtros.</td></tr>'; return; }
     var MAX = 400;
     tb.innerHTML = l.slice(0, MAX).map(function (r) {
       return '<tr class="day-row' + (anulado(r) ? ' anulado' : '') + '" data-id="' + esc(r.id) + '">' +
-        '<td class="num">' + esc(r.numero) + '</td><td class="num">' + fmtFecha(r.fecha) + '</td><td>' + esc(r.producto) + '</td><td class="num">' + esc(r.lote) + '</td>' +
+        '<td class="num">' + esc(r.numero) + ((r.adjuntos || []).length ? ' <span title="' + r.adjuntos.length + ' adjunto(s)">📷</span>' : '') + '</td><td class="num">' + fmtFecha(r.fecha) + '</td><td>' + esc(r.origen || '') + '</td><td>' + esc(r.cliente || '') + '</td><td>' + esc(r.producto) + '</td><td class="num">' + esc(r.lote) + '</td>' +
         '<td class="num">' + (r.vencimiento_ilegible ? '<span class="fm-hint">borroso</span>' : fmtFecha(r.vencimiento)) + '</td>' +
         '<td>' + esc(r.reclamo_cliente) + '</td><td><b>' + esc(r.desvio_real) + '</b></td><td>' + esc(r.envase) + (r.lote_envase ? ' <span class="fm-hint">' + esc(r.lote_envase) + '</span>' : '') + '</td>' +
-        '<td>' + esc(r.tapa) + '</td><td>' + esc(r.destino_envase) + '</td><td>' + badgeReclamo(r) + '</td><td>' + esc(r.controlo) + '</td></tr>';
-    }).join('') + (l.length > MAX ? '<tr class="day-row empty"><td colspan="12">Se muestran los ' + MAX + ' más recientes de ' + l.length + '. Usá los filtros o el CSV para ver todo.</td></tr>' : '');
+        '<td>' + esc(r.tapa) + '</td><td>' + esc(r.destino_envase) + '</td><td>' + badgeReclamo(r) + '</td><td>' + esc(r.controlo) + '</td><td title="' + esc(r.creado_por || '') + '">' + esc(quien(r.creado_por)) + '</td></tr>';
+    }).join('') + (l.length > MAX ? '<tr class="day-row empty"><td colspan="15">Se muestran los ' + MAX + ' más recientes de ' + l.length + '. Usá los filtros o el CSV para ver todo.</td></tr>' : '');
   }
   function abrirReclamo(id) {
     var r = id ? S.reclamos.find(function (x) { return x.id === id; }) : null;
     S.editRec = r ? r.id : null;
     $('rq-title').textContent = r ? 'Reclamo Nº ' + r.numero + ' / ' + r.anio : 'Nuevo reclamo';
-    $('rq-sub').textContent = r ? ('Cargado por ' + (r.creado_por || '—')) : 'Control de producto reclamado (devolución) · se numera al guardar';
-    var d = r || { fecha: hoy(), cantidad: 1, estado: 'Abierto' };
+    var miOrigen = origenDe(G.usuario());
+    $('rq-sub').textContent = r ? ('Cargado por ' + (r.creado_por || '—') + (r.origen ? ' · origen: ' + r.origen : ''))
+      : 'Lo cargás vos (' + G.usuario() + (miOrigen ? ' · ' + miOrigen : '') + ') · se numera al guardar';
+    var d = r || { fecha: hoy(), cantidad: 1, estado: 'Abierto', origen: miOrigen };
+    llenarSelect('rq-origen', lista('origenes_reclamo'), d.origen || '', '—');
+    $('rq-clientenom').value = d.cliente || '';
+    $('rq-comentarios').value = d.comentarios || '';
+    S.fotos = (d.adjuntos || []).slice(); S.fotosBorrar = [];
+    $('rq-control-por').textContent = r && r.control_por ? '· controlado por ' + quien(r.control_por) + (r.control_en ? ' el ' + fmtFecha(r.control_en) : '') : '';
+    var vistos = {}; $('rq-clientes-dl').innerHTML = S.reclamos.map(function (x) { return x.cliente; }).filter(function (c) { if (!c || vistos[c]) return false; vistos[c] = true; return true; })
+      .sort().map(function (c) { return '<option value="' + esc(c) + '">'; }).join('');
     $('rq-fecha').value = d.fecha || ''; $('rq-hora').value = d.hora || '';
     llenarSelect('rq-producto', lista('productos'), d.producto || '', 'Elegir producto');
     $('rq-lote').value = d.lote || ''; $('rq-venc').value = d.vencimiento || ''; $('rq-venc-ilegible').checked = !!d.vencimiento_ilegible;
@@ -203,14 +226,74 @@
     llenarSelect('rq-controlo', lista('controladores'), d.controlo || '', '—');
     $('rq-obs').value = d.observaciones || '';
     var pac = r && r.pac_id ? S.pacs.find(function (p) { return p.id === r.pac_id; }) : null;
-    $('rq-pac-link').innerHTML = pac ? 'Este reclamo está en la <a href="#" id="rq-ir-pac">NC/PAC ' + esc(codigoPac(pac)) + '</a>.' : '';
+    $('rq-pac-link').innerHTML = pac ? 'Este reclamo está en la <a href="#" id="rq-ir-pac">acción de mejora ' + esc(codigoPac(pac)) + '</a>.' : '';
     if (pac) $('rq-ir-pac').addEventListener('click', function (e) { e.preventDefault(); cerrarReclamo(); G.irA('ncpac'); abrirPac(pac.id); });
     $('rq-venc').disabled = $('rq-venc-ilegible').checked;
     soloLectura('reclamo-modal', 'rq-save', 'rq-anular', r, G.canEdit('reclamos'));
+    // A quien tiene un origen asignado se le pone solo (y no lo cambia); el resto lo elige.
+    if (!r && miOrigen) $('rq-origen').disabled = true;
+    // Recepción: la 2ª parte no se ve al cargar y después se ve solo de lectura.
+    var recep = esRecepcion();
+    $('rq-parte2').hidden = recep && !r;
+    $('rq-parte2').classList.toggle('bloqueada', recep);
+    if (recep) Array.prototype.forEach.call($('rq-parte2').querySelectorAll('input, select, textarea'), function (el) { el.disabled = true; });
+    var editaFotos = !recep && !anulado(r) && G.canEdit('reclamos');
+    $('rq-foto-label').hidden = !editaFotos;
+    S.fotosEditables = editaFotos;
+    renderFotos();
     if (!anulado(r) && G.canEdit('reclamos')) $('rq-venc').disabled = $('rq-venc-ilegible').checked;
     $('reclamo-overlay').classList.add('show');
   }
-  function cerrarReclamo() { $('reclamo-overlay').classList.remove('show'); S.editRec = null; G.cerrarSugerenciaSi('cal-rq'); }
+  function cerrarReclamo() {
+    (S.fotos || []).forEach(function (f) { if (f.preview) URL.revokeObjectURL(f.preview); });
+    $('reclamo-overlay').classList.remove('show'); S.editRec = null; G.cerrarSugerenciaSi('cal-rq');
+  }
+  // ---- Fotos del control (Google Drive) ----
+  function renderFotos() {
+    var box = $('rq-fotos'), l = S.fotos || [];
+    if (!l.length) { box.innerHTML = '<span class="fm-hint">Sin fotos.</span>'; return; }
+    box.innerHTML = l.map(function (f, i) {
+      var esImg = /^image\//.test(f.contentType || '');
+      var cont = f.pending
+        ? (f.preview ? '<img src="' + f.preview + '" alt="">' : '📎') + '<span>' + esc(f.name) + ' <span class="fm-hint">(se sube al guardar)</span></span>'
+        : (esImg ? '📷 ' : '📎 ') + '<a href="' + esc(f.url) + '" target="_blank" rel="noopener" title="Abrir en Google Drive">' + esc(f.name || 'archivo') + '</a>';
+      return '<div class="rq-foto">' + cont + (S.fotosEditables ? '<button type="button" data-i="' + i + '" title="Quitar">✕</button>' : '') + '</div>';
+    }).join('');
+    box.querySelectorAll('button[data-i]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var f = S.fotos.splice(Number(b.dataset.i), 1)[0];
+        if (f && f.preview) URL.revokeObjectURL(f.preview);
+        if (f && !f.pending && f.id) S.fotosBorrar.push(f.id);
+        renderFotos();
+      });
+    });
+  }
+  // Las fotos del celular se achican (máx. 1920 px, JPEG) para que suban rápido.
+  function achicar(file) {
+    if (!/^image\/(jpe?g|png|webp|heic|heif)/i.test(file.type) || file.size < 1200000 || !window.createImageBitmap) return Promise.resolve(file);
+    return createImageBitmap(file).then(function (bmp) {
+      var k = Math.min(1, 1920 / Math.max(bmp.width, bmp.height));
+      var c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      return new Promise(function (ok) { c.toBlob(function (b) { ok(b && b.size < file.size ? new File([b], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file); }, 'image/jpeg', 0.85); });
+    }).catch(function () { return file; });
+  }
+  $('rq-foto-input').addEventListener('change', function () {
+    var files = Array.prototype.slice.call(this.files || []); this.value = '';
+    if (!files.length) return;
+    if (!G.driveListo || !G.driveListo()) { toast('Las fotos se guardan en Google Drive y no está configurado (falta GOOGLE_DRIVE_CLIENT_ID en config.js).', 6000); return; }
+    Promise.all(files.map(achicar)).then(function (fs) {
+      fs.forEach(function (f) { S.fotos.push({ pending: true, file: f, name: f.name, contentType: f.type || '', sizeBytes: f.size || 0, preview: /^image\//.test(f.type) ? URL.createObjectURL(f) : '' }); });
+      renderFotos();
+    });
+  });
+  function subirFotos(r) {
+    var carpetas = ['Calidad', 'Reclamos ' + r.anio, 'Reclamo Nº ' + r.numero];
+    return Promise.all((S.fotos || []).map(function (f) {
+      if (!f.pending) return f;
+      return G.driveSubir(f.file, carpetas).then(function (up) { return { id: up.id, url: up.url, name: up.name, contentType: up.contentType, sizeBytes: up.sizeBytes, subido_por: G.usuario(), subido_en: new Date().toISOString() }; });
+    }));
+  }
   $('rq-venc-ilegible').addEventListener('change', function () { $('rq-venc').disabled = this.checked; if (this.checked) $('rq-venc').value = ''; });
   $('rq-cancel').addEventListener('click', cerrarReclamo);
   $('rq-nuevo').addEventListener('click', function () { abrirReclamo(null); });
@@ -221,17 +304,38 @@
     if (!fecha) { toast('Poné la fecha del reclamo.'); return; }
     if (!producto) { toast('Elegí el producto.'); return; }
     var anio = anioDe(fecha);
-    var r = Object.assign({}, previo || { id: nuevoId('rec'), creado_por: G.usuario(), anio: anio, numero: siguienteNumero(S.reclamos, anio) }, {
+    var recep = esRecepcion();
+    // 1ª parte: recepción del reclamo
+    var r = Object.assign({ estado: 'Abierto' }, previo || { id: nuevoId('rec'), creado_por: G.usuario(), anio: anio, numero: siguienteNumero(S.reclamos, anio) }, {
       fecha: fecha, hora: $('rq-hora').value, producto: producto, lote: $('rq-lote').value.trim(),
       vencimiento: $('rq-venc-ilegible').checked ? '' : $('rq-venc').value, vencimiento_ilegible: $('rq-venc-ilegible').checked,
-      cantidad: Number($('rq-cantidad').value) || 1, desvio: $('rq-desvio').value, reclamo_cliente: $('rq-cliente').value,
-      desvio_real: $('rq-real').value, envase: $('rq-envase').value, lote_envase: $('rq-lote-envase').value.trim(), tapa: $('rq-tapa').value,
-      destino_envase: $('rq-destino').value, estado: $('rq-estado').value || 'Abierto', controlo: $('rq-controlo').value, observaciones: $('rq-obs').value.trim(),
+      cantidad: Number($('rq-cantidad').value) || 1, desvio: $('rq-desvio').value,
+      origen: $('rq-origen').value, cliente: $('rq-clientenom').value.trim(), comentarios: $('rq-comentarios').value.trim(),
     });
+    // 2ª parte: control en fábrica (solo Calidad)
+    if (!recep) {
+      Object.assign(r, {
+        reclamo_cliente: $('rq-cliente').value,
+        desvio_real: $('rq-real').value, envase: $('rq-envase').value, lote_envase: $('rq-lote-envase').value.trim(), tapa: $('rq-tapa').value,
+        destino_envase: $('rq-destino').value, estado: $('rq-estado').value || 'Abierto', controlo: $('rq-controlo').value, observaciones: $('rq-obs').value.trim(),
+      });
+      if (!r.control_por && (r.desvio_real || r.estado !== 'Abierto' || r.controlo)) { r.control_por = G.usuario(); r.control_en = new Date().toISOString(); }
+    }
     if (previo && Number(previo.anio) !== anio) { r.anio = anio; r.numero = siguienteNumero(S.reclamos, anio); }
     if (r.estado !== 'Abierto' && !r.desvio_real) { toast('Para cerrar el reclamo cargá el desvío real que se comprobó.'); return; }
-    guardar('calidad_reclamos', r, COLS_REC, S.reclamos).then(function (ok) {
+    var hayPend = (S.fotos || []).some(function (f) { return f.pending; });
+    var btn = $('rq-save'); btn.disabled = true; btn.textContent = hayPend ? 'Subiendo fotos…' : 'Guardando…';
+    var borrar = (S.fotosBorrar || []).slice();
+    (recep ? Promise.resolve(r.adjuntos || []) : subirFotos(r)).then(function (adj) {
+      r.adjuntos = adj;
+      return guardar('calidad_reclamos', r, COLS_REC, S.reclamos);
+    }, function (e) {
+      toast('No se pudieron subir las fotos a Google Drive: ' + (e && e.message || e) + '. No se guardó el reclamo.', 8000);
+      return false;
+    }).then(function (ok) {
+      btn.disabled = false; btn.textContent = 'Guardar';
       if (!ok) return;
+      if (G.driveBorrar) borrar.forEach(function (id) { G.driveBorrar(id); });
       cerrarReclamo();
       if (F.anio !== anio) F.anio = anio;
       armarFiltrosReclamos(); renderReclamos();
@@ -247,19 +351,19 @@
       guardar('calidad_reclamos', a, COLS_REC, S.reclamos).then(function (ok) { if (ok) { cerrarReclamo(); renderReclamos(); toast('Reclamo anulado.'); } });
     });
   });
-  ['rq-f-anio', 'rq-f-mes', 'rq-f-producto', 'rq-f-desvio', 'rq-f-estado'].forEach(function (id) {
+  ['rq-f-anio', 'rq-f-mes', 'rq-f-producto', 'rq-f-origen', 'rq-f-desvio', 'rq-f-estado'].forEach(function (id) {
     $(id).addEventListener('change', function () {
-      var k = { 'rq-f-anio': 'anio', 'rq-f-mes': 'mes', 'rq-f-producto': 'producto', 'rq-f-desvio': 'desvio', 'rq-f-estado': 'estado' }[id];
+      var k = { 'rq-f-anio': 'anio', 'rq-f-mes': 'mes', 'rq-f-producto': 'producto', 'rq-f-origen': 'origen', 'rq-f-desvio': 'desvio', 'rq-f-estado': 'estado' }[id];
       F[k] = k === 'anio' ? Number(this.value) : this.value; renderReclamos();
     });
   });
   $('rq-f-buscar').addEventListener('input', function () { F.buscar = this.value; renderReclamos(); });
   $('rq-csv').addEventListener('click', function () {
     var l = reclamosFiltrados();
-    descargarCSV('reclamos-PT-' + F.anio + '.csv', ['Nº', 'Mes', 'Fecha', 'Producto', 'Lote', 'Hora', 'Vto', 'Desvío', 'Reclamo de cliente', 'Desvío real', 'Observaciones', 'Envase', 'Lote de envase', 'Tapa', 'Cantidad', 'Destino de envase', 'Estado', 'Controló'],
+    descargarCSV('reclamos-PT-' + F.anio + '.csv', ['Nº', 'Mes', 'Fecha', 'Producto', 'Lote', 'Hora', 'Vto', 'Desvío', 'Reclamo de cliente', 'Desvío real', 'Observaciones', 'Envase', 'Lote de envase', 'Tapa', 'Cantidad', 'Destino de envase', 'Estado', 'Controló', 'Origen', 'Cliente', 'Cargado por', 'Comentarios (recepción)', 'Controlado por', 'Fotos'],
       l.slice().reverse().map(function (r) {
         return [r.numero, r.fecha ? MESES[Number(r.fecha.slice(5, 7)) - 1] : '', fmtFecha(r.fecha), r.producto, r.lote, r.hora, r.vencimiento_ilegible ? 'BORROSO' : fmtFecha(r.vencimiento), r.desvio, r.reclamo_cliente,
-          r.desvio_real, r.observaciones, r.envase, r.lote_envase, r.tapa, r.cantidad, r.destino_envase, anulado(r) ? 'ANULADO' : r.estado, r.controlo];
+          r.desvio_real, r.observaciones, r.envase, r.lote_envase, r.tapa, r.cantidad, r.destino_envase, anulado(r) ? 'ANULADO' : r.estado, r.controlo, r.origen || '', r.cliente || '', r.creado_por || '', r.comentarios || '', r.control_por || '', (r.adjuntos || []).map(function (a) { return a.url; }).join(' ')];
       }));
   });
 
@@ -316,7 +420,7 @@
     if (!S.cargado || S.sinTablas) { mensajeSinTablas(tb, 11); return; }
     var l = pacsFiltradas();
     $('pq-count').textContent = '(' + l.length + ')';
-    if (!l.length) { tb.innerHTML = '<tr class="day-row empty"><td colspan="11">No hay NC/PAC con esos filtros.</td></tr>'; return; }
+    if (!l.length) { tb.innerHTML = '<tr class="day-row empty"><td colspan="11">No hay acciones de mejora con esos filtros.</td></tr>'; return; }
     tb.innerHTML = l.map(function (p) {
       var venc = pacVencida(p);
       var ef = p.eficacia_resultado ? esc(p.eficacia_resultado) : (eficaciaPendiente(p) ? '<span class="cal-vencida">Pendiente</span>' : '<span class="fm-hint">—</span>');
@@ -338,7 +442,7 @@
     S.editPac = p ? p.id : null;
     if (!p) S.pacDesdeReclamos = precarga && precarga.reclamo_ids ? precarga.reclamo_ids.slice() : null;
     var d = p || Object.assign({ fecha: hoy(), estado: 'Abierta' }, precarga || {});
-    $('pq-title').textContent = p ? 'NC / PAC ' + codigoPac(p) : 'Nueva NC / PAC';
+    $('pq-title').textContent = p ? 'Acción de mejora ' + codigoPac(p) : 'Nueva acción de mejora';
     $('pq-sub').textContent = p ? ('RG-0801 · cargada por ' + (p.creado_por || '—')) : 'RG-0801 · se le asigna un número al guardar';
     Object.keys(CAMPOS_PAC).forEach(function (k) { $(k).value = d[CAMPOS_PAC[k]] || ''; });
     Object.keys(SELECTS_PAC).forEach(function (k) { llenarSelect(k, lista(SELECTS_PAC[k][1]), d[SELECTS_PAC[k][0]] || '', '—'); });
@@ -374,15 +478,15 @@
         if (r) guardar('calidad_reclamos', Object.assign({}, r, { pac_id: p.id }), COLS_REC, S.reclamos);
       });
       cerrarPac(); armarFiltrosPac(); renderPacs();
-      toast(previo ? 'NC / PAC guardada.' : 'NC / PAC ' + codigoPac(p) + ' creada.');
+      toast(previo ? 'Acción de mejora guardada.' : 'Acción de mejora ' + codigoPac(p) + ' creada.');
     });
   });
   $('pq-anular').addEventListener('click', function () {
     var p = S.pacs.find(function (x) { return x.id === S.editPac; });
     if (!p) return;
-    G.pedirMotivo('Anular NC / PAC ' + codigoPac(p), 'Queda registrada como anulada y su número no se vuelve a usar.', function (motivo) {
+    G.pedirMotivo('Anular acción de mejora ' + codigoPac(p), 'Queda registrada como anulada y su número no se vuelve a usar.', function (motivo) {
       var a = Object.assign({}, p, { anulado_en: new Date().toISOString(), anulado_por: G.usuario(), motivo_anulacion: motivo });
-      guardar('calidad_pac', a, COLS_PAC, S.pacs).then(function (ok) { if (ok) { cerrarPac(); renderPacs(); toast('NC / PAC anulada.'); } });
+      guardar('calidad_pac', a, COLS_PAC, S.pacs).then(function (ok) { if (ok) { cerrarPac(); renderPacs(); toast('Acción de mejora anulada.'); } });
     });
   });
   $('pq-imprimir').addEventListener('click', function () {
@@ -412,7 +516,7 @@
     var texto = function (t) { return '<div class="texto">' + esc(t || '—') + '</div>'; };
     var vinc = (p.reclamo_ids || []).map(function (rid) { return S.reclamos.find(function (x) { return x.id === rid; }); }).filter(Boolean);
     G.imprimirDocumento({
-      tipo: 'Seguimiento de NC / PAC', numero: codigoPac(p), fecha: p.fecha, codigo: 'RG-0801',
+      tipo: 'Acción de mejora', numero: codigoPac(p), fecha: p.fecha, codigo: 'RG-0801',
       estado: { texto: anul ? 'Anulada' : (p.estado || 'Abierta'), color: anul ? '#e1251b' : col },
       anulado: anul ? G.anulacionTexto({ anuladoEn: p.anulado_en, anuladoPor: p.anulado_por, motivoAnulacion: p.motivo_anulacion }) : null,
       bloques: [
@@ -435,7 +539,7 @@
   var OK = '#16a34a', MAL = '#e1251b', AMBAR = '#d48f00', GRIS = '#94a1ab';
   var PALETA = ['#223c7e', '#2ba9e0', '#e1251b', '#16a34a', '#d48f00', '#8b5cf6', '#3456a8', '#db2777', '#0d9488', '#94a1ab'];
   var MES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-  var FD = { anio: null, desde: 1, hasta: 12, producto: '' };
+  var FD = { anio: null, desde: 1, hasta: 12, producto: '', origen: '' };
   function armarFiltrosDash() {
     var anios = aniosDe(S.reclamos.concat(S.pacs));
     if (FD.anio == null) {
@@ -449,6 +553,7 @@
       el.value = String(id === 'cd-desde' ? FD.desde : FD.hasta);
     });
     llenarSelect('cd-producto', lista('productos'), FD.producto, 'Todos');
+    llenarSelect('cd-origen', lista('origenes_reclamo'), FD.origen, 'Todos');
   }
   function enPeriodo(x) {
     if (anulado(x) || !x.fecha) return false;
@@ -511,15 +616,15 @@
     if (!S.cargado) return;
     if (S.sinTablas) { $('cd-kpis').innerHTML = '<div class="cq-empty">Falta crear las tablas de Calidad: corré base-de-datos/calidad.sql en Supabase.</div>'; return; }
     var periodoTxt = (FD.desde === FD.hasta ? MESES[FD.desde - 1] : MESES[FD.desde - 1] + ' a ' + MESES[FD.hasta - 1]) + ' ' + FD.anio;
-    $('cd-sub').textContent = (FD.producto || 'Todos los productos') + ' · ' + periodoTxt + ' · Reclamos de PT (RG-0802) y NC / PAC (RG-0801)';
-    var rec = S.reclamos.filter(function (r) { return enPeriodo(r) && (!FD.producto || r.producto === FD.producto); });
+    $('cd-sub').textContent = (FD.producto || 'Todos los productos') + (FD.origen ? ' · origen ' + FD.origen : '') + ' · ' + periodoTxt + ' · Reclamos de PT (RG-0802) y acciones de mejora (RG-0801)';
+    var rec = S.reclamos.filter(function (r) { return enPeriodo(r) && (!FD.producto || r.producto === FD.producto) && (!FD.origen || (r.origen || '') === FD.origen); });
     var just = rec.filter(justificado), nojust = rec.filter(function (r) { return r.estado === 'Cerrado No justificado'; }), abiertos = rec.filter(function (r) { return r.estado === 'Abierto'; });
     var cerrados = just.length + nojust.length;
     var unid = rec.reduce(function (t, r) { return t + (Number(r.cantidad) || 0); }, 0);
 
     // Variación del último mes con datos contra el anterior
     var porMes = [];
-    for (var m = 1; m <= 12; m++) porMes.push(S.reclamos.filter(function (r) { return !anulado(r) && r.fecha && Number(r.fecha.slice(0, 4)) === Number(FD.anio) && Number(r.fecha.slice(5, 7)) === m && (!FD.producto || r.producto === FD.producto); }));
+    for (var m = 1; m <= 12; m++) porMes.push(S.reclamos.filter(function (r) { return !anulado(r) && r.fecha && Number(r.fecha.slice(0, 4)) === Number(FD.anio) && Number(r.fecha.slice(5, 7)) === m && (!FD.producto || r.producto === FD.producto) && (!FD.origen || (r.origen || '') === FD.origen); }));
     var ult = -1; for (var i = FD.hasta - 1; i >= FD.desde - 1; i--) { if (porMes[i].length) { ult = i; break; } }
     var variacion = null, varTxt = 'Sin datos';
     if (ult > 0 && porMes[ult - 1].length) { variacion = (porMes[ult].length / porMes[ult - 1].length - 1) * 100; varTxt = MES_CORTO[ult] + ' vs ' + MES_CORTO[ult - 1]; }
@@ -561,6 +666,12 @@
     var colDesvio = { 'SIN GUSTO': OK, 'MG: plastico': MAL, 'MG: cloro': '#2ba9e0', 'MG: otro': AMBAR, 'EE: insecto': '#8b5cf6', 'EE: precinto/tapa': '#223c7e', 'EE: otro': '#3456a8' };
     dona('cd-dona-desvio', G.tally(rec.filter(function (r) { return r.desvio_real; }), function (r) { return r.desvio_real; }), 'reclamos controlados', colDesvio);
     dona('cd-dona-producto', G.tally(rec, function (r) { return r.producto; }), 'reclamos');
+    // Por origen (quién lo cargó: planta, sucursal, distribuidor…)
+    var porOrigen = agrupar(rec, function (r) { return r.origen || 'Sin origen'; });
+    ranking('cd-origen-rk', Object.keys(porOrigen).map(function (kk) {
+      var l = porOrigen[kk], c = l.filter(justificado).length;
+      return { label: kk, total: l.length, parte: c, sub: l.length + ' reclamos · ' + c + ' justificados' };
+    }).sort(function (a, b) { return b.total - a.total; }), '#0d9488', function (x) { return String(x.total); });
 
     // Reclamado vs confirmado
     var porCliente = agrupar(rec, function (r) { return r.reclamo_cliente; });
@@ -583,7 +694,7 @@
     var gl = agrupar(just.filter(function (r) { return loteValido(r.lote); }), function (r) { return r.producto + '|' + r.lote; });
     var lotes = Object.keys(gl).map(function (kk) { return gl[kk]; }).filter(function (g) { return g.length >= 2; }).sort(function (a, b) { return b.length - a.length; }).slice(0, 15);
     var maxL = lotes.length ? lotes[0].length : 1;
-    $('cd-lotes').innerHTML = lotes.length ? '<thead><tr><th>Producto</th><th>Lote</th><th class="num">Justificados</th><th>Desvío principal</th><th>Envases</th><th>Último</th><th>NC / PAC</th></tr></thead><tbody>' +
+    $('cd-lotes').innerHTML = lotes.length ? '<thead><tr><th>Producto</th><th>Lote</th><th class="num">Justificados</th><th>Desvío principal</th><th>Envases</th><th>Último</th><th>Acción de mejora</th></tr></thead><tbody>' +
       lotes.map(function (g) {
         var d = G.tally(g, function (r) { return r.desvio_real; })[0], env = G.tally(g, function (r) { return r.envase; }).map(function (x) { return x.label; }).join(', ');
         var ultimo = g.reduce(function (m, r) { return r.fecha > m ? r.fecha : m; }, '');
@@ -603,12 +714,12 @@
     var efectivas = conEf.filter(function (p) { return p.eficacia_resultado === 'Efectiva'; }).length;
     var cerradasP = pac.filter(function (p) { return p.estado === 'Cerrada'; }).length;
     $('cd-kpis-pac').innerHTML = [
-      kpiCard({ c: '#3456a8', ico: '📋', lab: 'NC / PAC del período', val: pac.length, sub: pac.filter(function (p) { return /^NC/.test(p.clasificacion || ''); }).length + ' no conformidades' }),
+      kpiCard({ c: '#3456a8', ico: '📋', lab: 'Acciones de mejora del período', val: pac.length, sub: pac.filter(function (p) { return /^NC/.test(p.clasificacion || ''); }).length + ' no conformidades' }),
       kpiCard({ c: OK, ico: '✔️', lab: 'Cerradas', val: pac.length ? pct(cerradasP, pac.length) + '%' : '—', vc: pac.length ? OK : GRIS, sub: cerradasP + ' de ' + pac.length }),
       kpiCard({ c: vencidas.length ? MAL : OK, ico: vencidas.length ? '⚠️' : '📅', lab: 'Con acción vencida', val: vencidas.length, vc: vencidas.length ? MAL : OK, sub: pendTodas.length + ' pendientes en total', extra: vencidas.length ? tag('Requiere seguimiento', false) : tag('Al día', true) }),
       kpiCard({ c: '#8b5cf6', ico: '🎯', lab: 'Eficacia verificada', val: conEf.length ? pct(efectivas, conEf.length) + '%' : '—', vc: conEf.length ? (efectivas === conEf.length ? OK : AMBAR) : GRIS, sub: conEf.length ? efectivas + ' efectivas de ' + conEf.length + ' verificadas' : 'Ninguna verificada en el período' }),
     ].join('');
-    dona('cd-dona-estado', G.tally(pac, function (p) { return p.estado; }), 'NC / PAC', { 'Cerrada': OK, 'En gestión': '#2ba9e0', 'Abierta': AMBAR });
+    dona('cd-dona-estado', G.tally(pac, function (p) { return p.estado; }), 'acciones', { 'Cerrada': OK, 'En gestión': '#2ba9e0', 'Abierta': AMBAR });
     ranking('cd-clasif', G.tally(pac, function (p) { return p.clasificacion; }).map(function (x) { return { label: x.label, parte: x.count }; }), MAL);
     ranking('cd-origen', G.tally(pac, function (p) { return p.origen; }).map(function (x) { return { label: x.label, parte: x.count }; }), '#2ba9e0');
     var gp = agrupar(pac, function (p) { return p.proceso; });
@@ -629,6 +740,7 @@
   $('cd-desde').addEventListener('change', function () { FD.desde = Number(this.value); if (FD.hasta < FD.desde) FD.hasta = FD.desde; armarFiltrosDash(); renderDash(); });
   $('cd-hasta').addEventListener('change', function () { FD.hasta = Number(this.value); if (FD.desde > FD.hasta) FD.desde = FD.hasta; armarFiltrosDash(); renderDash(); });
   $('cd-producto').addEventListener('change', function () { FD.producto = this.value; renderDash(); });
+  $('cd-origen').addEventListener('change', function () { FD.origen = this.value; renderDash(); });
   $('cd-todo').addEventListener('click', function () { FD.desde = 1; FD.hasta = 12; armarFiltrosDash(); renderDash(); });
 
   // =====================================================================
@@ -656,7 +768,39 @@
         pintar();
         cont.appendChild(box);
       });
+      cont.appendChild(boxCargadores());
     });
+  }
+  // Quién carga reclamos y desde dónde: el origen se le pone solo a cada reclamo que carga.
+  function boxCargadores() {
+    var box = document.createElement('div'); box.className = 'cal-lista cal-cargadores'; box.dataset.lista = 'cargadores';
+    var filas = cargadores().map(function (c) { return { email: c.email, origen: c.origen || '' }; });
+    var emails = [];
+    function opcionesOrigen(sel) { return '<option value="">— origen —</option>' + lista('origenes_reclamo').map(function (o) { return '<option' + (o === sel ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join(''); }
+    function pintar() {
+      box.innerHTML = '<h4>Quién carga reclamos <span style="font-weight:400;text-transform:none;">· cargan la recepción (1ª parte) y el origen se pone solo; el control en fábrica y las fotos los completa Calidad</span></h4>' +
+        (filas.length ? filas.map(function (f, i) {
+          return '<div class="cal-carg"><span class="em" title="' + esc(f.email) + '">' + esc(f.email) + '</span><select data-i="' + i + '">' + opcionesOrigen(f.origen) + '</select><button type="button" class="btn" data-x="' + i + '" title="Sacar">✕</button></div>';
+        }).join('') : '<div class="fm-hint">Nadie asignado todavía: cada uno elige el origen al cargar.</div>') +
+        '<div class="addrow"><input type="email" list="cal-carg-dl" placeholder="email de quien carga…"><datalist id="cal-carg-dl">' + emails.map(function (e) { return '<option value="' + esc(e) + '">'; }).join('') + '</datalist>' +
+        '<select class="nuevo-origen">' + opcionesOrigen('') + '</select><button class="btn" type="button">+</button></div>';
+      box.querySelectorAll('select[data-i]').forEach(function (sel) { sel.addEventListener('change', function () { filas[Number(sel.dataset.i)].origen = sel.value; guardarLista('cargadores', filas); }); });
+      box.querySelectorAll('button[data-x]').forEach(function (b) { b.addEventListener('click', function () { filas.splice(Number(b.dataset.x), 1); guardarLista('cargadores', filas); pintar(); }); });
+      var inp = box.querySelector('.addrow input'), so = box.querySelector('.nuevo-origen');
+      box.querySelector('.addrow button').addEventListener('click', function () {
+        var e = inp.value.trim().toLowerCase();
+        if (!e) return;
+        if (!so.value) { toast('Elegí el origen de esa persona.'); return; }
+        var ya = filas.find(function (f) { return f.email === e; });
+        if (ya) ya.origen = so.value; else filas.push({ email: e, origen: so.value });
+        guardarLista('cargadores', filas); pintar();
+      });
+    }
+    pintar();
+    if (sb()) Promise.resolve(sb().from('usuarios').select('email')).then(function (res) {
+      if (res && !res.error) { emails = (res.data || []).map(function (u) { return u.email; }).filter(Boolean).sort(); pintar(); }
+    }).catch(function () {});
+    return box;
   }
   function guardarLista(id, valores) {
     S.listas[id] = valores.slice();
@@ -688,9 +832,9 @@
       if (!g) return;
       var detalle = resumenDesvios(g.rs);
       G.sugerir(G.conMemoria({ id: 'cal-rq:' + g.clave, titulo: 'Sifoncito: esto se repite',
-        texto: 'Ya van <b>' + g.rs.length + ' reclamos</b> con ' + g.que + ' (' + esc(detalle) + '). ¿Abrís una NC / PAC para investigarlo? Te la dejo armada.',
+        texto: 'Ya van <b>' + g.rs.length + ' reclamos</b> con ' + g.que + ' (' + esc(detalle) + '). ¿Abrís una acción de mejora para investigarlo? Te la dejo armada.',
         textoNunca: 'No para este lote',
-        botones: [{ texto: 'Abrir NC / PAC', pri: true, accion: function () {
+        botones: [{ texto: 'Abrir acción de mejora', pri: true, accion: function () {
           abrirPac(null, { origen: g.origen, clasificacion: 'NC MENOR', proceso: g.proceso, riesgo: 'MEDIO',
             hallazgo: g.hall + ': ' + g.rs.length + ' reclamos (Nº ' + g.rs.map(function (x) { return x.numero; }).join(', ') + '). Desvíos: ' + detalle + '.',
             reclamo_ids: g.rs.map(function (x) { return x.id; }) });
@@ -718,7 +862,7 @@
       var partes = [];
       if (vencidas.length) partes.push('<b>' + vencidas.length + '</b> con la acción vencida');
       if (efic.length) partes.push('<b>' + efic.length + '</b> esperando la verificación de eficacia');
-      G.sugerir(G.conMemoria({ id: 'cal-pac-vencidas', titulo: 'Sifoncito: NC / PAC pendientes', texto: 'Hay ' + partes.join(' y ') + ':', cuerpo: ul,
+      G.sugerir(G.conMemoria({ id: 'cal-pac-vencidas', titulo: 'Sifoncito: acciones de mejora pendientes', texto: 'Hay ' + partes.join(' y ') + ':', cuerpo: ul,
         textoAhoraNo: 'Mañana me recordás', textoNunca: 'No me avises más de esto' }, 'cal-pac-vencidas', 1));
     });
   }

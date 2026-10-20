@@ -101,11 +101,11 @@
         { t: "Cargá también el proveedor y el lote del <b>envase</b>, la <b>tapa</b> y a dónde va el envase. Con eso se sabe qué proveedor trae más problemas." },
         { t: "Al terminar, el estado queda <b>Cerrado justificado</b> si el desvío se confirmó, o <b>Cerrado No justificado</b> si no. Mientras tanto queda Abierto." },
         { t: "Arriba filtrás por año, mes, producto, desvío o estado, o buscás un lote. <b>⬇ CSV</b> descarga lo filtrado.", foco: "#rq-f-buscar" },
-        { t: "Si un lote junta 3 reclamos o más, aparezco y te propongo abrir una <b>NC / PAC</b> con todo armado." },
+        { t: "Si un lote junta 3 reclamos o más, aparezco y te propongo abrir una <b>acción de mejora</b> con todo armado." },
       ] },
-      { titulo: "Seguir una NC / PAC", pasos: [
-        { t: "Las no conformidades y planes de acción (la planilla RG-0801) están en <b>NC y PAC</b>. De entrada ves las pendientes.", ir: "#tab-ncpac", foco: "#pq-f-estado" },
-        { t: "Con <b>+ Nueva NC / PAC</b> cargás el hallazgo con su origen, clasificación y proceso. El número (ej. 12-26) se pone solo al guardar.", foco: "#pq-nuevo" },
+      { titulo: "Seguir una acción de mejora", pasos: [
+        { t: "Las acciones de mejora (no conformidades y planes de acción, la planilla RG-0801) están en <b>Acciones de mejora</b>. De entrada ves las pendientes.", ir: "#tab-ncpac", foco: "#pq-f-estado" },
+        { t: "Con <b>+ Nueva acción de mejora</b> cargás el hallazgo con su origen, clasificación y proceso. El número (ej. 12-26) se pone solo al guardar.", foco: "#pq-nuevo" },
         { t: "La ficha sigue los pasos de la planilla: riesgo y causa, corrección, acción correctiva con responsable y fecha límite, seguimiento y verificación de eficacia." },
         { t: "Las fechas límite vencidas se ven en rojo con ⚠. Para pasarla a <b>Cerrada</b> hay que cargar el resultado de la eficacia (o \"No aplica\")." },
         { t: "Desde la ficha la podés <b>🖨 Imprimir</b>. Si se cargó mal, no se borra: se <b>anula</b> con un motivo." },
@@ -113,7 +113,7 @@
       { titulo: "Indicadores de calidad", pasos: [
         { t: "En <b>Indicadores</b> elegís el año y los meses.", ir: "#tab-calidash", foco: "#cd-anio" },
         { t: "Ves los reclamos por mes, el desvío real, qué reclama el cliente, por producto, y los justificados por proveedor de envase y de tapa." },
-        { t: "Más abajo, las NC / PAC por clasificación, estado, proceso y origen, cuántas tienen la acción vencida y qué porcentaje resultó efectivo." },
+        { t: "Más abajo, las acciones de mejora por clasificación, estado, proceso y origen, cuántas tienen la acción vencida y qué porcentaje resultó efectivo." },
       ] },
       { titulo: "Listas de calidad", pasos: [
         { t: "Los desplegables (productos, desvíos, proveedores de envase y tapa, procesos, responsables…) se cambian en <b>⚙ → Calidad → Listas de calidad</b>.", foco: "#settings-btn" },

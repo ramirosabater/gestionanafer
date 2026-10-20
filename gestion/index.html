@@ -840,6 +840,18 @@
   .cal-badge.medio{background:color-mix(in srgb, #d97706 16%, var(--surface)); color:#b45309;}
   .cal-badge.bajo{background:color-mix(in srgb, #16a34a 14%, var(--surface)); color:#15803d;}
   .cal-vencida{color:var(--danger); font-weight:700;}
+  .rq-parte{border:1px solid var(--border); border-radius:14px; padding:12px 14px 4px; margin-bottom:14px; background:var(--surface);}
+  .rq-parte-tit{display:flex; align-items:center; gap:8px; font-weight:800; font-size:13.5px; margin-bottom:10px; flex-wrap:wrap;}
+  .rq-parte-tit small{font-weight:400; color:var(--muted); font-size:12px;}
+  .rq-num{width:22px; height:22px; border-radius:50%; background:#7c3aed; color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:12px;}
+  .rq-parte.bloqueada{opacity:.75;} .rq-parte[hidden]{display:none;}
+  .rq-fotos{display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 8px;}
+  .rq-foto{display:flex; align-items:center; gap:6px; background:var(--surface-2); border-radius:9px; padding:6px 9px; font-size:12.5px; max-width:100%;}
+  .rq-foto a{color:var(--accent); text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:220px;}
+  .rq-foto img{width:44px; height:44px; object-fit:cover; border-radius:6px;}
+  .rq-foto button{border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:14px;}
+  #reclamo-modal .field label.rq-foto-btn{display:inline-flex; width:auto; align-items:center; gap:6px; cursor:pointer; margin:0 0 10px; text-transform:none; letter-spacing:0; font-size:13px; font-weight:700; color:var(--ink);}
+  #reclamo-modal .field label.rq-foto-btn[hidden]{display:none;}
   .cal-grid{display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:0 14px;}
   .cal-grid .cal-span2{grid-column:span 2;}
   @media (max-width:720px){ .cal-grid{grid-template-columns:1fr 1fr;} }
@@ -848,6 +860,8 @@
   .cal-sec{font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:#7c3aed; margin:14px 0 6px; padding-top:10px; border-top:1px solid var(--border);}
   .cal-sec:first-of-type{border-top:none; padding-top:0; margin-top:4px;}
   .cal-listas{display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:14px;}
+  .cal-carg{display:flex; gap:8px; align-items:center; margin:6px 0;} .cal-carg .em{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; font-size:13px;}
+  .cal-cargadores .addrow{display:flex; gap:8px; flex-wrap:wrap;} .cal-cargadores .addrow input{flex:1; min-width:180px;}
   .cal-lista{border:1px solid var(--border); border-radius:12px; padding:10px 12px; background:var(--surface);}
   .cal-lista h4{margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);}
   .cal-chips{display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px;}
@@ -920,7 +934,7 @@
     <button class="viewtab" id="tab-day"><span class="vt-ico" aria-hidden="true">📅</span>Día</button>
     <button class="viewtab" id="tab-dashboard"><span class="vt-ico" aria-hidden="true">📊</span>Dashboard</button>
     <button class="viewtab" id="tab-reclamos"><span class="vt-ico" aria-hidden="true">🧴</span>Reclamos de PT</button>
-    <button class="viewtab" id="tab-ncpac"><span class="vt-ico" aria-hidden="true">📋</span>NC y PAC</button>
+    <button class="viewtab" id="tab-ncpac"><span class="vt-ico" aria-hidden="true">📋</span>Acciones de mejora</button>
     <button class="viewtab" id="tab-calidash"><span class="vt-ico" aria-hidden="true">📈</span>Indicadores</button>
     <button class="viewtab" id="tab-tableros"><span class="vt-ico" aria-hidden="true">📈</span>Dashboards</button>
   </div>
@@ -1419,13 +1433,14 @@
       <label class="fbar-f"><span>Año</span><select id="rq-f-anio" class="scope-select"></select></label>
       <label class="fbar-f"><span>Mes</span><select id="rq-f-mes" class="scope-select"></select></label>
       <label class="fbar-f"><span>Producto</span><select id="rq-f-producto" class="scope-select"></select></label>
+      <label class="fbar-f"><span>Origen</span><select id="rq-f-origen" class="scope-select"></select></label>
       <label class="fbar-f"><span>Desvío real</span><select id="rq-f-desvio" class="scope-select"></select></label>
       <label class="fbar-f"><span>Estado</span><select id="rq-f-estado" class="scope-select"></select></label>
-      <label class="fbar-f fbar-buscar"><span>Buscar</span><input type="search" id="rq-f-buscar" class="prov-search" placeholder="Lote, envase, observación…"></label>
+      <label class="fbar-f fbar-buscar"><span>Buscar</span><input type="search" id="rq-f-buscar" class="prov-search" placeholder="Lote, cliente, envase, observación…"></label>
     </div>
     <div class="day-wrap cal-wrap">
       <table class="day-table cal-table" id="rq-table">
-        <thead><tr><th>Nº</th><th>Fecha</th><th>Producto</th><th>Lote</th><th>Vto.</th><th>Reclamo del cliente</th><th>Desvío real</th><th>Envase</th><th>Tapa</th><th>Destino envase</th><th>Estado</th><th>Controló</th></tr></thead>
+        <thead><tr><th>Nº</th><th>Fecha</th><th>Origen</th><th>Cliente</th><th>Producto</th><th>Lote</th><th>Vto.</th><th>Reclamo del cliente</th><th>Desvío real</th><th>Envase</th><th>Tapa</th><th>Destino envase</th><th>Estado</th><th>Controló</th><th>Cargó</th></tr></thead>
         <tbody id="rq-body"></tbody>
       </table>
     </div>
@@ -1436,11 +1451,11 @@
       <div style="font-size:12.5px; color:var(--ink-2);">Seguimiento de no conformidades y plan de acción correctiva · RG-0801</div>
     </div>
     <div class="compras-section-head">
-      <h3>NC y PAC <span class="prov-count" id="pq-count"></span></h3>
+      <h3>Acciones de mejora <span class="prov-count" id="pq-count"></span></h3>
       <div class="cal-acciones">
         <button type="button" class="fbar-limpiar" data-limpiar="pq" data-fbar="pq-fbar" title="Volver a los filtros de entrada" hidden>✕ Limpiar filtros</button>
         <button class="btn" id="pq-csv" title="Descargar lo filtrado">⬇ CSV</button>
-        <button class="btn primary edit-action" id="pq-nuevo">+ Nueva NC / PAC</button>
+        <button class="btn primary edit-action" id="pq-nuevo">+ Nueva acción de mejora</button>
       </div>
     </div>
     <div class="fbar" id="pq-fbar">
@@ -1469,6 +1484,7 @@
         <div class="cq-hf"><label for="cd-desde">Desde</label><select id="cd-desde"></select></div>
         <div class="cq-hf"><label for="cd-hasta">Hasta</label><select id="cd-hasta"></select></div>
         <div class="cq-hf"><label for="cd-producto">Producto</label><select id="cd-producto"></select></div>
+        <div class="cq-hf"><label for="cd-origen">Origen</label><select id="cd-origen"></select></div>
         <button type="button" class="cq-chip" id="cd-todo">Todo el año</button>
       </div>
     </header>
@@ -1502,6 +1518,13 @@
 
     <div class="cq-grid cq-g11">
       <section class="cq-card cq-panel">
+        <div class="cq-ph"><div><h2 style="--a:#0d9488">Por origen</h2><p>Desde dónde se cargó cada reclamo (planta, sucursal, distribuidor…)</p></div></div>
+        <div id="cd-origen-rk"></div>
+      </section>
+    </div>
+
+    <div class="cq-grid cq-g11">
+      <section class="cq-card cq-panel">
         <div class="cq-ph"><div><h2 style="--a:#8b5cf6">Proveedor de envase</h2><p>Reclamos justificados · % sobre los reclamos de ese envase</p></div></div>
         <div id="cd-envase"></div>
       </section>
@@ -1520,11 +1543,11 @@
     <div class="cq-kpis" id="cd-kpis-pac"></div>
     <div class="cq-grid cq-g11">
       <section class="cq-card cq-panel">
-        <div class="cq-ph"><div><h2 style="--a:#16a34a">Estado</h2><p>NC / PAC del período</p></div></div>
+        <div class="cq-ph"><div><h2 style="--a:#16a34a">Estado</h2><p>Acciones de mejora del período</p></div></div>
         <div id="cd-dona-estado"></div>
       </section>
       <section class="cq-card cq-panel">
-        <div class="cq-ph"><div><h2 style="--a:#e1251b">Por clasificación</h2><p>NC / PAC del período</p></div></div>
+        <div class="cq-ph"><div><h2 style="--a:#e1251b">Por clasificación</h2><p>Acciones de mejora del período</p></div></div>
         <div id="cd-clasif"></div>
         <div class="cq-ph" style="margin-top:18px"><div><h2 style="--a:#2ba9e0">Por origen</h2></div></div>
         <div id="cd-origen"></div>
@@ -1537,7 +1560,7 @@
         <div id="cd-proceso"></div>
       </section>
       <section class="cq-card cq-panel">
-        <div class="cq-ph"><div><h2 style="--a:#e1251b">Acciones vencidas</h2><p>NC / PAC sin cerrar con la fecha límite pasada (todas, no solo el período)</p></div></div>
+        <div class="cq-ph"><div><h2 style="--a:#e1251b">Acciones vencidas</h2><p>Acciones de mejora sin cerrar con la fecha límite pasada (todas, no solo el período)</p></div></div>
         <div class="cq-scrollx"><table class="cq-table" id="cd-vencidas"></table></div>
       </section>
     </div>
@@ -2376,7 +2399,7 @@
           <div class="addrow"><button class="btn primary" id="gan-save">Guardar regímenes y escalas</button></div>
         </div>
         <div id="stab-calidad-listas" hidden>
-          <div class="sub" style="margin-bottom:12px;">Las opciones de los desplegables de Reclamos y de NC/PAC. Lo que se saca de una lista no se borra de los registros ya cargados.</div>
+          <div class="sub" style="margin-bottom:12px;">Las opciones de los desplegables de Reclamos y de Acciones de mejora. Lo que se saca de una lista no se borra de los registros ya cargados.</div>
           <div id="cal-listas" class="cal-listas"></div>
         </div>
         <div id="stab-auth" hidden>
@@ -2451,25 +2474,40 @@
     <h3 id="rq-title">Nuevo reclamo</h3>
     <div class="sub" id="rq-sub">Control de producto reclamado (devolución)</div>
     <div class="modal-scroll-body">
-    <div class="cal-grid">
-      <div class="field"><label for="rq-fecha">Fecha</label><input type="date" id="rq-fecha"></div>
-      <div class="field"><label for="rq-hora">Hora</label><input type="time" id="rq-hora"></div>
-      <div class="field"><label for="rq-producto">Producto</label><select id="rq-producto"></select></div>
-      <div class="field"><label for="rq-lote">Lote</label><input type="text" id="rq-lote" maxlength="30" placeholder="Ej: 343"></div>
-      <div class="field"><label for="rq-venc">Vencimiento</label><input type="date" id="rq-venc">
-        <label class="cal-check"><input type="checkbox" id="rq-venc-ilegible"> Ilegible / borroso</label></div>
-      <div class="field"><label for="rq-cantidad">Cantidad</label><input type="number" id="rq-cantidad" min="1" step="1" value="1"></div>
-      <div class="field"><label for="rq-desvio">Desvío informado</label><select id="rq-desvio"></select></div>
-      <div class="field"><label for="rq-cliente">Reclamo del cliente</label><select id="rq-cliente"></select></div>
-      <div class="field"><label for="rq-real">Desvío real (lo que se comprobó)</label><select id="rq-real"></select></div>
-      <div class="field"><label for="rq-envase">Envase (proveedor)</label><select id="rq-envase"></select></div>
-      <div class="field"><label for="rq-lote-envase">Lote de envase</label><input type="text" id="rq-lote-envase" maxlength="20" placeholder="Ej: 2/25"></div>
-      <div class="field"><label for="rq-tapa">Tapa (proveedor)</label><select id="rq-tapa"></select></div>
-      <div class="field"><label for="rq-destino">Destino del envase</label><select id="rq-destino"></select></div>
-      <div class="field"><label for="rq-estado">Estado</label><select id="rq-estado"></select></div>
-      <div class="field"><label for="rq-controlo">Controló</label><select id="rq-controlo"></select></div>
-    </div>
-    <div class="field"><label for="rq-obs">Observaciones</label><textarea id="rq-obs" placeholder="Lo que se vio al controlar el envase…"></textarea></div>
+    <section class="rq-parte" id="rq-parte1">
+      <div class="rq-parte-tit"><span class="rq-num">1</span> Recepción del reclamo <small>la carga quien recibe el reclamo (sucursal, distribuidor…)</small></div>
+      <div class="cal-grid">
+        <div class="field"><label for="rq-origen">Origen</label><select id="rq-origen"></select></div>
+        <div class="field"><label for="rq-clientenom">Cliente</label><input type="text" id="rq-clientenom" maxlength="80" list="rq-clientes-dl" placeholder="Nombre o Nº de cliente"><datalist id="rq-clientes-dl"></datalist></div>
+        <div class="field"><label for="rq-fecha">Fecha</label><input type="date" id="rq-fecha"></div>
+        <div class="field"><label for="rq-hora">Hora</label><input type="time" id="rq-hora"></div>
+        <div class="field"><label for="rq-producto">Producto</label><select id="rq-producto"></select></div>
+        <div class="field"><label for="rq-lote">Lote</label><input type="text" id="rq-lote" maxlength="30" placeholder="Ej: 343"></div>
+        <div class="field"><label for="rq-venc">Vencimiento</label><input type="date" id="rq-venc">
+          <label class="cal-check"><input type="checkbox" id="rq-venc-ilegible"> Ilegible / borroso</label></div>
+        <div class="field"><label for="rq-cantidad">Cantidad</label><input type="number" id="rq-cantidad" min="1" step="1" value="1"></div>
+        <div class="field"><label for="rq-desvio">Desvío informado</label><select id="rq-desvio"></select></div>
+      </div>
+      <div class="field"><label for="rq-comentarios">Comentarios</label><textarea id="rq-comentarios" placeholder="Lo que contó el cliente, cómo llegó el producto…"></textarea></div>
+    </section>
+    <section class="rq-parte" id="rq-parte2">
+      <div class="rq-parte-tit"><span class="rq-num">2</span> Control en fábrica <small>lo completa Calidad <span id="rq-control-por"></span></small></div>
+      <div class="cal-grid">
+        <div class="field"><label for="rq-cliente">Reclamo del cliente</label><select id="rq-cliente"></select></div>
+        <div class="field"><label for="rq-real">Desvío real (lo que se comprobó)</label><select id="rq-real"></select></div>
+        <div class="field"><label for="rq-envase">Envase (proveedor)</label><select id="rq-envase"></select></div>
+        <div class="field"><label for="rq-lote-envase">Lote de envase</label><input type="text" id="rq-lote-envase" maxlength="20" placeholder="Ej: 2/25"></div>
+        <div class="field"><label for="rq-tapa">Tapa (proveedor)</label><select id="rq-tapa"></select></div>
+        <div class="field"><label for="rq-destino">Destino del envase</label><select id="rq-destino"></select></div>
+        <div class="field"><label for="rq-estado">Estado</label><select id="rq-estado"></select></div>
+        <div class="field"><label for="rq-controlo">Controló</label><select id="rq-controlo"></select></div>
+      </div>
+      <div class="field"><label for="rq-obs">Observaciones</label><textarea id="rq-obs" placeholder="Lo que se vio al controlar el envase…"></textarea></div>
+      <div class="field"><label>Fotos y adjuntos <span class="fm-hint">se guardan en Google Drive (Calidad › Reclamos › año › Nº)</span></label>
+        <div class="rq-fotos" id="rq-fotos"></div>
+        <label class="btn rq-foto-btn" id="rq-foto-label">📷 Agregar fotos<input type="file" id="rq-foto-input" accept="image/*,application/pdf" multiple hidden></label>
+      </div>
+    </section>
     <div class="fm-hint" id="rq-pac-link"></div>
     </div>
     <div class="modal-actions">
@@ -2484,7 +2522,7 @@
 
 <div class="overlay" id="pac-overlay">
   <div class="modal wide modal-lg" id="pac-modal">
-    <h3 id="pq-title">Nueva NC / PAC</h3>
+    <h3 id="pq-title">Nueva acción de mejora</h3>
     <div class="sub" id="pq-sub">Se le asigna un número al guardar</div>
     <div class="modal-scroll-body">
     <h4 class="cal-sec">1 · Hallazgo</h4>

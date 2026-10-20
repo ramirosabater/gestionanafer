@@ -272,7 +272,7 @@
           texto: 'De los reclamos controlados en los últimos 90 días, el <b>' + fmtPct(pj) + '</b> resultó justificado (antes era ' + fmtPct(pjA) + ').' }] : [],
         con('p:Justificados por proveedor de envase', concentracion('envase', porEnvase, 0.45, 'mal', 'de los reclamos justificados de los últimos 90 días (proveedor de envase)')),
         porDesvio.length ? [{ ver: 'p:Desvío confirmado', tono: 'info', peso: 0.3, texto: 'El desvío más confirmado en los últimos 90 días es <b>' + esc(porDesvio[0].label) + '</b> (' + porDesvio[0].v + ' casos).' }] : [],
-        vencidas.length ? [{ ver: 'k:Con acción vencida', tono: 'mal', peso: 1 + vencidas.length * 0.1, texto: '<b>' + vencidas.length + ' NC / PAC</b> tienen la acción vencida y siguen sin cerrar.' }] : (abiertas.length ? [{ ver: 'k:NC / PAC abiertas', tono: 'bien', peso: 0.3, texto: 'Las ' + abiertas.length + ' NC / PAC abiertas están dentro de sus plazos.' }] : []),
+        vencidas.length ? [{ ver: 'k:Con acción vencida', tono: 'mal', peso: 1 + vencidas.length * 0.1, texto: '<b>' + vencidas.length + ' acciones de mejora</b> tienen la acción vencida y siguen sin cerrar.' }] : (abiertas.length ? [{ ver: 'k:Acciones de mejora abiertas', tono: 'bien', peso: 0.3, texto: 'Las ' + abiertas.length + ' acciones de mejora abiertas están dentro de sus plazos.' }] : []),
         recAbiertos.length ? [{ tono: 'mal', peso: 0.6, texto: '<b>' + recAbiertos.length + ' reclamos</b> siguen abiertos hace más de una semana.' }] : [],
         conEf.length >= 3 ? [{ tono: conEf.every(function (p) { return p.eficacia_resultado === 'Efectiva'; }) ? 'bien' : 'info', peso: 0.3,
           texto: 'De las acciones verificadas, el <b>' + fmtPct(conEf.filter(function (p) { return p.eficacia_resultado === 'Efectiva'; }).length / conEf.length) + '</b> fueron efectivas.' }] : []
@@ -559,11 +559,11 @@
     },
     calidad: function (d) {
       var k = d.kpi, v = variacion(k.recMes, k.prom6, false);
-      return hero('Tablero de Calidad', 'Reclamos de producto y NC / PAC · toda la historia cargada') +
+      return hero('Tablero de Calidad', 'Reclamos de producto y acciones de mejora · toda la historia cargada') +
         '<div class="cq-kpis">' +
           kpiCard({ c: NAVY, ico: '📦', lab: 'Reclamos de ' + ymLargo(k.mes), val: fmtN(k.recMes), sub: '<span style="color:' + v.c + '">' + v.txt + '</span>' }) +
           kpiCard({ c: MAL, ico: '🔎', lab: 'Justificados (90 días)', val: d.pj != null ? fmtPct(d.pj) : '—', vc: d.pj != null ? MAL : GRIS, sub: 'de los reclamos ya controlados' }) +
-          kpiCard({ c: AMBAR, ico: '📋', lab: 'NC / PAC abiertas', val: d.abiertas, sub: 'sin cerrar' }) +
+          kpiCard({ c: AMBAR, ico: '📋', lab: 'Acciones de mejora abiertas', val: d.abiertas, sub: 'sin cerrar' }) +
           kpiCard({ c: d.vencidas ? MAL : OK, ico: d.vencidas ? '⚠️' : '✅', lab: 'Con acción vencida', val: d.vencidas, vc: d.vencidas ? MAL : OK }) +
         '</div>' + sifPanel('calidad', d.lecturas) +
         panel('Reclamos por mes', 'En rojo, la parte que resultó justificada · últimos 24 meses', NAVY, barrasMes(d.serieRec, { color: '#cfd6dd',
@@ -615,7 +615,7 @@
         var val, sub;
         if (m.id === 'logistica') { val = fmtN(d.kpi.viajesMes) + ' viajes'; sub = ymLargo(d.kpi.mes) + ' · ' + variacion(d.kpi.viajesMes, d.kpi.prom6, null).txt; }
         if (m.id === 'administracion') { val = fmtPlata(d.kpi.gastoMes); sub = 'gasto de ' + ymLargo(d.kpi.mes) + ' · ' + variacion(d.kpi.gastoMes, d.kpi.prom6, false).txt; }
-        if (m.id === 'calidad') { val = fmtN(d.kpi.recMes) + ' reclamos'; sub = ymLargo(d.kpi.mes) + ' · ' + d.vencidas + ' NC vencidas'; }
+        if (m.id === 'calidad') { val = fmtN(d.kpi.recMes) + ' reclamos'; sub = ymLargo(d.kpi.mes) + ' · ' + d.vencidas + ' acciones vencidas'; }
         if (m.id === 'comercial') { val = d.cumpl != null ? fmtPct(d.cumpl, 1) : '—'; sub = 'del presupuesto ' + d.ultimoYm.slice(0, 4) + ' · ' + fmtPlata(d.realAc); }
         if (m.id === 'rrhh') { val = d.kpi.pctMes.toFixed(1).replace('.', ',') + '% tarde'; sub = d.activos + ' empleados · ' + ymLargo(d.kpi.mes); }
         tarjetas += kpiCard({ c: sem, ico: m.icono, lab: m.label + (mal ? ' · ' + mal + ' alerta' + (mal > 1 ? 's' : '') : ' · sin alertas'), val: val, sub: sub, ir: m.id, irLabel: m.label });

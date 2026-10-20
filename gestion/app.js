@@ -200,7 +200,7 @@
     {id:'day',        label:'Día'},
     {id:'dashboard',  label:'Dashboard'},
     {id:'reclamos',   label:'Reclamos de PT'},
-    {id:'ncpac',      label:'NC y PAC'},
+    {id:'ncpac',      label:'Acciones de mejora'},
     {id:'calidash',   label:'Indicadores de calidad'},
     {id:'tableros',   label:'Dashboards (todos los módulos)'},
     {id:'comercial',  label:'Tablero comercial', noTab:true},
@@ -2920,9 +2920,21 @@
     }).then(function(id){ driveFolderCache[key] = id; return id; });
   }
 
-  function uploadAdjunto(file, nombreProveedor){
+  // Carpeta anidada dentro de la raíz (ej. ["Calidad", "Reclamos 2026", "Reclamo Nº 12"]).
+  function driveEnsurePath(nombres){
+    return driveEnsureRootFolder().then(function(root){
+      return nombres.reduce(function(p, n){
+        return p.then(function(parent){
+          var k = parent+'/'+n;
+          if(driveFolderCache[k]) return driveFolderCache[k];
+          return driveEnsureFolder(n, parent).then(function(id){ driveFolderCache[k] = id; return id; });
+        });
+      }, Promise.resolve(root));
+    });
+  }
+  function uploadAdjunto(file, nombreProveedor, carpetas){
     if(!driveReady()) return Promise.reject(new Error('Google Drive no está configurado (falta GOOGLE_DRIVE_CLIENT_ID en config.js)'));
-    return driveEnsureProveedorFolder(nombreProveedor).then(function(folderId){
+    return (carpetas ? driveEnsurePath(carpetas) : driveEnsureProveedorFolder(nombreProveedor)).then(function(folderId){
       return file.arrayBuffer().then(function(buf){
         var bytes = new Uint8Array(buf);
         var binary = '';
@@ -6770,7 +6782,9 @@
     esAnulado: esAnulado, facturaLineas: facturaLineas, ccRaiz: ccRaiz, ccNombre: ccNombre, ccRuta: ccRuta, proveedorNombre: proveedorNombre,
     labelForRoute: labelForRoute, branchLabel: branchLabel, cuentaSaldoActual: cuentaSaldoActual, cuentaSaldoProyectado: cuentaSaldoProyectado,
     fmtMoney: fmtMoney, AREAS: AREAS,
-    imprimirDocumento: imprimirDocumento, impKV: impKV, impTabla: impTabla, impTotales: impTotales, impFecha: impFecha
+    imprimirDocumento: imprimirDocumento, impKV: impKV, impTabla: impTabla, impTotales: impTotales, impFecha: impFecha,
+    // Google Drive (adjuntos): carpetas = ["Calidad", "Reclamos 2026", …] dentro de la carpeta raíz
+    driveListo: driveReady, driveSubir: function(file, carpetas){ return uploadAdjunto(file, null, carpetas); }, driveBorrar: deleteAdjunto, fmtBytes: fmtBytes
   };
 
   // ---------- 1) Viajes y envíos que se repiten ----------
