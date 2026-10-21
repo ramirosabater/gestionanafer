@@ -673,7 +673,12 @@ $("presuFile").onchange=(e)=>{ if(e.target.files[0]) importarPresupuesto(e.targe
 $("factImport").onclick=()=>$("factFile").click();
 $("factFile").onchange=(e)=>{ if(e.target.files[0]) importarFacturacion(e.target.files[0]); e.target.value=""; };
 $("cliImport").onclick=()=>$("cliFile").click();
-$("salir-btn").onclick=()=>{ sb.auth.signOut().finally(()=>{ window.location.href='index.html'; }); };
+// Salir: cierra la sesión y vuelve a la pantalla de ingreso de Gestión (raíz del sitio).
+$("salir-btn").onclick=()=>{
+  const b=$("salir-btn"); b.disabled=true; b.textContent='Saliendo…';
+  const ir=()=>{ try{ Object.keys(localStorage).forEach(k=>{ if(/^sb-.*-auth-token$/.test(k)||k==='hdr_area'||k==='hdr_role') localStorage.removeItem(k); }); }catch(e){} window.location.replace('/'); };
+  Promise.race([sb.auth.signOut().catch(()=>{}), new Promise(r=>setTimeout(r,2500))]).then(ir,ir);
+};
 $("cliFile").onchange=(e)=>{ if(e.target.files[0]) importarClientes(e.target.files[0]); e.target.value=""; };
 document.querySelectorAll('#medida button').forEach(b=> b.onclick=()=>{ medida=b.dataset.m; document.querySelectorAll('#medida button').forEach(x=>x.classList.toggle('on',x===b)); render(); });
 

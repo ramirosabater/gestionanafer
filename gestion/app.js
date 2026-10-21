@@ -7430,15 +7430,28 @@
     refreshTabVisibility();
   }
 
+  // Salir: cierra la sesión (en el servidor y en este navegador) y vuelve a la
+  // pantalla de ingreso del sitio (la raíz: anafergestion.netlify.app/).
+  function borrarSesionesGuardadas(){
+    try{
+      ['hdr_role','hdr_area'].forEach(function(k){ localStorage.removeItem(k); });
+      Object.keys(localStorage).forEach(function(k){ if(/^sb-.*-auth-token$/.test(k)) localStorage.removeItem(k); });
+    }catch(e){}
+  }
   function logout(){
+    if(state.saliendo) return;
+    state.saliendo = true;
+    try{ if(window.Tableros && window.Tableros.detener) window.Tableros.detener(); }catch(e){}
     state.roleId = null;
     state.area = null;
     state.sessionEmail = null;
-    try{ localStorage.removeItem('hdr_role'); localStorage.removeItem('hdr_area'); }catch(e){}
-    if(state.sb && state.sb.auth) state.sb.auth.signOut().catch(function(){});
-    document.getElementById('login-password').value = '';
-    document.getElementById('login-error').style.display = 'none';
-    updateAuthVisibility();
+    var btn = document.getElementById('logout-btn');
+    if(btn){ btn.disabled = true; btn.textContent = 'Saliendo…'; }
+    var ir = function(){ borrarSesionesGuardadas(); window.location.replace('/'); };
+    var p = (state.sb && state.sb.auth) ? state.sb.auth.signOut() : null;
+    if(!p || !p.then){ ir(); return; }
+    // si el servidor no contesta, igual se sale (la sesión local se borra)
+    Promise.race([p.catch(function(){}), new Promise(function(r){ setTimeout(r, 2500); })]).then(ir, ir);
   }
 
   var loginModo = 'email';

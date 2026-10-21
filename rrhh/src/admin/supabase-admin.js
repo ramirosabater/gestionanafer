@@ -82,6 +82,23 @@ export function logoutAdmin(borrarCompartida = true) {
 }
 export function getAdminEmail() { return ADMIN_EMAIL; }
 
+// Botón Salir: cierra la sesión en el servidor y en el navegador (es la misma
+// de Gestión) y vuelve a la pantalla de ingreso del sitio.
+export async function salirAlLogin() {
+  const token = AUTH_TOKEN;
+  if (token) {
+    try {
+      await Promise.race([
+        fetch(`${SUPABASE_URL}/auth/v1/logout?scope=global`, { method: "POST", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` } }),
+        new Promise((r) => setTimeout(r, 2500)),
+      ]);
+    } catch { /* igual se sale */ }
+  }
+  logoutAdmin(true);
+  try { Object.keys(localStorage).forEach((k) => { if (/^sb-.*-auth-token$/.test(k) || k === "hdr_area" || k === "hdr_role") localStorage.removeItem(k); }); } catch { /* sin storage */ }
+  window.location.replace("/");
+}
+
 async function refrescar() {
   if (!REFRESH_TOKEN) return false;
   try {

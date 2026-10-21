@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { loginAdmin, logoutAdmin, getAdminEmail, sesionGuardada, permisoRRHH } from "./supabase-admin.js";
+import { loginAdmin, logoutAdmin, getAdminEmail, sesionGuardada, permisoRRHH, salirAlLogin } from "./supabase-admin.js";
 import Empleados from "./Empleados.jsx";
 import Plantillas from "./Plantillas.jsx";
 import Sectores from "./Sectores.jsx";
@@ -61,7 +61,8 @@ export default function Admin() {
     }
   };
 
-  const salir = () => { logoutAdmin(); setLogueado(false); setPass(""); };
+  const [saliendo, setSaliendo] = useState(false);
+  const salir = () => { if (saliendo) return; setSaliendo(true); salirAlLogin(); };
 
   // Sifoncito avisa (una vez por día) si quedaron turnos sin fichar la salida.
   useEffect(() => {
@@ -148,8 +149,8 @@ export default function Admin() {
             <div className="flex items-center gap-2">
               <a href="../" title="Volver al inicio de Gestión Anafer" className="text-sm font-semibold text-[#5c6b78] hover:text-[#223c7e] py-1.5 px-3 rounded-lg border border-[#e3e8ed] bg-white">⌂ Inicio</a>
               <span className="text-xs text-[#5c6b78] bg-[#f1f4f7] border border-[#e3e8ed] rounded-full px-3 py-1.5 max-w-[240px] truncate">{getAdminEmail() || "admin"}</span>
-              <button onClick={salir} className="text-sm font-semibold text-[#5c6b78] hover:text-[#223c7e] py-1.5 px-3 rounded-lg border border-[#e3e8ed] bg-white">
-                Salir
+              <button onClick={salir} disabled={saliendo} className="text-sm font-semibold text-[#5c6b78] hover:text-[#223c7e] py-1.5 px-3 rounded-lg border border-[#e3e8ed] bg-white disabled:opacity-60">
+                {saliendo ? "Saliendo…" : "Salir"}
               </button>
             </div>
           </div>
