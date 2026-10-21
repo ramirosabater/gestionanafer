@@ -102,3 +102,55 @@ test("pago mixto: cheque de cartera + transferencia por la diferencia", async ({
   const chq = (await escrituras(page, "cheques")).map((x) => x[2]).pop();
   expect(chq.estado).toBe("entregado");
 });
+
+test("movimiento entre cuentas: sale de una, entra en la otra, se edita y se anula junto", async ({ page }) => {
+  await abrirGestion(page, baseDePrueba(datosCompras()), { email: "compras@anafer.test" });
+  await page.click("#tab-tesoreria");
+  await page.click('#subtabs-tesoreria .stabbtn[data-sub="movimientos"]');
+  await page.click("#new-transfer-btn");
+  await page.selectOption("#trf-desde", "bco");
+  await page.selectOption("#trf-hacia", "bco");
+  await expect(page.locator("#trf-aviso")).toContainText("dos cuentas distintas");
+  await page.selectOption("#trf-hacia", "caja");
+  await page.fill("#trf-monto", "2.100.000");
+  await expect(page.locator("#trf-saldo-desde")).toContainText("queda −$100.000,00");
+  await expect(page.locator("#trf-aviso")).toContainText("queda en negativo");
+  await page.click("#trf-swap");                       // ahora de Caja al Banco
+  await page.click("#trf-swap");                       // y de vuelta
+  await page.fill("#trf-monto", "150.000");
+  await page.fill("#trf-detalle", "Fondo fijo");
+  await page.click("#trf-save");
+
+  const movs = (await escrituras(page, "movimientos")).map((x) => x[2]);
+  const sal = movs.find((m) => m.id.endsWith("_sal")), ent = movs.find((m) => m.id.endsWith("_ent"));
+  expect(sal).toMatchObject({ cuenta_id: "bco", tipo: "egreso", monto: 150000, concepto: "Transferencia a Caja — Fondo fijo" });
+  expect(ent).toMatchObject({ cuenta_id: "caja", tipo: "ingreso", monto: 150000, concepto: "Transferencia desde Banco Santander — Fondo fijo" });
+  expect(sal.id.replace(/_sal$/, "")).toBe(ent.id.replace(/_ent$/, ""));
+  await expect(page.locator("#movimientos-body .mov-origen-badge.trf")).toHaveCount(2);
+
+  await page.click('#subtabs-tesoreria .stabbtn[data-sub="cuentas"]');
+  await expect(page.locator("#cuentas-body tr", { hasText: "Banco Santander" })).toContainText("$1.850.000,00");
+  await expect(page.locator("#cuentas-body tr", { hasText: "Caja" }).first()).toContainText("$200.000,00");
+
+  // editar desde cualquiera de las dos filas: cambia las dos
+  await page.click('#subtabs-tesoreria .stabbtn[data-sub="movimientos"]');
+  await page.locator("#movimientos-body tr", { hasText: "Transferencia desde" }).click();
+  await expect(page.locator("#trf-desde")).toHaveValue("bco");
+  await expect(page.locator("#trf-detalle")).toHaveValue("Fondo fijo");
+  await page.fill("#trf-monto", "100000");
+  await page.click("#trf-save");
+  const ult = (await escrituras(page, "movimientos")).map((x) => x[2]).slice(-2);
+  expect(ult.map((m) => m.monto)).toEqual([100000, 100000]);
+  expect(ult.map((m) => m.id).sort()).toEqual([sal.id, ent.id].sort());
+
+  // anular: se anulan las dos y vuelven los saldos
+  await page.locator("#movimientos-body tr", { hasText: "Transferencia a Caja" }).click();
+  await page.click("#trf-anular");
+  await page.fill("#anul-motivo", "Cargado por error");
+  await page.click("#anul-ok");
+  const anul = (await escrituras(page, "movimientos")).map((x) => x[2]).slice(-2);
+  expect(anul.every((m) => m.anulado_en && m.motivo_anulacion === "Cargado por error")).toBe(true);
+  await page.click('#subtabs-tesoreria .stabbtn[data-sub="cuentas"]');
+  await expect(page.locator("#cuentas-body tr", { hasText: "Banco Santander" })).toContainText("$2.000.000,00");
+  expect((await escrituras(page, "movimientos")).filter((x) => x[1] === "delete")).toHaveLength(0);
+});

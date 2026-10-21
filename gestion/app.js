@@ -4413,6 +4413,8 @@
   function provGanCondicionAuto(p){
     var iva = normTxt(p && p.condicionIva);
     if(iva.indexOf('monotrib')!==-1) return 'monotributo';
+    // "Exento en IVA": la factura no lleva IVA (neto = total) pero en Ganancias se le retiene como inscripto.
+    if(iva.indexOf('exento en iva')!==-1) return 'inscripto';
     if(iva.indexOf('exento')!==-1) return 'exento';
     if(iva.indexOf('inscripto')!==-1) return 'inscripto';
     return 'no_inscripto';
@@ -5926,6 +5928,7 @@
 
   function movimientoOrigen(m){
     if(m.pagoId) return {label:'Orden de pago', auto:true};
+    if(esTransferencia(m)) return {label:'Entre cuentas', auto:false, trf:true};
     if(m.id.indexOf('mov_chq_')===0) return {label:'Cheque', auto:true};
     return {label:'Manual', auto:false};
   }
@@ -5955,9 +5958,10 @@
         +'<td class="num" title="'+esc(medioLabel(m.medioId))+'">'+esc(medioCodigo(m.medioId)||'—')+'</td>'
         +'<td>'+esc(cuentaNombre(m.cuentaId))+'</td>'
         +'<td class="day-note">'+esc(m.concepto||'—')+'</td>'
-        +'<td><span class="mov-origen-badge'+(org.auto?' auto':'')+'">'+org.label+'</span></td>'
+        +'<td><span class="mov-origen-badge'+(org.auto?' auto':'')+(org.trf?' trf':'')+'">'+org.label+'</span></td>'
         +'<td class="num'+(ing?' monto-ingreso':'')+'">'+(ing?'+':'−')+'$'+montoStr+'</td>';
       tr.addEventListener('click', function(){
+        if(org.trf){ openTransferModal(transferBase(m.id)); return; }
         if(anul && !m.pagoId && !org.auto){ openMovimientoModal(m.id); return; }
         if(anul){ showToast(anulacionTexto(Object.assign({__genero:'o'}, m)), 6000); return; }
         if(m.pagoId){ showToast('Este movimiento viene de una orden de pago: se cambia desde Pagos.'); return; }
@@ -6351,6 +6355,118 @@
       closeMovimientoModal();
       renderTesoreria();
       showToast('Movimiento anulado.');
+    });
+  });
+
+  // ---------- Movimiento entre cuentas (de una caja o banco a otro) ----------
+  // Son dos movimientos ligados por el id: mov_trf_<x>_sal (salida de la
+  // cuenta de origen) y mov_trf_<x>_ent (entrada en la de destino), con la
+  // misma fecha e importe. Se editan y se anulan juntos. No cambian el total
+  // de la empresa: solo dónde está la plata. La cartera de cheques no
+  // participa (los cheques se mueven depositándolos).
+  function esTransferencia(m){ return !!m && /^mov_trf_.+_(sal|ent)$/.test(m.id||''); }
+  function transferBase(id){ return String(id||'').replace(/_(sal|ent)$/, ''); }
+  function transferPar(base){ return {sal: movimientoById(base+'_sal'), ent: movimientoById(base+'_ent')}; }
+  function cuentasParaTransferir(incluir){
+    return state.cuentas.filter(function(c){ return c.tipo!=='cartera' || incluir.indexOf(c.id)>=0; })
+      .sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); });
+  }
+  function fmtMoneySigno(n){ return (n<0 ? '−' : '')+fmtMoney(Math.abs(n)); }
+  function transferSaldos(){
+    var base = state.editingTransfer;
+    var par = base ? transferPar(base) : {};
+    var monto = parseMontoInput(document.getElementById('trf-monto').value) || 0;
+    var d = document.getElementById('trf-desde').value, h = document.getElementById('trf-hacia').value;
+    var aviso = [];
+    [['desde', d, -1, par.sal], ['hacia', h, 1, par.ent]].forEach(function(x){
+      var el = document.getElementById('trf-saldo-'+x[0]);
+      if(!x[1]){ el.textContent = ''; el.classList.remove('neg'); return; }
+      // saldo de hoy sin este mismo movimiento (si se está editando)
+      var hoy = cuentaSaldoActual(x[1]);
+      if(x[3] && noAnulado(x[3]) && x[3].cuentaId===x[1] && (x[3].fecha||'')<=todayStr()) hoy -= (x[3].tipo==='ingreso'?1:-1)*Number(x[3].monto||0);
+      var despues = hoy + x[2]*monto;
+      el.textContent = 'Saldo hoy '+fmtMoneySigno(hoy)+(monto>0 ? ' → queda '+fmtMoneySigno(despues) : '');
+      el.classList.toggle('neg', monto>0 && despues<0);
+      if(x[0]==='desde' && monto>0 && despues<0) aviso.push('La cuenta de origen queda en negativo ('+fmtMoneySigno(despues)+'). Se puede guardar igual.');
+    });
+    if(d && h && d===h) aviso.unshift('Elegí dos cuentas distintas.');
+    var av = document.getElementById('trf-aviso');
+    av.textContent = aviso.join(' '); av.hidden = !aviso.length;
+  }
+  function openTransferModal(base){
+    var par = base ? transferPar(base) : {};
+    var m = par.sal || par.ent || null;
+    if(base && !m){ showToast('No se encontró el movimiento.'); return; }
+    state.editingTransfer = base || null;
+    var incl = [par.sal && par.sal.cuentaId, par.ent && par.ent.cuentaId].filter(Boolean);
+    var lista = cuentasParaTransferir(incl);
+    ['trf-desde','trf-hacia'].forEach(function(id){ fillSelect(document.getElementById(id), lista, 'id', 'nombre', 'Elegir cuenta'); });
+    var sel = document.getElementById('trf-medio');
+    sel.innerHTML = '<option value="">— Sin concepto —</option>';
+    mediosOrdenados(m && m.medioId).filter(function(x){ return x.cheque==='no' || (m && x.id===m.medioId); }).forEach(function(x){
+      var o = document.createElement('option'); o.value = x.id; o.textContent = x.codigo+' — '+x.nombre; sel.appendChild(o);
+    });
+    var detalle = '';
+    if(m){
+      var c = m.concepto||'';
+      var i = c.indexOf(' — '); detalle = i>=0 ? c.slice(i+3) : '';
+    }
+    document.getElementById('trf-desde').value = par.sal ? par.sal.cuentaId : '';
+    document.getElementById('trf-hacia').value = par.ent ? par.ent.cuentaId : '';
+    document.getElementById('trf-fecha').value = m ? (m.fecha||todayStr()) : todayStr();
+    document.getElementById('trf-monto').value = m ? fmtMontoInput(m.monto||0) : '';
+    sel.value = m ? (m.medioId||'') : '';
+    document.getElementById('trf-detalle').value = detalle;
+    document.getElementById('trf-notas').value = m ? (m.notas||'') : '';
+    document.getElementById('trf-title').textContent = m ? 'Movimiento entre cuentas' : 'Nuevo movimiento entre cuentas';
+    document.getElementById('trf-anular').style.display = m ? '' : 'none';
+    marcarModalAnulado('trf-save', 'trf-anular', m, 'o');
+    transferSaldos();
+    document.getElementById('transfer-overlay').classList.add('show');
+  }
+  function closeTransferModal(){ document.getElementById('transfer-overlay').classList.remove('show'); }
+  document.getElementById('new-transfer-btn').addEventListener('click', function(){ openTransferModal(null); });
+  document.getElementById('trf-cancel').addEventListener('click', closeTransferModal);
+  ['trf-desde','trf-hacia','trf-monto'].forEach(function(id){
+    document.getElementById(id).addEventListener(id==='trf-monto' ? 'input' : 'change', transferSaldos);
+  });
+  document.getElementById('trf-swap').addEventListener('click', function(){
+    var d = document.getElementById('trf-desde'), h = document.getElementById('trf-hacia'), t = d.value;
+    d.value = h.value; h.value = t; transferSaldos();
+  });
+  document.getElementById('trf-save').addEventListener('click', function(){
+    var desde = document.getElementById('trf-desde').value, hacia = document.getElementById('trf-hacia').value;
+    if(!desde || !hacia){ showToast('Elegí de qué cuenta sale y en cuál entra.'); return; }
+    if(desde===hacia){ showToast('Elegí dos cuentas distintas.'); return; }
+    var monto = parseMontoInput(document.getElementById('trf-monto').value);
+    if(isNaN(monto) || monto<=0){ showToast('Ingresá un importe válido.'); return; }
+    var base = state.editingTransfer || newId('mov_trf_');
+    var prev = state.editingTransfer ? transferPar(base) : {};
+    if((prev.sal && esAnulado(prev.sal)) || (prev.ent && esAnulado(prev.ent))){ showToast('Este movimiento está anulado.'); return; }
+    var fecha = document.getElementById('trf-fecha').value || todayStr();
+    var medioId = document.getElementById('trf-medio').value || null;
+    var det = document.getElementById('trf-detalle').value.trim();
+    var notas = document.getElementById('trf-notas').value.trim();
+    var nd = cuentaNombre(desde), nh = cuentaNombre(hacia);
+    var comun = {fecha:fecha, monto:r2(monto), pagoId:'', notas:notas, medioId:medioId, chequeIds:[]};
+    upsertMovimientoLocal(Object.assign({}, prev.sal||{}, comun, {id:base+'_sal', cuentaId:desde, tipo:'egreso', concepto:'Transferencia a '+nh+(det ? ' — '+det : '')}));
+    upsertMovimientoLocal(Object.assign({}, prev.ent||{}, comun, {id:base+'_ent', cuentaId:hacia, tipo:'ingreso', concepto:'Transferencia desde '+nd+(det ? ' — '+det : '')}));
+    closeTransferModal();
+    renderTesoreria();
+    showToast(state.editingTransfer ? 'Movimiento entre cuentas actualizado.' : 'Listo: '+fmtMoney(monto)+' de '+nd+' a '+nh+'.');
+  });
+  document.getElementById('trf-anular').addEventListener('click', function(){
+    var base = state.editingTransfer;
+    if(!base) return;
+    var par = transferPar(base);
+    var m = par.sal || par.ent;
+    if(!m || esAnulado(m)) return;
+    pedirAnulacion('Anular movimiento entre cuentas', (par.sal ? cuentaNombre(par.sal.cuentaId) : '?')+' → '+(par.ent ? cuentaNombre(par.ent.cuentaId) : '?')+' — '+fmtMoney(m.monto)+'. Se anulan la salida y la entrada; dejan de sumar a los saldos.', function(motivo){
+      var sello = sellarAnulacion({}, motivo);
+      [par.sal, par.ent].filter(Boolean).forEach(function(x){ upsertMovimientoLocal(Object.assign({}, x, sello)); });
+      closeTransferModal();
+      renderTesoreria();
+      showToast('Movimiento entre cuentas anulado.');
     });
   });
 

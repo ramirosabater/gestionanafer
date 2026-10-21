@@ -902,6 +902,15 @@
   .toast.show{opacity:1;}
 
   ::selection{background:var(--accent); color:var(--accent-ink);}
+  /* Movimiento entre cuentas */
+  .trf-cuentas{ display:grid; grid-template-columns:1fr auto 1fr; gap:10px; align-items:start; }
+  .trf-cuentas .trf-swap{ margin-top:24px; padding:8px 12px; }
+  .trf-saldo{ font-size:12px; color:var(--muted); margin-top:4px; }
+  .trf-saldo.neg{ color:var(--danger); font-weight:600; }
+  .trf-aviso{ background:#fff7e0; border:1px solid #f2d27a; color:#7a5b00; border-radius:10px; padding:8px 12px; font-size:13px; margin-top:6px; }
+  .trf-aviso[hidden]{ display:none; }
+  .mov-origen-badge.trf{ background:rgba(43,169,224,.14); color:#1b7fae; }
+  @media (max-width:560px){ .trf-cuentas{ grid-template-columns:1fr; } .trf-cuentas .trf-swap{ margin-top:0; justify-self:center; transform:rotate(90deg); } }
 </style>
 </head>
 <body>
@@ -1405,6 +1414,7 @@
         <select id="mov-filter-cuenta" class="scope-select">
           <option value="">Todas las cuentas</option>
         </select>
+        <button class="btn edit-action" id="new-transfer-btn" title="Pasar plata de una caja o banco a otra">⇄ Entre cuentas</button>
         <button class="btn primary edit-action" id="new-entrada-btn">+ Entrada</button>
         <button class="btn primary edit-action" id="new-movimiento-btn">+ Salida</button>
       </div>
@@ -1790,7 +1800,8 @@
           <option value="">—</option>
           <option value="Responsable inscripto">Responsable inscripto</option>
           <option value="Monotributo">Monotributo</option>
-          <option value="Exento">Exento</option>
+          <option value="Exento en IVA">Exento en IVA (no va al IVA, sí a Ganancias)</option>
+          <option value="Exento">Exento (IVA y Ganancias)</option>
           <option value="Consumidor final">Consumidor final</option>
         </select>
       </div>
@@ -2267,6 +2278,52 @@
         <button class="btn" id="movm-delete" style="display:none; color:var(--danger);">Anular</button>
       </div>
       <button class="btn primary" id="movm-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="transfer-overlay">
+  <div class="modal wide" id="transfer-modal" style="max-width:640px;">
+    <h3 id="trf-title">Movimiento entre cuentas</h3>
+    <div class="sub">Pasa plata de una caja o banco a otro: sale de una cuenta y entra en la otra el mismo día, por el mismo importe.</div>
+    <div class="modal-scroll-body">
+    <div class="trf-cuentas">
+      <div class="field">
+        <label for="trf-desde">Sale de</label>
+        <select id="trf-desde"></select>
+        <div class="trf-saldo" id="trf-saldo-desde"></div>
+      </div>
+      <button type="button" class="btn trf-swap" id="trf-swap" title="Invertir">⇄</button>
+      <div class="field">
+        <label for="trf-hacia">Entra en</label>
+        <select id="trf-hacia"></select>
+        <div class="trf-saldo" id="trf-saldo-hacia"></div>
+      </div>
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label for="trf-fecha">Fecha</label><input type="date" id="trf-fecha"></div>
+      <div class="field"><label for="trf-monto">Importe</label><input type="text" id="trf-monto" inputmode="decimal" placeholder="0,00"></div>
+    </div>
+    <div class="field">
+      <label for="trf-medio">Concepto de caja (opcional)</label>
+      <select id="trf-medio"></select>
+    </div>
+    <div class="field">
+      <label for="trf-detalle">Detalle (opcional)</label>
+      <input type="text" id="trf-detalle" maxlength="80" placeholder="Ej: Depósito de la recaudación, Fondo fijo sucursal">
+    </div>
+    <div class="field">
+      <label for="trf-notas">Notas (opcional)</label>
+      <textarea id="trf-notas" placeholder="Observaciones..."></textarea>
+    </div>
+    <div class="trf-aviso" id="trf-aviso" hidden></div>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="trf-cancel">Cancelar</button>
+        <button class="btn" id="trf-anular" style="display:none; color:var(--danger);">Anular</button>
+      </div>
+      <button class="btn primary" id="trf-save">Guardar</button>
     </div>
   </div>
 </div>

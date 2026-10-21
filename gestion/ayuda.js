@@ -89,6 +89,7 @@
         { t: "En <b>Tesorería → Cuentas</b> ves, por cada caja y banco, el <b>saldo hoy</b>, lo que está <b>a debitar</b> y el <b>saldo proyectado</b>.", ir: ["#tab-tesoreria", '#subtabs-tesoreria .stabbtn[data-sub="cuentas"]'], foco: "#cuentas-table" },
         { t: "Si pagás con un cheque o echeq propio a 30 o 60 días, la plata sale del banco el <b>día de cobro</b>: hasta entonces figura \"a debitar\" y solo baja el saldo proyectado. El gasto, en cambio, cuenta en la fecha de la factura." },
         { t: "En <b>Movimientos</b> cargás entradas y salidas con su concepto de caja (CAN, TR1, CHE…).", ir: '#subtabs-tesoreria .stabbtn[data-sub="movimientos"]', foco: "#new-entrada-btn" },
+        { t: "Para pasar plata de una caja o banco a otro (por ejemplo, depositar la recaudación o armar el fondo fijo de una sucursal) usá <b>⇄ Entre cuentas</b>: elegís de dónde sale, dónde entra y el importe, y queda la salida y la entrada juntas. El total de la empresa no cambia, solo dónde está la plata.", foco: "#new-transfer-btn" },
         { t: "Los pagos de órdenes de pago generan su salida solos; esos se corrigen desde la orden, no desde acá. Un movimiento mal cargado se <b>anula</b>: queda tachado y deja de sumar al saldo." },
         { t: "En <b>Cartera de cheques</b> están los cheques de terceros: tocá uno para depositarlo o marcarlo rechazado. Los que están en fecha dicen AL COBRO.", ir: '#subtabs-tesoreria .stabbtn[data-sub="cheques"]', foco: "#cheques-table" },
       ] },

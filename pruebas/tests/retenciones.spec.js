@@ -73,3 +73,98 @@ test("segundo pago del mes descuenta lo ya retenido; egreso y certificado por el
   await expect(cert.locator("body")).toContainText("N° 000001");
   await expect(cert.locator("body")).toContainText("$656,60");
 });
+
+// Regímenes que usa Anafer (retenciones-reales.sql): honorarios de director por
+// la 1ª escala, dividendos 7% y Factura M (Ganancias 0,25% + IVA 21%).
+function datosReales() {
+  const d = datosCompras();
+  d.gan_regimenes = [...d.gan_regimenes,
+    { codigo: 116, descripcion: "Honorarios de director", alic_insc: null, escala: "general", alic_no_insc: 28, alic_no_insc_ph: null, mnsr: 67170, mnsr_no_insc: false, min_insc: 240, min_no_insc: 240, activo: true, orden: 5 },
+    { codigo: 900, descripcion: "Distribución de dividendos", alic_insc: 7, escala: null, alic_no_insc: 7, alic_no_insc_ph: null, mnsr: 0, mnsr_no_insc: false, min_insc: 0, min_no_insc: 0, activo: true, orden: 8 },
+    { codigo: 901, descripcion: "Facturas M (Ganancias + IVA)", alic_insc: 0.25, escala: null, alic_no_insc: 0.25, alic_no_insc_ph: null, mnsr: 67170, mnsr_no_insc: false, min_insc: 240, min_no_insc: 240, iva_pct: 21, activo: true, orden: 9 },
+    { codigo: 32, descripcion: "Alquileres rurales (ya no se usa)", alic_insc: 6, escala: null, alic_no_insc: 25, alic_no_insc_ph: 28, mnsr: 11200, mnsr_no_insc: false, min_insc: 240, min_no_insc: 240, activo: false, orden: 99 },
+  ];
+  d.gan_escalas = [...d.gan_escalas,
+    { escala: "general", desde: 0, hasta: 8000, fijo: 0, pct: 5 }, { escala: "general", desde: 24000, hasta: 32000, fijo: 2080, pct: 15 },
+    { escala: "general", desde: 32000, hasta: 48000, fijo: 3280, pct: 19 }, { escala: "general", desde: 96000, hasta: null, fijo: 18640, pct: 31 }];
+  d.proveedores = [...d.proveedores,
+    { id: "dire", nombre: "Director Gómez", cuit: "20-77777777-7", condicion_iva: "Responsable inscripto", rubro: "", gan_regimen: 116 },
+    { id: "acc", nombre: "Accionista Ruiz", cuit: "20-88888888-8", condicion_iva: "Responsable inscripto", rubro: "", gan_regimen: 900 },
+    { id: "mfac", nombre: "Emisor M SRL", cuit: "30-99999999-9", condicion_iva: "Responsable inscripto", rubro: "Bienes" },
+    { id: "rural", nombre: "Campo SA", cuit: "30-12121212-1", condicion_iva: "Responsable inscripto", rubro: "", gan_regimen: 32 },
+  ];
+  d.facturas = [...d.facturas,
+    { id: "d1", proveedor_id: "dire", numero: "C-0001-00000010", fecha: "2026-10-02", monto: 100000, neto: 100000, estado: "pendiente" },
+    { id: "a1", proveedor_id: "acc", numero: "DIV-2026", fecha: "2026-10-02", monto: 500000, neto: 500000, estado: "pendiente" },
+    { id: "fm1", proveedor_id: "mfac", numero: "M-0003-00001234", fecha: "2026-10-02", monto: 363000, neto: 300000, estado: "pendiente" },
+    { id: "r1", proveedor_id: "rural", numero: "A-0001-00000077", fecha: "2026-10-02", monto: 121000, neto: 100000, estado: "pendiente" },
+  ];
+  return d;
+}
+
+test.describe("retenciones que usa Anafer", () => {
+  test.beforeEach(async ({ page }) => {
+    await abrirGestion(page, baseDePrueba(datosReales()), { email: "compras@anafer.test" });
+    await irAOrdenes(page);
+  });
+  test("honorarios de director (116): (100.000 − 67.170) por la 1ª escala = 3.280 + 19% de 830", async ({ page }) => {
+    await nuevaOP(page, "Director");
+    expect(await importeRet(page)).toBe("$3.437,70");
+  });
+  test("dividendos (900): 7%", async ({ page }) => {
+    await nuevaOP(page, "Accionista");
+    expect(await importeRet(page)).toBe("$35.000,00");
+  });
+  test("régimen desactivado: no retiene y avisa", async ({ page }) => {
+    await nuevaOP(page, "Campo");
+    expect(await importeRet(page)).toBe("$0,00");
+    await expect(page.locator("#pom-ret-lines")).toContainText("desactivado");
+  });
+  test("Factura M: Ganancias (300.000 − 67.170) × 0,25% e IVA 21% del neto, con dos certificados", async ({ page, context }) => {
+    await nuevaOP(page, "Emisor M", { pagar: true });
+    const lineas = page.locator("#pom-ret-lines .ret-line");
+    await expect(lineas).toHaveCount(2);
+    await expect(lineas.nth(0)).toContainText("901");
+    await expect(lineas.nth(0).locator("b")).toHaveText("$582,08");
+    await expect(lineas.nth(1)).toContainText("IVA");
+    await expect(lineas.nth(1).locator("b").last()).toHaveText("$63.000,00");
+    await expect(page.locator("#pom-neto")).toHaveText("$299.417,92");
+    await page.click("#pom-save");
+    const op = (await escrituras(page, "ordenes_pago")).map((x) => x[2]).pop();
+    expect(op.retenciones.map((e) => [e.impuesto || "ganancias", e.regimen, e.importe, e.certificado])).toEqual([["ganancias", 901, 582.08, 1], ["iva", 901, 63000, 2]]);
+    expect(op.retenido).toBe(63582.08);
+    await page.click('#subtabs-pagos .stabbtn[data-sub="retenciones"]');
+    await page.fill("#ret-mes", "2026-10");
+    await page.dispatchEvent("#ret-mes", "change");
+    await expect(page.locator("#ret-body tr")).toHaveCount(2);
+    await expect(page.locator("#ret-body tr").nth(1)).toContainText("IVA · 901");
+    const [cert] = await Promise.all([context.waitForEvent("page"), page.locator("#ret-body tr").nth(1).locator("button").click()]);
+    await expect(cert.locator("body")).toContainText("Impuesto al Valor Agregado");
+    await expect(cert.locator("body")).toContainText("$63.000,00");
+  });
+});
+
+test("exento en IVA: la factura no lleva IVA (neto = total) pero se retiene Ganancias; exento total no", async ({ page }) => {
+  const { PROVEEDORES, FACTURAS } = await import("../apoyo/datos-compras.js");
+  await abrirGestion(page, baseDePrueba(datosCompras({
+    proveedores: [...PROVEEDORES,
+      { id: "exiva", nombre: "Exiva Servicios", cuit: "30-44444444-4", condicion_iva: "Exento en IVA", rubro: "Locación de servicios" },
+      { id: "extot", nombre: "Extot Asociación", cuit: "30-55555555-5", condicion_iva: "Exento", rubro: "Locación de servicios" }],
+    facturas: [...FACTURAS,
+      { id: "x1", proveedor_id: "exiva", numero: "C-1", fecha: "2026-10-01", monto: 100000, estado: "pendiente" },
+      { id: "x2", proveedor_id: "extot", numero: "C-2", fecha: "2026-10-01", monto: 100000, estado: "pendiente" }],
+  })), { email: "compras@anafer.test" });
+  await irAOrdenes(page);
+  await nuevaOP(page, "Exiva");
+  await expect.poll(() => importeRet(page)).toBe("$656,60");   // (100.000 − 67.170) × 2%, sin sacarle IVA
+  await page.click("#pom-cancel");
+  await nuevaOP(page, "Extot");
+  await expect.poll(() => importeRet(page)).toBe("$0,00");
+  await page.click("#pom-cancel");
+  // en la ficha aparece la condición nueva y Ganancias automática → Inscripto
+  await page.click("#tab-compras");
+  await page.click('#subtabs-compras .stabbtn[data-sub="proveedores"]');
+  await page.locator("#proveedores-body tr", { hasText: "Exiva" }).click();
+  await expect(page.locator("#pm-condicion-iva")).toHaveValue("Exento en IVA");
+  await expect(page.locator("#pm-gan-hint")).toHaveText("→ Inscripto");
+});
