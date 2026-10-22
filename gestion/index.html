@@ -911,6 +911,28 @@
   .trf-aviso[hidden]{ display:none; }
   .mov-origen-badge.trf{ background:rgba(43,169,224,.14); color:#1b7fae; }
   @media (max-width:560px){ .trf-cuentas{ grid-template-columns:1fr; } .trf-cuentas .trf-swap{ margin-top:0; justify-self:center; transform:rotate(90deg); } }
+  /* Artículos en la factura */
+  .art-box{ border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin:8px 0 12px; background:color-mix(in srgb, var(--accent) 4%, var(--surface)); }
+  .art-box[hidden]{ display:none; }
+  .art-line{ display:grid; grid-template-columns:minmax(0,3fr) 90px 70px 120px 110px 28px; gap:6px; align-items:center; margin-top:6px; }
+  .art-line input{ font-family:inherit; font-size:13px; border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:8px; padding:6px 8px; min-width:0; width:100%; }
+  .art-line input.cant, .art-line input.precio{ text-align:right; font-family:"IBM Plex Mono",monospace; }
+  .art-line .imp{ font-family:"IBM Plex Mono",monospace; }
+  #fm-art-total{ font-family:inherit; }
+  .art-line .uni{ font-size:12px; color:var(--muted); }
+  .art-line .imp{ text-align:right; font-variant-numeric:tabular-nums; font-size:13px; }
+  .art-line .del{ border:none; background:none; cursor:pointer; color:var(--muted); font-size:15px; }
+  .art-line .del:hover{ color:var(--danger); }
+  .art-line.err input.art{ border-color:var(--danger); }
+  .art-head{ display:grid; grid-template-columns:minmax(0,3fr) 90px 70px 120px 110px 28px; gap:6px; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-top:6px; }
+  .art-head span:nth-child(2), .art-head span:nth-child(4), .art-head span:nth-child(5){ text-align:right; }
+  .art-uso{ font-size:12.5px; color:var(--ink-2); margin-top:6px; }
+  .art-inactivo{ color:var(--muted); }
+  @media (max-width:640px){
+    .art-head{ display:none; }
+    .art-line{ grid-template-columns:1fr 1fr 1fr; }
+    .art-line input.art{ grid-column:1 / -1; }
+  }
 </style>
 </head>
 <body>
@@ -1211,7 +1233,7 @@
 
   <div id="view-compras" hidden>
     <div class="toolbar" id="toolbar-compras">
-      <div style="font-size:12.5px; color:var(--ink-2);">Proveedores y órdenes de compra</div>
+      <div style="font-size:12.5px; color:var(--ink-2);">Proveedores, órdenes de compra y artículos</div>
     </div>
 
     <div class="settings-tabs subtabs" id="subtabs-compras"></div>
@@ -1250,6 +1272,27 @@
       <table class="day-table" id="oc-table">
         <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Descripción</th><th>Monto</th><th>Estado</th></tr></thead>
         <tbody id="oc-body"></tbody>
+      </table>
+    </div>
+    </section>
+
+    <section class="subsec" data-sub="articulos" data-label="Artículos">
+    <div class="compras-section-head">
+      <h3>Artículos <span class="prov-count" id="articulos-count"></span></h3>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="search" id="articulos-search" class="prov-search" placeholder="Buscar por código, descripción o categoría..." autocomplete="off">
+        <select id="articulos-filter" class="scope-select">
+          <option value="activos">Activos</option>
+          <option value="inactivos">Inactivos</option>
+          <option value="">Todos</option>
+        </select>
+        <button class="btn primary edit-action" id="new-articulo-btn">+ Nuevo artículo</button>
+      </div>
+    </div>
+    <div class="day-wrap prov-wrap">
+      <table class="day-table" id="articulos-table">
+        <thead><tr><th>Cód.</th><th>Descripción</th><th>Unidad</th><th>Categoría</th><th>Comprado</th><th>Último precio</th></tr></thead>
+        <tbody id="articulos-body"></tbody>
       </table>
     </div>
     </section>
@@ -1832,6 +1875,7 @@
       </div>
     </div>
     <label class="sug-prio-check"><input type="checkbox" id="pm-prioritario"> ★ Pago prioritario (aparece primero en la sugerencia de pagos: combustible, servicios, etc.)</label>
+    <label class="sug-prio-check"><input type="checkbox" id="pm-lleva-articulos"> 📦 Carga artículos: en sus facturas hay que detallar los artículos comprados (cantidad y precio), para Stock</label>
     <div class="field">
       <label>Imputaciones contables</label>
       <div class="imput-help">Combinaciones de centro de costo + concepto que usa este proveedor. Al cargar una factura se propone la más usada (si todavía no tiene facturas, la marcada ★).</div>
@@ -2085,6 +2129,19 @@
       </div>
     </div>
     <div class="split-toggle-row"><button type="button" class="link-btn" id="fm-split-on">Repartir esta factura en varias imputaciones</button></div>
+    <div class="art-box" id="fm-articulos" hidden>
+      <div class="split-head">
+        <span class="lbl">📦 Artículos de la factura</span>
+        <span class="fm-hint">Precio unitario sin IVA. Sirven para Stock.</span>
+      </div>
+      <datalist id="fm-art-datalist"></datalist>
+      <div class="art-lines" id="fm-art-lines"></div>
+      <div class="split-foot">
+        <button type="button" class="btn" id="fm-art-add">+ Agregar artículo</button>
+        <button type="button" class="link-btn" id="fm-art-nuevo">Crear un artículo nuevo</button>
+        <span class="split-total" id="fm-art-total"></span>
+      </div>
+    </div>
     <div class="crew-fields">
       <div class="field"><label for="fm-numero">N° de factura</label><input type="text" id="fm-numero" maxlength="40" placeholder="Ej: A-0001-00012345"></div>
       <div class="field"><label for="fm-fecha">Fecha</label><input type="date" id="fm-fecha"></div>
@@ -2324,6 +2381,37 @@
         <button class="btn" id="trf-anular" style="display:none; color:var(--danger);">Anular</button>
       </div>
       <button class="btn primary" id="trf-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="articulo-overlay" style="z-index:60;">
+  <div class="modal wide" id="articulo-modal" style="max-width:560px;">
+    <h3 id="artm-title">Nuevo artículo</h3>
+    <div class="sub">Artículo de la base (la usan las facturas de proveedores que cargan artículos y, después, Stock)</div>
+    <div class="modal-scroll-body">
+    <div class="crew-fields">
+      <div class="field"><label for="artm-codigo">Código</label><input type="text" id="artm-codigo" maxlength="30" placeholder="Automático"></div>
+      <div class="field"><label for="artm-unidad">Unidad</label>
+        <select id="artm-unidad">
+          <option>Unidad</option><option>Kg</option><option>Litro</option><option>Metro</option><option>Metro²</option>
+          <option>Caja</option><option>Bolsa</option><option>Paquete</option><option>Rollo</option><option>Bidón</option>
+          <option>Par</option><option>Juego</option><option>Tonelada</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label for="artm-descripcion">Descripción</label><input type="text" id="artm-descripcion" maxlength="120" placeholder="Ej: Tapa plástica 28 mm azul"></div>
+    <div class="field"><label for="artm-categoria">Categoría (opcional)</label><input type="text" id="artm-categoria" maxlength="60" list="artm-categorias" placeholder="Ej: Envases, Repuestos, Limpieza"><datalist id="artm-categorias"></datalist></div>
+    <div class="field"><label for="artm-notas">Notas (opcional)</label><textarea id="artm-notas" placeholder="Marca, medida, proveedor habitual..."></textarea></div>
+    <label class="sug-prio-check"><input type="checkbox" id="artm-activo" checked> Activo (si no, no se ofrece en las facturas nuevas)</label>
+    <div class="art-uso" id="artm-uso"></div>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="artm-cancel">Cancelar</button>
+        <button class="btn" id="artm-delete" style="display:none; color:var(--danger);">Eliminar</button>
+      </div>
+      <button class="btn primary" id="artm-save">Guardar</button>
     </div>
   </div>
 </div>

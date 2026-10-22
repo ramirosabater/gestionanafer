@@ -475,6 +475,12 @@
     editingCentroCostoId: null,
     editingConceptoId: null,
     rubros: [],                 // [{id, nombre}] — lista administrable desde ⚙ → Compras → Rubros
+    articulos: [],              // [{id, codigo, descripcion, unidad, categoria, activo, notas}] — Compras → Artículos
+    tablaArticulos: false,      // existe la tabla articulos (se corrió articulos.sql)
+    colArticulos: false,        // existe facturas.articulos
+    colLlevaArticulos: false,   // existe proveedores.lleva_articulos
+    editingFacturaArts: null,   // líneas de artículos de la factura en edición
+    articulosFiltro: 'activos', articulosBusqueda: '',
     editingRubroId: null,
     editingFacturaItems: null,  // null = factura con una sola imputación; array = repartida en líneas
     // Facturas y Órdenes de pago: facturas de proveedor (con o sin orden de
@@ -3731,6 +3737,7 @@
     renderConceptosList();
     renderRubrosList();
     renderOCList();
+    renderArticulosList();
     actualizarSubtabs();
   }
 
@@ -3767,7 +3774,7 @@
       var def = imputacionDefault(p.id);
       var extra = (p.imputaciones||[]).length>1 ? ' <span style="color:var(--muted);">(+'+((p.imputaciones||[]).length-1)+')</span>' : '';
       tr.innerHTML = '<td class="num">'+esc(p.codigo||'—')+'</td>'
-        +'<td class="day-route">'+esc(p.nombre)+(p.nombreFantasia ? ' <span style="color:var(--muted); font-weight:400;">· '+esc(p.nombreFantasia)+'</span>' : '')+'</td>'
+        +'<td class="day-route">'+esc(p.nombre)+(p.llevaArticulos ? ' <span title="Carga artículos en sus facturas">📦</span>' : '')+(p.nombreFantasia ? ' <span style="color:var(--muted); font-weight:400;">· '+esc(p.nombreFantasia)+'</span>' : '')+'</td>'
         +'<td class="num">'+esc(p.cuit||'—')+'</td>'
         +'<td>'+esc(p.rubro||'—')+'</td>'
         +'<td>'+(def ? esc(imputLabel(def))+extra : '—')+'</td>'
@@ -3825,6 +3832,7 @@
       provincia:p.provincia||'', condicion_iva:p.condicionIva||'', condicion_pago:p.condicionPago||'',
       imputaciones:(p.imputaciones||[]).map(function(im){ return {centro_costo_id:im.centroCostoId, concepto_id:im.conceptoId}; })
     }, state.colPrioritario ? {prioritario: !!p.prioritario} : {},
+       state.colLlevaArticulos ? {lleva_articulos: !!p.llevaArticulos} : {},
        state.schemaV3 ? {gan_condicion: p.ganCondicion||'', gan_regimen: p.ganRegimen||null} : {})).then(function(res){
       if(res.error) showToast('No se pudo guardar el proveedor: '+res.error.message);
     });
@@ -3945,6 +3953,7 @@
     setSelectValueLoose('pm-condicion-iva', p ? p.condicionIva : '');
     setSelectValueLoose('pm-condicion-pago', p ? p.condicionPago : '');
     document.getElementById('pm-prioritario').checked = !!(p && p.prioritario);
+    document.getElementById('pm-lleva-articulos').checked = !!(p && p.llevaArticulos);
     document.getElementById('pm-gan-condicion').value = p ? (p.ganCondicion||'') : '';
     fillRegimenSelect(document.getElementById('pm-gan-regimen'), p && p.ganRegimen ? String(p.ganRegimen) : '', 'Según rubro');
     actualizarPmGanHint();
@@ -3986,10 +3995,12 @@
       condicionIva: document.getElementById('pm-condicion-iva').value,
       condicionPago: document.getElementById('pm-condicion-pago').value,
       prioritario: document.getElementById('pm-prioritario').checked,
+      llevaArticulos: document.getElementById('pm-lleva-articulos').checked,
       ganCondicion: document.getElementById('pm-gan-condicion').value || '',
       ganRegimen: document.getElementById('pm-gan-regimen').value ? Number(document.getElementById('pm-gan-regimen').value) : null,
       imputaciones: state.editingProveedorImput.slice()
     };
+    if(baseData.llevaArticulos && !state.colLlevaArticulos) showToast('Para guardar "Carga artículos" falta correr base-de-datos/articulos.sql en Supabase.', 7000);
     if(baseData.prioritario && !state.colPrioritario) showToast('Para guardar "pago prioritario" falta correr el schema.sql nuevo en Supabase.', 6000);
     asegurarRubro(baseData.rubro);
     var saveBtn = this;
@@ -4101,6 +4112,7 @@
 
   function mapProveedorRow(row){
     if(row && Object.prototype.hasOwnProperty.call(row, 'prioritario')) state.colPrioritario = true;
+    if(row && Object.prototype.hasOwnProperty.call(row, 'lleva_articulos')) state.colLlevaArticulos = true;
     return {
       id:row.id, nombre:row.nombre||row.id, cuit:row.cuit||'', rubro:row.rubro||'',
       contacto:row.contacto||'', telefono:row.telefono||'', email:row.email||'',
@@ -4109,6 +4121,7 @@
       codigo:row.codigo||'', nombreFantasia:row.nombre_fantasia||'', localidad:row.localidad||'',
       provincia:row.provincia||'', condicionIva:row.condicion_iva||'', condicionPago:row.condicion_pago||'',
       prioritario: row.prioritario===true,
+      llevaArticulos: row.lleva_articulos===true,
       ganCondicion: row.gan_condicion||'', ganRegimen: row.gan_regimen==null ? null : Number(row.gan_regimen),
       imputaciones: (Array.isArray(row.imputaciones) ? row.imputaciones : []).filter(function(im){ return im && im.centro_costo_id && im.concepto_id; })
         .map(function(im){ return {centroCostoId:im.centro_costo_id, conceptoId:im.concepto_id}; })
@@ -4182,6 +4195,13 @@
       renderCompras();
     });
     cargarParametrosRetencion();
+    fetchAllRows('articulos').then(function(res){
+      if(res.error){ state.tablaArticulos = false; return; }   // sin articulos.sql todavía
+      state.tablaArticulos = true;
+      state.articulos = (res.data||[]).map(mapArticuloRow);
+      renderCompras();
+      if(document.getElementById('factura-overlay').classList.contains('show')) renderFacturaArts();
+    });
     state.sb.from('rubros').select('*').then(function(res){
       if(res.error){ showToast('Error cargando rubros (¿corriste el schema.sql nuevo?): '+res.error.message); return; }
       state.rubros = (res.data||[]).map(function(row){ return {id:row.id, nombre:row.nombre||''}; });
@@ -4416,6 +4436,7 @@
     // "Exento en IVA": la factura no lleva IVA (neto = total) pero en Ganancias se le retiene como inscripto.
     if(iva.indexOf('exento en iva')!==-1) return 'inscripto';
     if(iva.indexOf('exento')!==-1) return 'exento';
+    if(iva.indexOf('consumidor')!==-1) return 'no_retener';   // consumidor final: no se le retiene
     if(iva.indexOf('inscripto')!==-1) return 'inscripto';
     return 'no_inscripto';
   }
@@ -4859,6 +4880,7 @@
     }
     cnt('compras', 'proveedores', state.proveedores.length);
     cnt('compras', 'ocs', state.ordenesCompra.filter(function(o){ return o.estado==='pendiente'; }).length);
+    cnt('compras', 'articulos', state.articulos.filter(function(a){ return a.activo; }).length);
     var enOP = {};
     state.ordenesPago.forEach(function(p){ if(noAnulado(p)) (p.facturaIds||[]).forEach(function(fid){ enOP[fid] = true; }); });
     cnt('pagos', 'sugerencia', state.facturas.filter(function(f){ return f.estado==='pendiente' && !enOP[f.id] && Number(f.monto||0)!==0; }).length);
@@ -5049,6 +5071,259 @@
     showToast(grupos.length+' órdenes de pago creadas como pendientes. Para pagarlas, abrilas y marcalas como pagadas.', 6000);
   });
 
+  // ---------- Artículos (base para Stock) ----------
+  function mapArticuloRow(row){
+    return {id:row.id, codigo:row.codigo||'', descripcion:row.descripcion||'', unidad:row.unidad||'Unidad',
+            categoria:row.categoria||'', activo:row.activo!==false, notas:row.notas||''};
+  }
+  function articuloById(id){ return state.articulos.find(function(a){ return a.id===id; }) || null; }
+  function articuloLabel(a){ return a ? ((a.codigo ? a.codigo+' · ' : '')+a.descripcion) : ''; }
+  function proveedorLlevaArticulos(provId){ var p = state.proveedores.find(function(x){ return x.id===provId; }); return !!(p && p.llevaArticulos); }
+  function nextArticuloCodigo(){
+    var max = 0;
+    state.articulos.forEach(function(a){ if(/^\d+$/.test(a.codigo||'')) max = Math.max(max, Number(a.codigo)); });
+    return String(max+1).padStart(5, '0');
+  }
+  // Compras de un artículo en facturas no anuladas: cantidad total y último precio.
+  function articuloCompras(id, proveedorId){
+    var tot = 0, ult = null;
+    state.facturas.forEach(function(f){
+      if(esAnulado(f)) return;
+      (f.articulos||[]).forEach(function(l){
+        if(l.articuloId!==id) return;
+        tot += Number(l.cantidad)||0;
+        var prio = proveedorId && f.proveedorId===proveedorId ? 1 : 0;
+        if(!ult || prio>ult.prio || (prio===ult.prio && (f.fecha||'')>=(ult.fecha||''))) ult = {precio:l.precio, fecha:f.fecha, prio:prio, proveedorId:f.proveedorId};
+      });
+    });
+    return {cantidad:tot, ultimo:ult};
+  }
+  function fmtCant(n){ return (Math.round((Number(n)||0)*1000)/1000).toLocaleString('es-AR', {maximumFractionDigits:3}); }
+  function renderArticulosList(){
+    var body = document.getElementById('articulos-body');
+    if(!body) return;
+    var q = normTxt(state.articulosBusqueda), f = state.articulosFiltro;
+    var list = state.articulos.filter(function(a){
+      if(f==='activos' && !a.activo) return false;
+      if(f==='inactivos' && a.activo) return false;
+      return !q || normTxt(a.codigo+' '+a.descripcion+' '+a.categoria).indexOf(q)!==-1;
+    }).sort(function(a,b){ return (a.descripcion||'').localeCompare(b.descripcion||''); });
+    document.getElementById('articulos-count').textContent = state.articulos.length ? '('+state.articulos.length+')' : '';
+    body.innerHTML = '';
+    if(!state.tablaArticulos){
+      body.innerHTML = '<tr class="day-row empty"><td colspan="6">Para usar artículos falta correr <b>base-de-datos/articulos.sql</b> en Supabase.</td></tr>';
+      return;
+    }
+    if(!list.length){
+      body.innerHTML = '<tr class="day-row empty"><td colspan="6">'+(state.articulos.length ? 'Ningún artículo coincide con la búsqueda.' : 'Todavía no hay artículos. Cargalos con “+ Nuevo artículo” o desde la factura de un proveedor que carga artículos.')+'</td></tr>';
+      return;
+    }
+    list.slice(0, 300).forEach(function(a){
+      var c = articuloCompras(a.id);
+      var tr = document.createElement('tr');
+      tr.className = 'day-row'+(a.activo ? '' : ' art-inactivo');
+      tr.innerHTML = '<td class="num">'+esc(a.codigo||'—')+'</td>'
+        +'<td class="day-route">'+esc(a.descripcion)+(a.activo ? '' : ' <span class="fm-hint">(inactivo)</span>')+'</td>'
+        +'<td>'+esc(a.unidad)+'</td>'
+        +'<td>'+esc(a.categoria||'—')+'</td>'
+        +'<td class="num">'+(c.cantidad ? fmtCant(c.cantidad)+' '+esc(a.unidad.toLowerCase()) : '—')+'</td>'
+        +'<td class="num">'+(c.ultimo ? fmtMoney(c.ultimo.precio)+' <span class="fm-hint">'+esc(c.ultimo.fecha||'')+'</span>' : '—')+'</td>';
+      tr.addEventListener('click', function(){ openArticuloModal(a.id); });
+      body.appendChild(tr);
+    });
+  }
+  document.getElementById('articulos-search').addEventListener('input', function(){ state.articulosBusqueda = this.value; renderArticulosList(); });
+  document.getElementById('articulos-filter').addEventListener('change', function(){ state.articulosFiltro = this.value; renderArticulosList(); });
+
+  function writeArticulo(a){
+    if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return Promise.resolve(false); }
+    return state.sb.from('articulos').upsert({id:a.id, codigo:a.codigo||'', descripcion:a.descripcion, unidad:a.unidad||'Unidad',
+      categoria:a.categoria||'', activo:a.activo!==false, notas:a.notas||''}).then(function(res){
+      if(res.error){
+        showToast(/duplicate|unique/i.test(res.error.message) ? 'Ya hay otro artículo con el código '+a.codigo+'.' : 'No se pudo guardar el artículo: '+res.error.message, 6000);
+        return false;
+      }
+      return true;
+    });
+  }
+  // desdeLinea: índice de la línea de la factura que espera el artículo nuevo
+  function openArticuloModal(id, opts){
+    if(!state.tablaArticulos){ showToast('Para usar artículos falta correr base-de-datos/articulos.sql en Supabase.', 6000); return; }
+    opts = opts || {};
+    state.editingArticuloId = id || null;
+    state.artParaLinea = opts.desdeLinea==null ? null : opts.desdeLinea;
+    var a = id ? articuloById(id) : null;
+    document.getElementById('artm-title').textContent = a ? 'Editar artículo' : 'Nuevo artículo';
+    document.getElementById('artm-codigo').value = a ? a.codigo : '';
+    document.getElementById('artm-codigo').placeholder = 'Automático: '+nextArticuloCodigo();
+    document.getElementById('artm-descripcion').value = a ? a.descripcion : (opts.descripcion||'');
+    document.getElementById('artm-unidad').value = a ? a.unidad : 'Unidad';
+    if(a && document.getElementById('artm-unidad').value!==a.unidad) setSelectValueLoose('artm-unidad', a.unidad);
+    document.getElementById('artm-categoria').value = a ? a.categoria : '';
+    document.getElementById('artm-notas').value = a ? a.notas : '';
+    document.getElementById('artm-activo').checked = a ? a.activo : true;
+    var cats = {}; state.articulos.forEach(function(x){ if(x.categoria) cats[x.categoria] = true; });
+    document.getElementById('artm-categorias').innerHTML = Object.keys(cats).sort().map(function(c){ return '<option value="'+esc(c)+'">'; }).join('');
+    var uso = a ? articuloCompras(a.id) : null;
+    var nFact = a ? state.facturas.filter(function(f){ return (f.articulos||[]).some(function(l){ return l.articuloId===a.id; }); }).length : 0;
+    document.getElementById('artm-uso').textContent = a ? (nFact ? 'Está en '+nFact+' factura'+(nFact===1?'':'s')+' · comprado: '+fmtCant(uso.cantidad)+' '+a.unidad.toLowerCase()+(uso.ultimo ? ' · último precio '+fmtMoney(uso.ultimo.precio) : '') : 'Todavía no está en ninguna factura.') : '';
+    document.getElementById('artm-delete').style.display = a ? '' : 'none';
+    document.getElementById('articulo-overlay').classList.add('show');
+    setTimeout(function(){ try{ document.getElementById(a ? 'artm-descripcion' : (opts.descripcion ? 'artm-categoria' : 'artm-descripcion')).focus(); }catch(e){} }, 30);
+  }
+  function closeArticuloModal(){ document.getElementById('articulo-overlay').classList.remove('show'); state.artParaLinea = null; }
+  document.getElementById('new-articulo-btn').addEventListener('click', function(){ openArticuloModal(null); });
+  document.getElementById('artm-cancel').addEventListener('click', closeArticuloModal);
+  document.getElementById('artm-save').addEventListener('click', function(){
+    var desc = document.getElementById('artm-descripcion').value.trim();
+    if(!desc){ showToast('Escribí la descripción del artículo.'); return; }
+    var id = state.editingArticuloId;
+    var codigo = document.getElementById('artm-codigo').value.trim() || (id ? (articuloById(id)||{}).codigo || '' : nextArticuloCodigo());
+    var dup = state.articulos.find(function(x){ return x.id!==id && codigo && normTxt(x.codigo)===normTxt(codigo); });
+    if(dup){ showToast('El código '+codigo+' ya es de "'+dup.descripcion+'".'); return; }
+    var mismaDesc = state.articulos.find(function(x){ return x.id!==id && normTxt(x.descripcion)===normTxt(desc); });
+    if(mismaDesc && !id && !confirm('Ya existe "'+articuloLabel(mismaDesc)+'". ¿Crear otro igual de todos modos?')) return;
+    var a = {id: id || newId('art_'), codigo:codigo, descripcion:desc, unidad:document.getElementById('artm-unidad').value,
+      categoria:document.getElementById('artm-categoria').value.trim(), notas:document.getElementById('artm-notas').value.trim(),
+      activo:document.getElementById('artm-activo').checked};
+    var linea = state.artParaLinea;
+    var btn = this; btn.disabled = true;
+    writeArticulo(a).then(function(ok){
+      if(!ok) return;
+      var i = state.articulos.findIndex(function(x){ return x.id===a.id; });
+      if(i>=0) state.articulos[i] = a; else state.articulos.push(a);
+      closeArticuloModal();
+      renderArticulosList(); actualizarSubtabs();
+      if(linea!=null && state.editingFacturaArts && state.editingFacturaArts[linea]){
+        state.editingFacturaArts[linea].articuloId = a.id;
+        state.editingFacturaArts[linea].texto = '';
+      }
+      if(document.getElementById('factura-overlay').classList.contains('show')) renderFacturaArts();
+      showToast('Artículo '+(id ? 'guardado' : 'creado')+': '+articuloLabel(a));
+    }).finally(function(){ btn.disabled = false; });
+  });
+  document.getElementById('artm-delete').addEventListener('click', function(){
+    var a = articuloById(state.editingArticuloId);
+    if(!a) return;
+    var usado = state.facturas.some(function(f){ return (f.articulos||[]).some(function(l){ return l.articuloId===a.id; }); });
+    if(usado){ showToast('No se puede eliminar: está en facturas. Destildá "Activo" para que no se ofrezca más.', 6000); return; }
+    if(!confirm('¿Eliminar el artículo "'+articuloLabel(a)+'"?')) return;
+    state.articulos = state.articulos.filter(function(x){ return x.id!==a.id; });
+    if(state.sb) state.sb.from('articulos').delete().eq('id', a.id).then(function(res){ if(res.error) showToast('No se pudo eliminar: '+res.error.message); });
+    closeArticuloModal(); renderArticulosList(); actualizarSubtabs();
+    showToast('Artículo eliminado.');
+  });
+
+  // ---- Artículos dentro de la factura ----
+  function facturaArtsVisible(){
+    var prov = document.getElementById('fm-proveedor').value;
+    return proveedorLlevaArticulos(prov) || (state.editingFacturaArts||[]).some(function(l){ return l.articuloId; });
+  }
+  function artBuscar(texto){
+    var t = normTxt(texto);
+    if(!t) return null;
+    return state.articulos.find(function(a){ return normTxt(articuloLabel(a))===t; })
+      || state.articulos.find(function(a){ return a.codigo && normTxt(a.codigo)===t; })
+      || state.articulos.find(function(a){ return normTxt(a.descripcion)===t; }) || null;
+  }
+  function artImporte(l){ return r2((Number(l.cantidad)||0)*(Number(l.precio)||0)); }
+  function renderFacturaArts(){
+    var box = document.getElementById('fm-articulos');
+    var ver = facturaArtsVisible();
+    box.hidden = !ver;
+    if(!ver) return;
+    if(!state.editingFacturaArts || !state.editingFacturaArts.length) state.editingFacturaArts = [{articuloId:'', cantidad:0, precio:0, importe:0}];
+    var prov = document.getElementById('fm-proveedor').value;
+    document.getElementById('fm-art-datalist').innerHTML = state.articulos.filter(function(a){ return a.activo; })
+      .sort(function(a,b){ return (a.descripcion||'').localeCompare(b.descripcion||''); })
+      .map(function(a){ return '<option value="'+esc(articuloLabel(a))+'">'; }).join('');
+    var cont = document.getElementById('fm-art-lines');
+    cont.innerHTML = '<div class="art-head"><span>Artículo</span><span>Cantidad</span><span>Unidad</span><span>Precio unit.</span><span>Importe</span><span></span></div>';
+    state.editingFacturaArts.forEach(function(l, i){
+      var a = articuloById(l.articuloId);
+      var row = document.createElement('div');
+      row.className = 'art-line'+(l.texto && !a ? ' err' : '');
+      row.innerHTML = '<input type="text" class="art" list="fm-art-datalist" placeholder="Buscar por código o descripción…">'
+        +'<input type="text" class="cant" inputmode="decimal" placeholder="0">'
+        +'<span class="uni">'+esc(a ? a.unidad : '')+'</span>'
+        +'<input type="text" class="precio" inputmode="decimal" placeholder="0,00">'
+        +'<span class="imp">'+(artImporte(l) ? fmtMoney(artImporte(l)) : '—')+'</span>'
+        +'<button type="button" class="del" title="Quitar">✕</button>';
+      var inArt = row.querySelector('.art');
+      inArt.value = a ? articuloLabel(a) : (l.texto||'');
+      row.querySelector('.cant').value = l.cantidad ? String(l.cantidad).replace('.',',') : '';
+      row.querySelector('.precio').value = l.precio ? fmtMontoInput(l.precio) : '';
+      inArt.addEventListener('change', function(){
+        var enc = artBuscar(this.value);
+        l.articuloId = enc ? enc.id : '';
+        l.texto = enc ? '' : this.value.trim();
+        if(enc && !l.precio){ var u = articuloCompras(enc.id, prov).ultimo; if(u) l.precio = u.precio; }
+        renderFacturaArts();
+        if(enc){ var c = document.querySelectorAll('#fm-art-lines .art-line')[i]; if(c) c.querySelector('.cant').focus(); }
+      });
+      row.querySelector('.cant').addEventListener('input', function(){ var n = parseMontoInput(this.value); l.cantidad = isNaN(n) ? 0 : n; actualizarArtLinea(row, l); });
+      row.querySelector('.precio').addEventListener('input', function(){ var n = parseMontoInput(this.value); l.precio = isNaN(n) ? 0 : n; actualizarArtLinea(row, l); });
+      row.querySelector('.del').addEventListener('click', function(){
+        state.editingFacturaArts.splice(i, 1);
+        renderFacturaArts();
+      });
+      cont.appendChild(row);
+      if(l.texto && !a){
+        var aviso = document.createElement('div');
+        aviso.className = 'fm-hint';
+        aviso.innerHTML = '“'+esc(l.texto)+'” no está en la base. <button type="button" class="link-btn">Crearlo como artículo nuevo</button>';
+        aviso.querySelector('button').addEventListener('click', function(){ openArticuloModal(null, {desdeLinea:i, descripcion:l.texto}); });
+        cont.appendChild(aviso);
+      }
+    });
+    actualizarArtTotal();
+  }
+  function actualizarArtLinea(row, l){
+    l.importe = artImporte(l);
+    row.querySelector('.imp').textContent = l.importe ? fmtMoney(l.importe) : '—';
+    actualizarArtTotal();
+  }
+  function actualizarArtTotal(){
+    var el = document.getElementById('fm-art-total');
+    if(!el || !state.editingFacturaArts) return;
+    var tot = r2(state.editingFacturaArts.reduce(function(s,l){ return s+artImporte(l); }, 0));
+    var prov = document.getElementById('fm-proveedor').value;
+    var netoTxt = document.getElementById('fm-neto').value.trim();
+    var neto = netoTxt ? parseMontoInput(netoTxt) : facturaNetoAuto({proveedorId:prov, monto:facturaMontoActual()});
+    var dif = r2(tot - (neto||0));
+    el.innerHTML = 'Total artículos <b>'+fmtMoney(tot)+'</b>'+(neto ? ' · neto de la factura '+fmtMoney(neto)
+      +(Math.abs(dif)<0.01 ? ' <span style="color:var(--ok, #17a673);">✓</span>' : ' <span class="fm-hint">(diferencia '+(dif>0?'+':'−')+fmtMoney(Math.abs(dif))+': fletes, bonificaciones, percepciones…)</span>') : '');
+  }
+  document.getElementById('fm-art-add').addEventListener('click', function(){
+    state.editingFacturaArts = state.editingFacturaArts || [];
+    state.editingFacturaArts.push({articuloId:'', cantidad:0, precio:0, importe:0});
+    renderFacturaArts();
+    var ls = document.querySelectorAll('#fm-art-lines .art-line .art');
+    if(ls.length) ls[ls.length-1].focus();
+  });
+  document.getElementById('fm-art-nuevo').addEventListener('click', function(){
+    state.editingFacturaArts = state.editingFacturaArts || [];
+    var i = state.editingFacturaArts.findIndex(function(l){ return !l.articuloId; });
+    if(i<0){ state.editingFacturaArts.push({articuloId:'', cantidad:0, precio:0, importe:0}); i = state.editingFacturaArts.length-1; }
+    openArticuloModal(null, {desdeLinea:i, descripcion:state.editingFacturaArts[i].texto||''});
+  });
+  ['fm-monto','fm-neto'].forEach(function(id){ document.getElementById(id).addEventListener('input', actualizarArtTotal); });
+  // Devuelve las líneas a guardar, o false si falta algo (ya avisó).
+  function facturaArtsParaGuardar(proveedorId){
+    var lleva = proveedorLlevaArticulos(proveedorId);
+    var lineas = (state.editingFacturaArts||[]).filter(function(l){ return l.articuloId || l.texto || l.cantidad || l.precio; });
+    if(!lleva && !lineas.some(function(l){ return l.articuloId; })) return [];
+    if(!state.tablaArticulos && !state.colArticulos){ showToast('Este proveedor carga artículos, pero falta correr base-de-datos/articulos.sql en Supabase.', 7000); return false; }
+    for(var i=0;i<lineas.length;i++){
+      var l = lineas[i];
+      if(!l.articuloId){ showToast('Artículo '+(i+1)+': '+(l.texto ? '“'+l.texto+'” no está en la base; crealo con el link de abajo.' : 'elegí el artículo.'), 6000); return false; }
+      if(!(l.cantidad>0)){ showToast('Artículo '+(i+1)+' ('+articuloLabel(articuloById(l.articuloId))+'): ingresá la cantidad.'); return false; }
+      if(l.precio<0){ showToast('Artículo '+(i+1)+': el precio no puede ser negativo.'); return false; }
+    }
+    if(lleva && !lineas.length){ showToast('Este proveedor carga artículos: agregá al menos un artículo con su cantidad.', 6000); return false; }
+    return lineas.map(function(l){ return {articuloId:l.articuloId, cantidad:Number(l.cantidad), precio:r2(l.precio), importe:artImporte(l)}; });
+  }
+
   function writeFactura(f){
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
     // Las columnas nuevas (cc_ref, neto, regimen_gan) solo se mandan si ya se
@@ -5059,6 +5334,7 @@
       fecha:f.fecha||'', monto:f.monto||0, estado:f.estado||'pendiente', notas:f.notas||'', archivos:f.archivos||[],
       items:(f.items||[]).map(function(it){ return {centro_costo_id:it.centroCostoId, concepto_id:it.conceptoId, cc_ref:it.ccRef||'', monto:it.monto||0, detalle:it.detalle||''}; })
     }, state.schemaV3 ? {cc_ref:f.ccRef||'', neto:(f.neto==null ? null : f.neto), regimen_gan:(f.regimenGan||null)} : {},
+       (state.colArticulos || state.tablaArticulos) ? {articulos:(f.articulos||[]).map(function(a){ return {articulo_id:a.articuloId, cantidad:a.cantidad, precio:a.precio, importe:a.importe}; })} : {},
        camposAnulacion(f))).then(function(res){
       if(res.error) showToast('No se pudo guardar la factura: '+res.error.message);
     });
@@ -5081,6 +5357,7 @@
     fillFacturaOCSelect(this.value);
     if(this.value) aplicarImputacionDefault(this.value);
     renderFacturaImputChips();
+    renderFacturaArts();
   });
 
   // Imputación de la factura: al elegir proveedor se completan solos el
@@ -5283,6 +5560,7 @@
     fillFacturaConceptoSelect();
     document.getElementById('fm-concepto').value = f ? (f.conceptoId||'') : '';
     state.editingFacturaItems = (f && f.items && f.items.length>=2) ? f.items.map(function(l){ return Object.assign({}, l); }) : null;
+    state.editingFacturaArts = (f && (f.articulos||[]).length) ? f.articulos.map(function(a){ return Object.assign({}, a); }) : null;
     document.getElementById('fm-numero').value = f ? (f.numero||'') : '';
     document.getElementById('fm-fecha').value = f ? (f.fecha||todayStr()) : todayStr();
     document.getElementById('fm-monto').value = f ? String(f.monto||0).replace('.',',') : '';
@@ -5295,6 +5573,7 @@
     renderAttachList('fm-archivos-list', function(){ return state.editingFacturaArchivos; });
     refreshFacturaReadAvailability();
     renderSplitUI();
+    renderFacturaArts();
     marcarModalAnulado('fm-save', 'fm-delete', f, 'a');
     document.getElementById('factura-overlay').classList.add('show');
   }
@@ -5344,6 +5623,9 @@
       ccRef = reqS ? (document.getElementById('fm-ccref').value||'') : ccRefEfectiva(centroCostoId, '');
       if(reqS && !ccRef){ showToast('Elegí '+(reqS==='movil'?'el móvil':'la sucursal')+' del centro de costo.'); return; }
     }
+    // Artículos (proveedores que cargan artículos)
+    var arts = facturaArtsParaGuardar(proveedorId);
+    if(arts===false) return;
     var id = state.editingFacturaId;
     var isNew = !id;
     var existing = id ? facturaById(id) : null;
@@ -5359,6 +5641,7 @@
       neto: (function(){ var t = document.getElementById('fm-neto').value.trim(); if(!t) return null; var n = parseMontoInput(t); return isNaN(n) ? null : r2(n); })(),
       regimenGan: document.getElementById('fm-regimen').value==='' ? null : Number(document.getElementById('fm-regimen').value),
       items: items,
+      articulos: arts,
       numero:numero,
       fecha: document.getElementById('fm-fecha').value || todayStr(),
       monto: monto,
@@ -5766,6 +6049,12 @@
       ccRef: row.cc_ref||'',
       neto: (row.neto===null || row.neto===undefined || row.neto==='') ? null : Number(row.neto),
       regimenGan: row.regimen_gan==null ? null : Number(row.regimen_gan),
+      articulos: (function(){
+        if(row && Object.prototype.hasOwnProperty.call(row, 'articulos')) state.colArticulos = true;
+        return (Array.isArray(row.articulos) ? row.articulos : []).map(function(a){
+          return {articuloId:a.articulo_id||'', cantidad:Number(a.cantidad)||0, precio:Number(a.precio)||0, importe:Number(a.importe)||0};
+        });
+      })(),
       items: (Array.isArray(row.items) ? row.items : []).map(function(it){
         return {centroCostoId:it.centro_costo_id||'', conceptoId:it.concepto_id||'', ccRef:it.cc_ref||'',
                 monto: typeof it.monto==='number' ? it.monto : parseFloat(it.monto)||0, detalle:it.detalle||''};
@@ -5790,6 +6079,7 @@
     fetchAllRows('facturas').then(function(res){
       if(res.error){ showToast('Error cargando facturas: '+res.error.message); return; }
       state.facturas = (res.data||[]).map(mapFacturaRow);
+      renderArticulosList();   // "comprado" y "último precio" salen de las facturas
       state.facturasCargadas = true;
       renderPagos();
       setTimeout(revisarFacturasFaltantes, 600);
@@ -7324,6 +7614,9 @@
       .subscribe();
     state.sb.channel('centros-costo-changes')
       .on('postgres_changes', {event:'*', schema:'public', table:'centros_costo'}, function(){ debounced('fetchCompras', fetchCompras); })
+      .subscribe();
+    state.sb.channel('articulos-changes')
+      .on('postgres_changes', {event:'*', schema:'public', table:'articulos'}, function(){ debounced('fetchCompras', fetchCompras); })
       .subscribe();
     state.sb.channel('rubros-changes')
       .on('postgres_changes', {event:'*', schema:'public', table:'rubros'}, function(){ debounced('fetchCompras', fetchCompras); })

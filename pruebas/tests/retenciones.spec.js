@@ -144,21 +144,26 @@ test.describe("retenciones que usa Anafer", () => {
   });
 });
 
-test("exento en IVA: la factura no lleva IVA (neto = total) pero se retiene Ganancias; exento total no", async ({ page }) => {
+test("exento en IVA: la factura no lleva IVA (neto = total) pero se retiene Ganancias; exento total y consumidor final no", async ({ page }) => {
   const { PROVEEDORES, FACTURAS } = await import("../apoyo/datos-compras.js");
   await abrirGestion(page, baseDePrueba(datosCompras({
     proveedores: [...PROVEEDORES,
       { id: "exiva", nombre: "Exiva Servicios", cuit: "30-44444444-4", condicion_iva: "Exento en IVA", rubro: "Locación de servicios" },
-      { id: "extot", nombre: "Extot Asociación", cuit: "30-55555555-5", condicion_iva: "Exento", rubro: "Locación de servicios" }],
+      { id: "extot", nombre: "Extot Asociación", cuit: "30-55555555-5", condicion_iva: "Exento", rubro: "Locación de servicios" },
+      { id: "confi", nombre: "Confin Particular", cuit: "20-66666666-6", condicion_iva: "Consumidor final", rubro: "Locación de servicios" }],
     facturas: [...FACTURAS,
       { id: "x1", proveedor_id: "exiva", numero: "C-1", fecha: "2026-10-01", monto: 100000, estado: "pendiente" },
-      { id: "x2", proveedor_id: "extot", numero: "C-2", fecha: "2026-10-01", monto: 100000, estado: "pendiente" }],
+      { id: "x2", proveedor_id: "extot", numero: "C-2", fecha: "2026-10-01", monto: 100000, estado: "pendiente" },
+      { id: "x3", proveedor_id: "confi", numero: "C-3", fecha: "2026-10-01", monto: 100000, estado: "pendiente" }],
   })), { email: "compras@anafer.test" });
   await irAOrdenes(page);
   await nuevaOP(page, "Exiva");
   await expect.poll(() => importeRet(page)).toBe("$656,60");   // (100.000 − 67.170) × 2%, sin sacarle IVA
   await page.click("#pom-cancel");
   await nuevaOP(page, "Extot");
+  await expect.poll(() => importeRet(page)).toBe("$0,00");
+  await page.click("#pom-cancel");
+  await nuevaOP(page, "Confin");                                // consumidor final: no se retiene (antes iba como no inscripto 28%)
   await expect.poll(() => importeRet(page)).toBe("$0,00");
   await page.click("#pom-cancel");
   // en la ficha aparece la condición nueva y Ganancias automática → Inscripto

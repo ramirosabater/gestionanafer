@@ -84,6 +84,8 @@
         { t: "En <b>Compras → Proveedores</b> buscás por nombre, CUIT o código.", ir: ["#tab-compras", '#subtabs-compras .stabbtn[data-sub="proveedores"]'], foco: "#proveedores-search" },
         { t: "En la ficha del proveedor se define la <b>condición en Ganancias</b> y el <b>régimen</b> (si no, salen del IVA y del rubro), si es <b>★ prioritario</b> y sus imputaciones habituales.", foco: "#new-proveedor-btn" },
         { t: "En <b>Órdenes de compra</b> registrás lo que se pide; después la factura se puede asociar a la orden.", ir: '#subtabs-compras .stabbtn[data-sub="ocs"]', foco: "#new-oc-btn" },
+        { t: "En <b>Artículos</b> está la base de artículos (código, descripción, unidad y categoría), con cuánto se compró y el último precio. Es la base que va a usar Stock.", ir: '#subtabs-compras .stabbtn[data-sub="articulos"]', foco: "#new-articulo-btn" },
+        { t: "Si en la ficha de un proveedor tildás <b>📦 Carga artículos</b>, en sus facturas aparece el bloque de artículos: elegís cada artículo, la cantidad y el precio sin IVA (te propongo el último que se pagó). Si no existe, lo creás ahí mismo. Esto va aparte de la imputación: la factura se puede seguir repartiendo en centros de costo." },
       ] },
       { titulo: "Caja, bancos y cheques", pasos: [
         { t: "En <b>Tesorería → Cuentas</b> ves, por cada caja y banco, el <b>saldo hoy</b>, lo que está <b>a debitar</b> y el <b>saldo proyectado</b>.", ir: ["#tab-tesoreria", '#subtabs-tesoreria .stabbtn[data-sub="cuentas"]'], foco: "#cuentas-table" },
