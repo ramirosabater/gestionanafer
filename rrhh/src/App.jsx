@@ -6,6 +6,7 @@ import {
 import Historial from "./screens/Historial.jsx";
 import Equipo from "./screens/Equipo.jsx";
 import Ausencias from "./screens/Ausencias.jsx";
+import Calidad from "./screens/Calidad.jsx";
 import { LOGO } from "./lib/logo.js";
 import { cargarConfig } from "./lib/cumplimiento.js";
 import { contextoFichada, tieneExtrasPropias } from "./lib/jornada.js";
@@ -25,7 +26,11 @@ export default function App() {
   const [nvPin, setNvPin] = useState("");
   const [nvPinRep, setNvPinRep] = useState("");
   const [ausenciasPend, setAusenciasPend] = useState(0);
-  const [vista, setVista] = useState("fichaje"); // "fichaje" | "historial" | "equipo"
+  const [vista, setVista] = useState("fichaje"); // "fichaje" | "historial" | "equipo" | "ausencias" | "calidad"
+  // Calidad: permisos del empleado (cargar reclamos / responsable de acciones de mejora)
+  const [calidad, setCalidad] = useState(null);
+  // Entrando por el link "Reclamos y acciones de mejora" del ingreso de Gestión (?ir=calidad)
+  const irCalidad = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("ir") === "calidad";
 
   // Cambio de PIN (desde el login)
   const [modoPin, setModoPin] = useState(false);
@@ -83,6 +88,15 @@ export default function App() {
     } catch { setEquipo({ modo: "gps" }); } // la base todavía no tiene esta función: se ficha como siempre
   };
 
+  const consultarCalidad = async (nro, pinUsado) => {
+    try {
+      const r = await sbRpc("calidad_mis_permisos", { p_legajo: nro, p_pin: pinUsado });
+      const c = r && r.ok ? r : null;
+      setCalidad(c);
+      return c;
+    } catch { setCalidad(null); return null; } // la base todavía no tiene Calidad para empleados
+  };
+
   const ingresar = async () => {
     setErrorLogin(null);
     const nro = parseInt(legajo, 10);
@@ -100,13 +114,15 @@ export default function App() {
         // La config de recargos es opcional: si falla, se usan los valores por defecto y el login igual funciona.
         try { setConfig(await cargarConfig(sbGet)); } catch { /* usa defaults */ }
         await consultarEquipo(nro, pin);
+        const cal = await consultarCalidad(nro, pin);
         setEmpleado(r.empleado);
         setPinAuth(pin);
         setTardanzas(r.tardanzas_periodo || 0);
         setACargo(r.a_cargo || 0);
         setAusenciasPend(r.ausencias_pendientes || 0);
         setDebeCambiar(!!r.debe_cambiar_pin);
-        setVista("fichaje");
+        setVista(irCalidad ? "calidad" : "fichaje");
+        if (irCalidad && !(cal && (cal.reclamos || cal.acciones))) setMsg({ ok: false, texto: "No tenés permiso para cargar reclamos ni acciones de mejora. Pedíselo a Calidad." });
         const hoy = Array.isArray(r.fichajes_hoy) ? r.fichajes_hoy : [];
         let rec = hoy;
         try {
@@ -162,7 +178,7 @@ export default function App() {
 
   const salir = () => {
     setEmpleado(null); setPinAuth(null); setLegajo(""); setPin("");
-    setEnTurno(false); setHistorial([]); setRecientes([]); setJornadaDeAyer(null); setMsg(null); setEquipo({ modo: "gps" }); setTardanzas(0); setACargo(0); setAusenciasPend(0); setDebeCambiar(false); setVista("fichaje");
+    setEnTurno(false); setHistorial([]); setRecientes([]); setJornadaDeAyer(null); setMsg(null); setEquipo({ modo: "gps" }); setTardanzas(0); setACargo(0); setAusenciasPend(0); setDebeCambiar(false); setVista("fichaje"); setCalidad(null);
   };
 
   const fichar = async () => {
@@ -218,8 +234,8 @@ export default function App() {
         <div className="w-full max-w-[380px] bg-[#ffffff] rounded-[28px] shadow-lg border border-[#e3e8ed] p-6">
           <div className="flex flex-col items-center text-center mb-6">
             <img src={LOGO} alt="ANAFER" className="h-12 mb-3" />
-            <h1 className="text-lg font-bold">Identificate para fichar</h1>
-            <p className="text-[#94a1ab] text-sm mt-1">Ingresá tu legajo y tu PIN</p>
+            <h1 className="text-lg font-bold">{irCalidad ? "Reclamos y acciones de mejora" : "Identificate para fichar"}</h1>
+            <p className="text-[#94a1ab] text-sm mt-1">{irCalidad ? "Calidad · ingresá con tu legajo y tu PIN" : "Ingresá tu legajo y tu PIN"}</p>
           </div>
           <input value={legajo} onChange={(e) => setLegajo(e.target.value)} type="number" placeholder="Legajo"
             className="w-full bg-[#f1f4f7] border border-[#cfd6dd] rounded-xl px-4 py-3 text-center text-lg outline-none" />
@@ -271,6 +287,10 @@ export default function App() {
   }
 
   // ---------- Equipo ----------
+  if (vista === "calidad" && calidad && (calidad.reclamos || calidad.acciones)) {
+    return <Calidad empleado={empleado} pin={pinAuth} permisos={calidad} onVolver={() => setVista("fichaje")} onRefrescar={() => consultarCalidad(empleado.legajo, pinAuth)} />;
+  }
+
   if (vista === "equipo") {
     return <Equipo empleado={empleado} pin={pinAuth} horarios={horarios} config={config} onVolver={() => setVista("fichaje")} />;
   }
@@ -429,6 +449,16 @@ export default function App() {
             📋 Mi historial
           </button>
         </div>
+
+        {calidad && (calidad.reclamos || calidad.acciones) && (
+          <div className="px-6 pb-3">
+            <button onClick={() => setVista("calidad")} data-btn-calidad
+              className="w-full py-3 rounded-xl font-semibold text-sm border hover:border-[#cfd6dd]" style={{ backgroundColor: "rgba(124,58,237,.07)", borderColor: "rgba(124,58,237,.3)", color: "#5b21b6" }}>
+              🔬 {calidad.reclamos && calidad.acciones ? "Reclamos y acciones de mejora" : calidad.reclamos ? "Cargar un reclamo" : "Mis acciones de mejora"}
+              {calidad.acciones_pendientes > 0 && <span className="ml-1 text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-[#f2a900] text-white">{calidad.acciones_pendientes}</span>}
+            </button>
+          </div>
+        )}
 
         <div className="px-6 pb-3">
           <button onClick={() => setVista("ausencias")}

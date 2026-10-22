@@ -72,6 +72,13 @@
   function anioDe(f) { return f ? Number(String(f).slice(0, 4)) : new Date().getFullYear(); }
   function justificado(r) { return r.estado === 'Cerrado justificado'; }
   // En la planilla, el lote que no se lee figura como "BORROSO": no es un lote.
+  var TIPOS_REC = { MG: 'Mal gusto (MG)', EE: 'Elemento extraño (EE)' };
+  function tipoReclamo(r) {
+    var c = String(r.reclamo_cliente || '').trim();
+    var m = c.match(/^([A-Za-z]{2})\s*:/);
+    if (m && TIPOS_REC[m[1].toUpperCase()]) return TIPOS_REC[m[1].toUpperCase()];
+    return c || String(r.desvio || '').trim() || 'Sin tipo cargado';
+  }
   function loteValido(l) { return !!l && !/borros|ilegible|^s\/?d$|sin dato|^-+$/i.test(String(l).trim()); }
 
   // ---------------- Datos ----------------
@@ -86,13 +93,14 @@
     ]).then(function (rs) {
       S.sinTablas = !!(rs[0].error || rs[1].error);
       if (!rs[0].error) S.reclamos = rs[0].data || [];
-      if (!rs[1].error) S.pacs = (rs[1].data || []).map(function (p) { if (!Array.isArray(p.reclamo_ids)) p.reclamo_ids = []; return p; });
+      if (!rs[1].error) S.pacs = (rs[1].data || []).map(function (p) { if (!Array.isArray(p.reclamo_ids)) p.reclamo_ids = []; if (Object.prototype.hasOwnProperty.call(p, 'responsable_legajo')) S.colResp = true; return p; });
       if (!rs[2].error) { S.listas = {}; (rs[2].data || []).forEach(function (r) { if (Array.isArray(r.valores)) S.listas[r.id] = r.valores; }); }
       S.cargado = true; S.ultimaCarga = Date.now();
     }).catch(function (e) { console.error('Calidad: error cargando', e); }).then(function () { S.cargando = null; });
     return S.cargando;
   }
   var COLS_REC = ['id', 'numero', 'anio', 'fecha', 'hora', 'producto', 'lote', 'vencimiento', 'vencimiento_ilegible', 'desvio', 'reclamo_cliente', 'desvio_real', 'observaciones', 'envase', 'lote_envase', 'tapa', 'cantidad', 'destino_envase', 'estado', 'controlo', 'pac_id', 'origen', 'cliente', 'comentarios', 'adjuntos', 'control_por', 'control_en', 'creado_por', 'actualizado', 'anulado_en', 'anulado_por', 'motivo_anulacion'];
+  var COLS_PAC_RESP = ['responsable_legajo'];
   var COLS_PAC = ['id', 'numero', 'anio', 'fecha', 'origen', 'clasificacion', 'proceso', 'hallazgo', 'riesgo', 'opcion_riesgo', 'causa', 'correccion', 'resp_correccion', 'fecha_correccion', 'accion', 'resp_accion', 'fecha_accion', 'resp_seguimiento', 'fecha_seguimiento', 'comentarios', 'eficacia_criterio', 'eficacia_resultado', 'resp_eficacia', 'fecha_eficacia', 'eficacia_detalle', 'estado', 'reclamo_ids', 'creado_por', 'actualizado', 'anulado_en', 'anulado_por', 'motivo_anulacion'];
   function soloCols(o, cols) { var r = {}; cols.forEach(function (c) { if (o[c] !== undefined) r[c] = (o[c] === '' && /^(fecha|vencimiento|anulado_en)/.test(c)) ? null : o[c]; }); return r; }
   function guardar(tabla, obj, cols, coleccion) {
@@ -184,6 +192,14 @@
     setTimeout(G.marcarFiltros, 0);
     var tb = $('rq-body');
     if (!S.cargado || S.sinTablas) { mensajeSinTablas(tb, 15); return; }
+    // Quien carga la recepción no ve los reclamos: los sigue Calidad.
+    var recep = esRecepcion();
+    document.body.classList.toggle('cal-recepcion', recep);
+    if (recep) {
+      $('rq-count').textContent = '';
+      tb.innerHTML = '<tr class="day-row empty"><td colspan="15"><div class="rq-solo-carga">📝 Para cargar un reclamo tocá <b>+ Nuevo reclamo</b>.<br>Después lo sigue Calidad desde el módulo de Calidad.</div></td></tr>';
+      return;
+    }
     var l = reclamosFiltrados();
     $('rq-count').textContent = '(' + l.length + ')';
     if (!l.length) { tb.innerHTML = '<tr class="day-row empty"><td colspan="15">No hay reclamos con esos filtros.</td></tr>'; return; }
@@ -200,10 +216,15 @@
     var r = id ? S.reclamos.find(function (x) { return x.id === id; }) : null;
     S.editRec = r ? r.id : null;
     $('rq-title').textContent = r ? 'Reclamo Nº ' + r.numero + ' / ' + r.anio : 'Nuevo reclamo';
+    // El número que se le va a asignar, en gris (se confirma al guardar).
+    var anioHoy = anioDe(hoy());
+    $('rq-nro').textContent = r ? '' : 'Nº ' + siguienteNumero(S.reclamos, anioHoy) + ' / ' + anioHoy;
+    $('rq-nro').title = r ? '' : 'Número que se le va a asignar (se confirma al guardar)';
     var miOrigen = origenDe(G.usuario());
     $('rq-sub').textContent = r ? ('Cargado por ' + (r.creado_por || '—') + (r.origen ? ' · origen: ' + r.origen : ''))
       : 'Lo cargás vos (' + G.usuario() + (miOrigen ? ' · ' + miOrigen : '') + ') · se numera al guardar';
-    var d = r || { fecha: hoy(), cantidad: 1, estado: 'Abierto', origen: miOrigen };
+    var ahora = new Date();
+    var d = r || { fecha: hoy(), hora: String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0'), cantidad: 1, estado: 'Abierto', origen: miOrigen };
     llenarSelect('rq-origen', lista('origenes_reclamo'), d.origen || '', '—');
     $('rq-clientenom').value = d.cliente || '';
     $('rq-comentarios').value = d.comentarios || '';
@@ -300,8 +321,8 @@
   $('rq-body').addEventListener('click', function (e) { var tr = e.target.closest('tr[data-id]'); if (tr) abrirReclamo(tr.dataset.id); });
   $('rq-save').addEventListener('click', function () {
     var previo = S.editRec ? S.reclamos.find(function (x) { return x.id === S.editRec; }) : null;
-    var fecha = $('rq-fecha').value, producto = $('rq-producto').value;
-    if (!fecha) { toast('Poné la fecha del reclamo.'); return; }
+    // La fecha es siempre la del día en que se carga (no se edita).
+    var fecha = previo ? (previo.fecha || hoy()) : hoy(), producto = $('rq-producto').value;
     if (!producto) { toast('Elegí el producto.'); return; }
     var anio = anioDe(fecha);
     var recep = esRecepcion();
@@ -309,13 +330,12 @@
     var r = Object.assign({ estado: 'Abierto' }, previo || { id: nuevoId('rec'), creado_por: G.usuario(), anio: anio, numero: siguienteNumero(S.reclamos, anio) }, {
       fecha: fecha, hora: $('rq-hora').value, producto: producto, lote: $('rq-lote').value.trim(),
       vencimiento: $('rq-venc-ilegible').checked ? '' : $('rq-venc').value, vencimiento_ilegible: $('rq-venc-ilegible').checked,
-      cantidad: Number($('rq-cantidad').value) || 1, desvio: $('rq-desvio').value,
+      cantidad: Number($('rq-cantidad').value) || 1, desvio: $('rq-desvio').value, reclamo_cliente: $('rq-cliente').value,
       origen: $('rq-origen').value, cliente: $('rq-clientenom').value.trim(), comentarios: $('rq-comentarios').value.trim(),
     });
     // 2ª parte: control en fábrica (solo Calidad)
     if (!recep) {
       Object.assign(r, {
-        reclamo_cliente: $('rq-cliente').value,
         desvio_real: $('rq-real').value, envase: $('rq-envase').value, lote_envase: $('rq-lote-envase').value.trim(), tapa: $('rq-tapa').value,
         destino_envase: $('rq-destino').value, estado: $('rq-estado').value || 'Abierto', controlo: $('rq-controlo').value, observaciones: $('rq-obs').value.trim(),
       });
@@ -428,7 +448,7 @@
         '<td class="num"><b>' + esc(codigoPac(p)) + '</b></td><td class="num">' + fmtFecha(p.fecha) + '</td><td>' + esc(p.origen) + '</td><td>' + esc(p.clasificacion) + '</td><td>' + esc(p.proceso) + '</td>' +
         '<td class="hallazgo" title="' + esc(p.hallazgo) + '">' + esc(p.hallazgo) + '</td>' +
         '<td>' + (p.riesgo ? '<span class="cal-badge ' + esc(String(p.riesgo).toLowerCase()) + '">' + esc(p.riesgo) + '</span>' : '') + '</td>' +
-        '<td>' + esc(p.resp_accion) + '</td><td class="num' + (venc ? ' cal-vencida' : '') + '">' + fmtFecha(p.fecha_accion) + (venc ? ' ⚠' : '') + '</td>' +
+        '<td>' + esc(p.resp_accion) + (p.responsable_legajo ? (p.resp_completo_en ? ' <span title="El responsable completó los puntos 2, 3 y 4">✍</span>' : ' <span title="Esperando al responsable (puntos 2, 3 y 4)">⏳</span>') : '') + '</td><td class="num' + (venc ? ' cal-vencida' : '') + '">' + fmtFecha(p.fecha_accion) + (venc ? ' ⚠' : '') + '</td>' +
         '<td>' + ef + '</td><td>' + badgePac(p) + '</td></tr>';
     }).join('');
   }
@@ -437,8 +457,34 @@
   var SELECTS_PAC = { 'pq-origen': ['origen', 'origenes'], 'pq-clasif': ['clasificacion', 'clasificaciones'], 'pq-proceso': ['proceso', 'procesos'], 'pq-riesgo': ['riesgo', 'riesgos'],
     'pq-opcion': ['opcion_riesgo', 'opciones_riesgo'], 'pq-resp-c': ['resp_correccion', 'responsables'], 'pq-resp-ac': ['resp_accion', 'responsables'],
     'pq-resp-seg': ['resp_seguimiento', 'responsables'], 'pq-resp-ef': ['resp_eficacia', 'responsables'] };
+  // Empleados con permiso de Calidad (⚙ → Calidad → Personal de Calidad)
+  function cargarPersonal(forzar) {
+    if (S.personal && !forzar) return Promise.resolve(S.personal);
+    if (!sb() || !sb().rpc) return Promise.resolve([]);
+    return Promise.resolve(sb().rpc('calidad_personal')).then(function (res) {
+      var d = res && res.data;
+      if (res && !res.error && d && d.ok) { S.personal = d.empleados || []; S.colResp = true; }
+      else S.personal = S.personal || [];
+      return S.personal;
+    }).catch(function () { return S.personal || []; });
+  }
+  function nombreEmp(e) { return e ? (e.apellido || '') + ', ' + (e.nombre || '') : ''; }
+  function empPorLegajo(l) { return (S.personal || []).find(function (e) { return Number(e.legajo) === Number(l); }); }
+  function llenarResponsable(valor) {
+    var sel = $('pq-responsable');
+    var l = (S.personal || []).filter(function (e) { return e.calidad_acciones || Number(e.legajo) === Number(valor); });
+    sel.innerHTML = '<option value="">— Sin asignar (lo completa Calidad) —</option>' + l.map(function (e) {
+      return '<option value="' + e.legajo + '">' + esc(nombreEmp(e)) + ' · leg. ' + e.legajo + (e.sector ? ' · ' + esc(e.sector) : '') + '</option>';
+    }).join('');
+    if (valor && !l.length) sel.innerHTML += '<option value="' + esc(valor) + '">Legajo ' + esc(valor) + '</option>';
+    sel.value = valor ? String(valor) : '';
+    var hint = sel.parentNode.querySelector('.pq-sin-personal');
+    if (!l.length && !hint) { hint = document.createElement('div'); hint.className = 'fm-hint pq-sin-personal'; sel.parentNode.appendChild(hint); }
+    if (hint) hint.textContent = l.length ? '' : 'Nadie tiene todavía el permiso "Responsable de acciones": asignalo en ⚙ → Calidad → Personal de Calidad.';
+  }
   function abrirPac(id, precarga) {
     var p = id ? S.pacs.find(function (x) { return x.id === id; }) : null;
+    cargarPersonal().then(function () { if ($('pac-overlay').classList.contains('show')) { var v = $('pq-responsable').value || (p && p.responsable_legajo) || ''; llenarResponsable(v); soloLectura('pac-modal', 'pq-save', 'pq-anular', p, G.canEdit('ncpac')); } });
     S.editPac = p ? p.id : null;
     if (!p) S.pacDesdeReclamos = precarga && precarga.reclamo_ids ? precarga.reclamo_ids.slice() : null;
     var d = p || Object.assign({ fecha: hoy(), estado: 'Abierta' }, precarga || {});
@@ -448,6 +494,13 @@
     Object.keys(SELECTS_PAC).forEach(function (k) { llenarSelect(k, lista(SELECTS_PAC[k][1]), d[SELECTS_PAC[k][0]] || '', '—'); });
     llenarSelect('pq-ef-resultado', RESULTADOS_EFICACIA.slice(1), d.eficacia_resultado || '', 'Pendiente');
     llenarSelect('pq-estado', ESTADOS_PAC, d.estado || 'Abierta');
+    llenarResponsable(d.responsable_legajo || '');
+    var est = $('pq-resp-estado');
+    if (p && p.responsable_legajo) {
+      est.hidden = false;
+      est.textContent = p.resp_completo_en ? '✍ ' + (p.resp_completo_por || 'El responsable') + ' completó los puntos 2, 3 y 4 el ' + fmtFecha(p.resp_completo_en) + '.'
+        : '⏳ Esperando que el responsable complete los puntos 2, 3 y 4 desde el fichaje.';
+    } else est.hidden = true;
     var ids = (p ? p.reclamo_ids : S.pacDesdeReclamos) || [];
     $('pq-reclamos').textContent = ids.length ? 'Reclamos vinculados: ' + ids.map(function (rid) { var r = S.reclamos.find(function (x) { return x.id === rid; }); return r ? 'Nº ' + r.numero : ''; }).filter(Boolean).join(', ') : '';
     soloLectura('pac-modal', 'pq-save', 'pq-anular', p, G.canEdit('ncpac'));
@@ -468,10 +521,16 @@
     Object.keys(CAMPOS_PAC).forEach(function (k) { p[CAMPOS_PAC[k]] = $(k).value.trim(); });
     Object.keys(SELECTS_PAC).forEach(function (k) { p[SELECTS_PAC[k][0]] = $(k).value; });
     p.eficacia_resultado = $('pq-ef-resultado').value; p.estado = $('pq-estado').value || 'Abierta';
+    var respL = $('pq-responsable').value;
+    p.responsable_legajo = respL ? Number(respL) : null;
+    // El responsable figura también en la corrección y en la acción si estaban vacías.
+    var re = empPorLegajo(respL);
+    if (re) { if (!p.resp_correccion) p.resp_correccion = nombreEmp(re); if (!p.resp_accion) p.resp_accion = nombreEmp(re); }
     if (previo && Number(previo.anio) !== anio) { p.anio = anio; p.numero = siguienteNumero(S.pacs, anio); }
     if (p.estado === 'Cerrada' && !p.eficacia_resultado) { toast('Antes de cerrarla, cargá el resultado de la verificación de eficacia (o "No aplica").', 6000); return; }
     var vinculados = previo ? [] : (S.pacDesdeReclamos || []);
-    guardar('calidad_pac', p, COLS_PAC, S.pacs).then(function (ok) {
+    if (p.responsable_legajo && !S.colResp) { toast('Para asignar un responsable falta correr base-de-datos/calidad-empleados.sql en Supabase.', 7000); return; }
+    guardar('calidad_pac', p, S.colResp ? COLS_PAC.concat(COLS_PAC_RESP) : COLS_PAC, S.pacs).then(function (ok) {
       if (!ok) return;
       vinculados.forEach(function (rid) {
         var r = S.reclamos.find(function (x) { return x.id === rid; });
@@ -667,6 +726,13 @@
     dona('cd-dona-desvio', G.tally(rec.filter(function (r) { return r.desvio_real; }), function (r) { return r.desvio_real; }), 'reclamos controlados', colDesvio);
     dona('cd-dona-producto', G.tally(rec, function (r) { return r.producto; }), 'reclamos');
     // Por origen (quién lo cargó: planta, sucursal, distribuidor…)
+    // Reclamos totales por tipo (lo que reclamó el cliente, agrupado MG / EE / …)
+    var gt = agrupar(rec, tipoReclamo);
+    ranking('cd-tipos', Object.keys(gt).map(function (kk) {
+      var l = gt[kk];
+      return { label: kk, total: l.length, parte: l.filter(justificado).length };
+    }).sort(function (a, b) { return b.total - a.total; }), MAL, function (x) { return x.total + ' <span style="color:var(--muted);font-weight:500">(' + pct(x.total, rec.length) + '%)</span>'; });
+    $('cd-tipos-total').textContent = rec.length + ' reclamos del período';
     var porOrigen = agrupar(rec, function (r) { return r.origen || 'Sin origen'; });
     ranking('cd-origen-rk', Object.keys(porOrigen).map(function (kk) {
       var l = porOrigen[kk], c = l.filter(justificado).length;
@@ -768,8 +834,56 @@
         pintar();
         cont.appendChild(box);
       });
+      cont.appendChild(boxPersonal());
       cont.appendChild(boxCargadores());
     });
+  }
+  // Personal de Calidad: qué empleados cargan reclamos desde el fichaje (1ª parte)
+  // y quiénes pueden ser responsables de acciones de mejora (puntos 2, 3 y 4).
+  function boxPersonal() {
+    var box = document.createElement('div'); box.className = 'cal-lista cal-personal-box'; box.dataset.lista = 'personal';
+    var q = '', soloCon = false;
+    function pintar() {
+      var l = (S.personal || []).filter(function (e) {
+        if (soloCon && !e.calidad_reclamos && !e.calidad_acciones) return false;
+        return !q || (nombreEmp(e) + ' ' + e.legajo + ' ' + (e.sector || '')).toLowerCase().indexOf(q) !== -1;
+      });
+      var conR = (S.personal || []).filter(function (e) { return e.calidad_reclamos; }).length, conA = (S.personal || []).filter(function (e) { return e.calidad_acciones; }).length;
+      box.innerHTML = '<h4>Personal de Calidad <span style="font-weight:400;text-transform:none;">· entran con su legajo y PIN desde el fichaje o el link "Reclamos y acciones de mejora" del ingreso</span></h4>' +
+        (!S.colResp ? '<div class="fm-hint">Falta correr <b>base-de-datos/calidad-empleados.sql</b> en Supabase para asignar estos permisos.</div>' :
+        '<div class="fm-hint" style="margin-bottom:6px;">' + conR + ' cargan reclamos · ' + conA + ' son responsables de acciones de mejora. Los que cargan reclamos no ven los reclamos después: los sigue Calidad.</div>' +
+        '<div class="addrow" style="margin-bottom:6px;"><input type="search" class="pers-q" placeholder="Buscar empleado…" value="' + esc(q) + '"><label class="cal-check" style="white-space:nowrap;"><input type="checkbox" class="pers-solo"' + (soloCon ? ' checked' : '') + '> Solo con permiso</label></div>' +
+        '<div class="cal-personal"><table><thead><tr><th>Empleado</th><th>Sector</th><th class="c">📝 Carga reclamos</th><th>Origen de sus reclamos</th><th class="c">🛠 Responsable de acciones</th></tr></thead><tbody>' +
+        (l.length ? l.map(function (e) {
+          return '<tr data-leg="' + e.legajo + '"><td>' + esc(nombreEmp(e)) + ' <span class="fm-hint">leg. ' + e.legajo + '</span></td><td>' + esc(e.sector || '') + '</td>' +
+            '<td class="c"><input type="checkbox" class="p-rec"' + (e.calidad_reclamos ? ' checked' : '') + '></td>' +
+            '<td><select class="p-ori"><option value="">Lo elige al cargar</option>' + lista('origenes_reclamo').map(function (o) { return '<option' + (o === e.calidad_origen ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select></td>' +
+            '<td class="c"><input type="checkbox" class="p-acc"' + (e.calidad_acciones ? ' checked' : '') + '></td></tr>';
+        }).join('') : '<tr><td colspan="5" class="fm-hint">No hay empleados que coincidan.</td></tr>') + '</tbody></table></div>');
+      var iq = box.querySelector('.pers-q');
+      if (iq) iq.addEventListener('input', function () { q = this.value.toLowerCase().trim(); var pos = this.selectionStart; pintar(); var n = box.querySelector('.pers-q'); n.focus(); try { n.setSelectionRange(pos, pos); } catch (e) {} });
+      var so = box.querySelector('.pers-solo');
+      if (so) so.addEventListener('change', function () { soloCon = this.checked; pintar(); });
+      box.querySelectorAll('tr[data-leg]').forEach(function (tr) {
+        var e = empPorLegajo(tr.dataset.leg);
+        function grabar() {
+          var nuevo = { r: tr.querySelector('.p-rec').checked, a: tr.querySelector('.p-acc').checked, o: tr.querySelector('.p-ori').value };
+          if (!G.canEdit('reclamos') && !G.canEdit('ncpac')) { toast('Tu perfil no puede cambiar estos permisos.'); pintar(); return; }
+          Promise.resolve(sb().rpc('calidad_set_personal', { p_legajo: Number(e.legajo), p_reclamos: nuevo.r, p_acciones: nuevo.a, p_origen: nuevo.o })).then(function (res) {
+            var d = res && res.data;
+            if (res && !res.error && d && d.ok) {
+              e.calidad_reclamos = nuevo.r; e.calidad_acciones = nuevo.a; e.calidad_origen = nuevo.o;
+              toast(nombreEmp(e) + ': ' + (nuevo.r || nuevo.a ? [nuevo.r ? 'carga reclamos' + (nuevo.o ? ' (' + nuevo.o + ')' : '') : '', nuevo.a ? 'responsable de acciones' : ''].filter(Boolean).join(' y ') : 'sin permisos de Calidad') + '.');
+            } else { toast('No se pudo guardar el permiso' + (d && d.motivo === 'sin_permiso' ? ': tu perfil necesita Editar en Reclamos o Acciones de mejora.' : '.')); }
+            pintar();
+          });
+        }
+        tr.querySelectorAll('input, select').forEach(function (el) { el.addEventListener('change', grabar); });
+      });
+    }
+    box.innerHTML = '<h4>Personal de Calidad</h4><div class="fm-hint">Cargando empleados…</div>';
+    cargarPersonal(true).then(pintar);
+    return box;
   }
   // Quién carga reclamos y desde dónde: el origen se le pone solo a cada reclamo que carga.
   function boxCargadores() {
@@ -778,7 +892,7 @@
     var emails = [];
     function opcionesOrigen(sel) { return '<option value="">— origen —</option>' + lista('origenes_reclamo').map(function (o) { return '<option' + (o === sel ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join(''); }
     function pintar() {
-      box.innerHTML = '<h4>Quién carga reclamos <span style="font-weight:400;text-transform:none;">· cargan la recepción (1ª parte) y el origen se pone solo; el control en fábrica y las fotos los completa Calidad</span></h4>' +
+      box.innerHTML = '<h4>Usuarios de Gestión que cargan reclamos <span style="font-weight:400;text-transform:none;">· (con email) cargan solo la recepción (1ª parte), el origen se pone solo y no ven la lista de reclamos</span></h4>' +
         (filas.length ? filas.map(function (f, i) {
           return '<div class="cal-carg"><span class="em" title="' + esc(f.email) + '">' + esc(f.email) + '</span><select data-i="' + i + '">' + opcionesOrigen(f.origen) + '</select><button type="button" class="btn" data-x="' + i + '" title="Sacar">✕</button></div>';
         }).join('') : '<div class="fm-hint">Nadie asignado todavía: cada uno elige el origen al cargar.</div>') +
@@ -848,18 +962,22 @@
     G.memListo().then(function () {
       if (!G.memPuede('cal-pac-vencidas')) return;
       var vencidas = S.pacs.filter(pacVencida), efic = S.pacs.filter(function (p) { return eficaciaPendiente(p) && !pacVencida(p); });
-      if (!vencidas.length && !efic.length) return;
+      // Las que el responsable completó (puntos 2, 3 y 4) en los últimos 30 días y Calidad todavía no siguió
+      var hace30 = new Date(Date.now() - 30 * 864e5).toISOString();
+      var compl = S.pacs.filter(function (p) { return !anulado(p) && p.estado !== 'Cerrada' && p.resp_completo_en && p.resp_completo_en >= hace30 && !p.fecha_seguimiento && !pacVencida(p) && !eficaciaPendiente(p); });
+      if (!vencidas.length && !efic.length && !compl.length) return;
       var ul = document.createElement('ul'); ul.className = 'sug-lista';
-      vencidas.concat(efic).slice(0, 8).forEach(function (p) {
+      compl.concat(vencidas).concat(efic).slice(0, 8).forEach(function (p) {
         var li = document.createElement('li');
-        var v = pacVencida(p);
+        var v = pacVencida(p), c = compl.indexOf(p) !== -1;
         li.innerHTML = '<span><b>' + esc(codigoPac(p)) + '</b> · ' + esc(String(p.hallazgo || '').slice(0, 70)) + '<small>' +
-          (v ? 'Acción vencida el ' + fmtFecha(p.fecha_accion || p.fecha_correccion) + ' · ' + esc(p.resp_accion || p.resp_correccion || 'sin responsable') : 'Verificar eficacia (desde el ' + fmtFecha(p.fecha_eficacia) + ') · ' + esc(p.resp_eficacia || 'sin responsable')) +
+          (c ? '✍ ' + esc(String(p.resp_completo_por || 'El responsable').replace(/^Legajo \d+ · /, '')) + ' completó los puntos 2, 3 y 4 el ' + fmtFecha(p.resp_completo_en) + ': revisalo y seguí con el seguimiento' : v ? 'Acción vencida el ' + fmtFecha(p.fecha_accion || p.fecha_correccion) + ' · ' + esc(p.resp_accion || p.resp_correccion || 'sin responsable') : 'Verificar eficacia (desde el ' + fmtFecha(p.fecha_eficacia) + ') · ' + esc(p.resp_eficacia || 'sin responsable')) +
           '</small></span><button type="button">Abrir</button>';
         li.querySelector('button').addEventListener('click', function () { window.AyudaAnafer.cerrarSugerencia(); abrirPac(p.id); });
         ul.appendChild(li);
       });
       var partes = [];
+      if (compl.length) partes.push('<b>' + compl.length + '</b> que su responsable ya completó');
       if (vencidas.length) partes.push('<b>' + vencidas.length + '</b> con la acción vencida');
       if (efic.length) partes.push('<b>' + efic.length + '</b> esperando la verificación de eficacia');
       G.sugerir(G.conMemoria({ id: 'cal-pac-vencidas', titulo: 'Sifoncito: acciones de mejora pendientes', texto: 'Hay ' + partes.join(' y ') + ':', cuerpo: ul,

@@ -350,7 +350,7 @@
   .modal .sub{font-size:12.5px; color:var(--ink-2); margin-bottom:14px;}
   .field{margin-bottom:12px;}
   .field label{display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); margin-bottom:5px;}
-  .field select, .field textarea, .field input[type=text], .field input[type=password]{width:100%; font-family:inherit; font-size:14px; border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:8px; padding:8px 10px;}
+  .field select, .field textarea, .field input[type=text], .field input[type=password], .field input[type=date], .field input[type=time], .field input[type=number], .field input[type=email], .field input[type=search]:not(.prov-search){width:100%; font-family:inherit; font-size:14px; border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:8px; padding:8px 10px;}
   .field textarea{resize:vertical; min-height:56px;}
   .suggest-hint{font-size:12px; color:var(--accent); background:var(--ghost-bg); border-radius:7px; padding:6px 9px; margin-bottom:12px; display:flex; gap:6px; align-items:center;}
   .modal-actions{display:flex; justify-content:space-between; gap:8px; margin-top:16px;}
@@ -933,6 +933,23 @@
     .art-line{ grid-template-columns:1fr 1fr 1fr; }
     .art-line input.art{ grid-column:1 / -1; }
   }
+  /* Calidad: reclamo en una línea, número provisorio, responsable de acciones */
+  .cal-grid.rq-linea{ grid-template-columns:1.3fr 1fr .8fr 1.2fr; }
+  @media (max-width:720px){ .cal-grid.rq-linea{ grid-template-columns:1fr 1fr; } }
+  .rq-nro{ color:var(--muted); font-weight:500; font-size:.85em; }
+  .field input.rq-fija{ background:var(--surface-2); color:var(--ink-2); cursor:not-allowed; }
+  .pq-lo-carga{ font-size:10.5px; font-weight:600; text-transform:none; letter-spacing:0; color:#0d9488; background:rgba(13,148,136,.1); border-radius:999px; padding:1px 8px; margin-left:6px; }
+  .pq-resp-estado{ font-size:12.5px; border-radius:10px; padding:7px 12px; margin:4px 0 8px; background:rgba(13,148,136,.08); border:1px solid rgba(13,148,136,.3); color:#0f5f58; }
+  .pq-resp-estado[hidden]{ display:none; }
+  .login-calidad{ margin-top:6px; padding-top:8px; border-top:none; color:#7c3aed; }
+  .rq-solo-carga{ text-align:center; padding:28px 12px; color:var(--ink-2); }
+  .cal-personal{ max-height:420px; overflow:auto; border:1px solid var(--border); border-radius:10px; }
+  .cal-personal table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .cal-personal th{ position:sticky; top:0; background:var(--surface-2); text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); padding:6px 8px; }
+  .cal-personal td{ padding:5px 8px; border-top:1px solid var(--border); }
+  .cal-personal td.c{ text-align:center; }
+  .cal-personal select{ font-size:12.5px; padding:3px 6px; border-radius:7px; border:1px solid var(--border); background:var(--bg); color:var(--ink); }
+  body.cal-recepcion #rq-fbar, body.cal-recepcion #rq-csv, body.cal-recepcion [data-limpiar="rq"], body.cal-recepcion #rq-table thead{ display:none !important; }
 </style>
 </head>
 <body>
@@ -1571,6 +1588,12 @@
         <div id="cd-dona-desvio"></div>
       </section>
     </div>
+
+    <section class="cq-card cq-panel cq-full">
+      <div class="cq-ph"><div><h2 style="--a:#2ba9e0">Reclamos totales por tipo</h2><p id="cd-tipos-total">Del período</p></div>
+        <div class="cq-legend"><span><i style="background:#cfd6dd"></i>Total</span><span><i style="background:#e1251b"></i>Justificados</span></div></div>
+      <div id="cd-tipos"></div>
+    </section>
 
     <div class="cq-grid cq-g11">
       <section class="cq-card cq-panel">
@@ -2604,6 +2627,7 @@
     <div id="login-error" style="display:none; color:var(--danger); font-size:12.5px; margin:-6px 0 12px;">Contraseña incorrecta.</div>
     <div class="modal-actions"><div></div><button class="btn primary" id="login-btn">Ingresar</button></div>
     <a class="login-fichar" href="fichaje/">🕑 ¿Sos empleado? Fichá acá →</a>
+    <a class="login-fichar login-calidad" href="fichaje/?ir=calidad">📝 Reclamos y acciones de mejora (Calidad) →</a>
   </div>
 </div>
 
@@ -2631,7 +2655,7 @@
 <!-- ===================== CALIDAD: modales ===================== -->
 <div class="overlay" id="reclamo-overlay">
   <div class="modal wide modal-lg" id="reclamo-modal">
-    <h3 id="rq-title">Nuevo reclamo</h3>
+    <h3><span id="rq-title">Nuevo reclamo</span> <span class="rq-nro" id="rq-nro"></span></h3>
     <div class="sub" id="rq-sub">Control de producto reclamado (devolución)</div>
     <div class="modal-scroll-body">
     <section class="rq-parte" id="rq-parte1">
@@ -2639,21 +2663,25 @@
       <div class="cal-grid">
         <div class="field"><label for="rq-origen">Origen</label><select id="rq-origen"></select></div>
         <div class="field"><label for="rq-clientenom">Cliente</label><input type="text" id="rq-clientenom" maxlength="80" list="rq-clientes-dl" placeholder="Nombre o Nº de cliente"><datalist id="rq-clientes-dl"></datalist></div>
-        <div class="field"><label for="rq-fecha">Fecha</label><input type="date" id="rq-fecha"></div>
-        <div class="field"><label for="rq-hora">Hora</label><input type="time" id="rq-hora"></div>
+        <div class="field"><label for="rq-fecha">Fecha <span class="fm-hint">(la del día de carga)</span></label><input type="date" id="rq-fecha" readonly tabindex="-1" class="rq-fija"></div>
+      </div>
+      <div class="cal-grid rq-linea">
         <div class="field"><label for="rq-producto">Producto</label><select id="rq-producto"></select></div>
         <div class="field"><label for="rq-lote">Lote</label><input type="text" id="rq-lote" maxlength="30" placeholder="Ej: 343"></div>
+        <div class="field"><label for="rq-hora">Hora</label><input type="time" id="rq-hora"></div>
         <div class="field"><label for="rq-venc">Vencimiento</label><input type="date" id="rq-venc">
           <label class="cal-check"><input type="checkbox" id="rq-venc-ilegible"> Ilegible / borroso</label></div>
+      </div>
+      <div class="cal-grid">
         <div class="field"><label for="rq-cantidad">Cantidad</label><input type="number" id="rq-cantidad" min="1" step="1" value="1"></div>
         <div class="field"><label for="rq-desvio">Desvío informado</label><select id="rq-desvio"></select></div>
+        <div class="field"><label for="rq-cliente">Reclamo del cliente</label><select id="rq-cliente"></select></div>
       </div>
       <div class="field"><label for="rq-comentarios">Comentarios</label><textarea id="rq-comentarios" placeholder="Lo que contó el cliente, cómo llegó el producto…"></textarea></div>
     </section>
     <section class="rq-parte" id="rq-parte2">
       <div class="rq-parte-tit"><span class="rq-num">2</span> Control en fábrica <small>lo completa Calidad <span id="rq-control-por"></span></small></div>
       <div class="cal-grid">
-        <div class="field"><label for="rq-cliente">Reclamo del cliente</label><select id="rq-cliente"></select></div>
         <div class="field"><label for="rq-real">Desvío real (lo que se comprobó)</label><select id="rq-real"></select></div>
         <div class="field"><label for="rq-envase">Envase (proveedor)</label><select id="rq-envase"></select></div>
         <div class="field"><label for="rq-lote-envase">Lote de envase</label><input type="text" id="rq-lote-envase" maxlength="20" placeholder="Ej: 2/25"></div>
@@ -2691,21 +2719,23 @@
       <div class="field"><label for="pq-origen">Origen</label><select id="pq-origen"></select></div>
       <div class="field"><label for="pq-clasif">Clasificación</label><select id="pq-clasif"></select></div>
       <div class="field"><label for="pq-proceso">Proceso</label><select id="pq-proceso"></select></div>
+      <div class="field cal-span2"><label for="pq-responsable">Responsable de la acción <span class="fm-hint">completa los puntos 2, 3 y 4 desde el fichaje</span></label><select id="pq-responsable"></select></div>
     </div>
+    <div class="pq-resp-estado" id="pq-resp-estado" hidden></div>
     <div class="field"><label for="pq-hallazgo">Hallazgo</label><textarea id="pq-hallazgo" rows="5" placeholder="Qué se detectó, dónde y con qué evidencia…"></textarea></div>
-    <h4 class="cal-sec">2 · Riesgo y causa</h4>
+    <h4 class="cal-sec">2 · Riesgo y causa <span class="pq-lo-carga">lo completa el responsable</span></h4>
     <div class="cal-grid">
       <div class="field"><label for="pq-riesgo">Riesgo</label><select id="pq-riesgo"></select></div>
       <div class="field cal-span2"><label for="pq-opcion">Opción para abordar el riesgo</label><select id="pq-opcion"></select></div>
     </div>
     <div class="field"><label for="pq-causa">Causa</label><textarea id="pq-causa" rows="2"></textarea></div>
-    <h4 class="cal-sec">3 · Corrección (lo inmediato)</h4>
+    <h4 class="cal-sec">3 · Corrección (lo inmediato) <span class="pq-lo-carga">lo completa el responsable</span></h4>
     <div class="field"><label for="pq-correccion">Corrección</label><textarea id="pq-correccion" rows="2"></textarea></div>
     <div class="cal-grid">
       <div class="field cal-span2"><label for="pq-resp-c">Responsable</label><select id="pq-resp-c"></select></div>
       <div class="field"><label for="pq-fecha-c">Fecha límite</label><input type="date" id="pq-fecha-c"></div>
     </div>
-    <h4 class="cal-sec">4 · Acción correctiva / de mejora</h4>
+    <h4 class="cal-sec">4 · Acción correctiva / de mejora <span class="pq-lo-carga">lo completa el responsable</span></h4>
     <div class="field"><label for="pq-accion">Acción</label><textarea id="pq-accion" rows="2"></textarea></div>
     <div class="cal-grid">
       <div class="field cal-span2"><label for="pq-resp-ac">Responsable</label><select id="pq-resp-ac"></select></div>

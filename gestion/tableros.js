@@ -247,6 +247,27 @@
   }
 
   // ---------- Calidad ----------
+  // Tipo de reclamo: lo que reclamó el cliente agrupado (MG: … → Mal gusto,
+  // EE: … → Elemento extraño); si no está, el desvío informado.
+  var TIPOS_REC = { MG: 'Mal gusto (MG)', EE: 'Elemento extraño (EE)' };
+  function tipoReclamo(r) {
+    var c = String(r.reclamo_cliente || '').trim();
+    var m = c.match(/^([A-Za-z]{2})\s*:/);
+    if (m && TIPOS_REC[m[1].toUpperCase()]) return TIPOS_REC[m[1].toUpperCase()];
+    return c || String(r.desvio || '').trim() || 'Sin tipo cargado';
+  }
+  function detalleTipo(l) {
+    var t = agrupar(l, function (r) { var c = String(r.reclamo_cliente || ''); return /^[A-Za-z]{2}\s*:/.test(c) ? c.split(':').slice(1).join(':').trim() : ''; });
+    return t.slice(0, 4).map(function (x) { return x.label + ' ' + x.v; }).join(' · ');
+  }
+  function reclamosPorTipo(rec) {
+    var anio = G.todayStr().slice(0, 4), g = {};
+    rec.forEach(function (r) { var k = tipoReclamo(r); (g[k] = g[k] || []).push(r); });
+    return Object.keys(g).map(function (k) {
+      var l = g[k], esteAnio = l.filter(function (r) { return String(r.fecha).slice(0, 4) === anio; }).length, det = detalleTipo(l);
+      return { label: k, v: l.length, anio: esteAnio, sub: 'en ' + anio + ': ' + esteAnio + (det ? ' · ' + det : '') };
+    }).sort(function (a, b) { return b.v - a.v; });
+  }
   function datosCalidad() {
     return Promise.all([G.fetchAllRows('calidad_reclamos'), G.fetchAllRows('calidad_pac')]).then(function (rs) {
       if (rs[0].error) throw new Error('Falta crear las tablas de Calidad (calidad.sql).');
@@ -266,8 +287,11 @@
       var abiertas = pac.filter(function (p) { return p.estado !== 'Cerrada'; }), vencidas = abiertas.filter(vencida);
       var conEf = pac.filter(function (p) { return p.eficacia_resultado === 'Efectiva' || p.eficacia_resultado === 'No efectiva'; });
       var recAbiertos = rec.filter(function (r) { return r.estado === 'Abierto' && diasDesde(r.fecha) > 7; });
+      var porTipo = reclamosPorTipo(rec);
       var L = [].concat(
         con('p:Reclamos por mes', leerSerie({ nombre: 'Los reclamos de producto', serie: sr, subirEsBueno: false })),
+        porTipo.length && rec.length ? [{ ver: 'p:Reclamos totales por tipo', tono: 'info', peso: 0.35,
+          texto: 'El tipo de reclamo más frecuente es <b>' + esc(porTipo[0].label) + '</b>: ' + porTipo[0].v + ' de ' + rec.length + ' reclamos (' + fmtPct(porTipo[0].v / rec.length) + ').' }] : [],
         pj != null && pjA != null && Math.abs(pj - pjA) >= 0.08 ? [{ ver: 'k:Justificados', tono: pj > pjA ? 'mal' : 'bien', peso: Math.abs(pj - pjA) * 3,
           texto: 'De los reclamos controlados en los últimos 90 días, el <b>' + fmtPct(pj) + '</b> resultó justificado (antes era ' + fmtPct(pjA) + ').' }] : [],
         con('p:Justificados por proveedor de envase', concentracion('envase', porEnvase, 0.45, 'mal', 'de los reclamos justificados de los últimos 90 días (proveedor de envase)')),
@@ -278,7 +302,7 @@
           texto: 'De las acciones verificadas, el <b>' + fmtPct(conEf.filter(function (p) { return p.eficacia_resultado === 'Efectiva'; }).length / conEf.length) + '</b> fueron efectivas.' }] : []
       );
       var iAct = sr.length - 2;
-      return { serieRec: sr, serieJust: sj, porEnvase: porEnvase, porDesvio: porDesvio, abiertas: abiertas.length, vencidas: vencidas.length, pj: pj, lecturas: L,
+      return { serieRec: sr, serieJust: sj, porTipo: porTipo, totalRec: rec.length, porEnvase: porEnvase, porDesvio: porDesvio, abiertas: abiertas.length, vencidas: vencidas.length, pj: pj, lecturas: L,
         kpi: { recMes: sr[iAct].v, mes: sr[iAct].ym, prom6: promedio(sr.slice(iAct - 6, iAct).map(function (x) { return x.v; })) } };
     });
   }
@@ -568,6 +592,7 @@
         '</div>' + sifPanel('calidad', d.lecturas) +
         panel('Reclamos por mes', 'En rojo, la parte que resultó justificada · últimos 24 meses', NAVY, barrasMes(d.serieRec, { color: '#cfd6dd',
           etiq: function (x, i) { return x.v + (d.serieJust[i].v ? '<span style="color:' + MAL + '"> · ' + d.serieJust[i].v + '</span>' : ''); } }), { scroll: true, full: true, legend: '<span><i style="background:#cfd6dd"></i>Reclamos</span><span><i style="background:' + MAL + '"></i>Justificados</span>' }) +
+        panelTipos(d) +
         '<div class="cq-grid cq-g11">' + panel('Justificados por proveedor de envase', 'Últimos 90 días', VIOLETA, ranking(d.porEnvase, VIOLETA)) + panel('Desvío confirmado', 'Últimos 90 días', MAL, ranking(d.porDesvio, MAL)) + '</div>';
     },
     comercial: function (d) {
@@ -599,6 +624,10 @@
         '<div class="tb-link"><a class="cq-chip tb-chip-claro" href="fichaje/admin.html">Abrir el panel de RR.HH. →</a></div>';
     },
   };
+  function panelTipos(d) {
+    return panel('Reclamos totales por tipo', 'Toda la historia (' + fmtN(d.totalRec || 0) + ' reclamos) · según lo que reclamó el cliente', CELESTE,
+      ranking(d.porTipo || [], CELESTE, { max: 10 }), { full: true });
+  }
   function renderResumen() {
     var mods = modulosVisibles();
     var cont = $('tb-contenido');
@@ -625,7 +654,8 @@
       mods.forEach(function (m) { top = top.concat(ordenarLecturas(todas.filter(function (x) { return x.texto.indexOf(m.label + '</span>') !== -1; })).slice(0, 2)); });
       cont.innerHTML = hero('Tablero general', 'Todos los módulos juntos · tocá una tarjeta para ver el tablero de ese módulo') +
         '<div class="cq-kpis tb-kpis-resumen">' + tarjetas + '</div>' +
-        sifPanel('resumen', top, { max: 12, nota: 'Acá ves lo más importante de cada módulo; el detalle está en la pestaña de cada uno.' });
+        sifPanel('resumen', top, { max: 12, nota: 'Acá ves lo más importante de cada módulo; el detalle está en la pestaña de cada uno.' }) +
+        (S.cache.calidad && !S.cache.calidad.error && mods.some(function (m) { return m.id === 'calidad'; }) ? panelTipos(S.cache.calidad) : '');
       leerUltimaOpinion('resumen');
     });
   }

@@ -55,7 +55,13 @@
         from: consulta,
         channel: function () { return canal; },
         removeChannel: function () {},
-        rpc: function () { return Promise.resolve({ data: null, error: null }); },
+        // RPC: la respuesta la pone la prueba en DB.__rpc[nombre] (valor o función(args))
+        rpc: function (nombre, args) {
+          S.escrituras.push(["__rpc", nombre, args || {}]);
+          var r = (DB.__rpc || {})[nombre];
+          if (typeof r === "function") r = r(args || {}, DB);
+          return Promise.resolve({ data: r === undefined ? null : JSON.parse(JSON.stringify(r)), error: null });
+        },
         // Edge Functions: la respuesta la pone la prueba en DB.__funciones[nombre]
         functions: { invoke: function (nombre, op) {
           S.escrituras.push(["__funciones", nombre, (op || {}).body]);

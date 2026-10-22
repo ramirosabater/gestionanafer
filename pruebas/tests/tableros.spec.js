@@ -228,3 +228,32 @@ test("voz de Sifoncito: si el servidor no tiene voz, usa la del navegador eligie
   expect(await page.evaluate(() => window.__dichos[0].voz)).toContain("Elena");
   await page.click('.tb-btn-escuchar[data-modulo="resumen"]');
 });
+
+test("Reclamos totales por tipo: en el tablero general, en el de Calidad y en Indicadores de Calidad", async ({ page }) => {
+  const anio = new Date().getFullYear();
+  const f = (d) => `${anio}-01-${String(d).padStart(2, "0")}`;
+  const r = (i, rc, extra = {}) => ({ id: "t" + i, numero: i, anio, fecha: f(i), producto: "Bx20Azul", reclamo_cliente: rc, estado: "Abierto", ...extra });
+  const db = datos();
+  db.calidad_reclamos = [r(1, "MG: cloro"), r(2, "MG: plastico"), r(3, "MG: cloro", { estado: "Cerrado justificado", desvio_real: "MG: cloro" }), r(4, "EE: insecto"), r(5, "Pinchado"), r(6, "", { desvio: "Otros" })];
+  await abrirGestion(page, db, { email: "admin@anafer.test" });
+  await entrar(page);
+  const general = page.locator("#tb-contenido .cq-panel", { hasText: "Reclamos totales por tipo" });
+  await expect(general).toContainText("Toda la historia (6 reclamos)");
+  await expect(general.locator(".cq-hrow").first()).toContainText("Mal gusto (MG)");
+  await expect(general.locator(".cq-hrow").first()).toContainText("3");
+  await expect(general.locator(".cq-hrow").first()).toContainText("cloro 2 · plastico 1");
+  await expect(general).toContainText("Elemento extraño (EE)");
+  await expect(general).toContainText("Otros");                       // sin reclamo del cliente: usa el desvío informado
+  await page.getByRole("button", { name: "🔬 Calidad" }).click();
+  await expect(page.locator("#tb-contenido .cq-panel", { hasText: "Reclamos totales por tipo" })).toBeVisible();
+  await expect(page.locator("#tb-contenido .tb-sif")).toContainText("El tipo de reclamo más frecuente es Mal gusto (MG): 3 de 6");
+  // Indicadores del módulo Calidad (con los filtros del tablero)
+  await page.click("#home-btn");
+  await page.locator("#home-grid .area-card", { hasText: "Calidad" }).click();
+  await page.click("#tab-calidash");
+  await page.selectOption("#cd-desde", "1");
+  await page.dispatchEvent("#cd-desde", "change");
+  const cd = page.locator("#cd-tipos .cq-hrow").first();
+  await expect(cd).toContainText("Mal gusto (MG)");
+  await expect(cd).toContainText("3 (50%)");
+});

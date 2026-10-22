@@ -162,7 +162,7 @@ test("Sifoncito se viste de calidad y recorre sus circuitos", async ({ page }) =
   await expect(page.locator("#ayuda-panel")).toBeHidden();
 });
 
-test("reclamo: queda quién lo cargó, el origen asignado a esa persona y el cliente; se filtra por origen", async ({ page }) => {
+test("reclamo: queda quién lo cargó, el origen asignado a esa persona y el cliente; se filtra por origen", async ({ page, context }) => {
   const db = datosCalidad({ calidad_reclamos: [rec(1, { origen: "Planta", cliente: "Kiosco Sol" })] });
   db.calidad_listas.push({ id: "cargadores", valores: [{ email: "admin@anafer.test", origen: "Distribuidor" }] });
   await abrirGestion(page, db, { email: "admin@anafer.test" });
@@ -179,6 +179,14 @@ test("reclamo: queda quién lo cargó, el origen asignado a esa persona y el cli
   await expect(page.locator("#reclamo-overlay")).not.toHaveClass(/show/);
   const nuevo = (await escrituras(page, "calidad_reclamos")).map((x) => x[2]).pop();
   expect(nuevo).toMatchObject({ origen: "Distribuidor", cliente: "Almacén Don Pepe", creado_por: "admin@anafer.test", producto: "Soda retornable 650ml" });
+  // quien carga la recepción no ve la lista: los reclamos los sigue Calidad
+  await expect(page.locator("#rq-body")).toContainText("lo sigue Calidad");
+  await expect(page.locator("#rq-fbar")).toBeHidden();
+  // Calidad (sin origen asignado) sí ve todo y filtra por origen
+  const db2 = datosCalidad({ calidad_reclamos: [rec(1, { origen: "Planta", cliente: "Kiosco Sol" }), { ...nuevo, id: "rec_nuevo" }] });
+  page = await context.newPage();
+  await abrirGestion(page, db2, { email: "admin@anafer.test" });
+  await entrarCalidad(page);
   await page.selectOption("#rq-f-origen", "Planta");
   await expect(page.locator("#rq-body tr")).toHaveCount(1);
   await expect(page.locator("#rq-body tr").first()).toContainText("Kiosco Sol");
@@ -221,11 +229,9 @@ test("reclamo en dos partes: la recepción carga la 1ª parte con comentarios y 
   const r = (await escrituras(page, "calidad_reclamos")).map((x) => x[2]).pop();
   expect(r).toMatchObject({ origen: "Sucursal", comentarios: "El cliente dice que tiene gusto raro", estado: "Abierto", adjuntos: [] });
   expect(r.control_por).toBeFalsy();
-  // abierto otra vez: el control se ve, pero no se puede tocar ni subir fotos
-  await page.locator("#rq-body tr").first().click();
-  await expect(page.locator("#rq-parte2")).toBeVisible();
-  await expect(page.locator("#rq-real")).toBeDisabled();
-  await expect(page.locator("#rq-foto-label")).toBeHidden();
+  // después no lo ve: el seguimiento es de Calidad
+  await expect(page.locator("#rq-body tr[data-id]")).toHaveCount(0);
+  await expect(page.locator("#rq-body")).toContainText("+ Nuevo reclamo");
 });
 
 test("control en fábrica: Calidad completa la 2ª parte y sube fotos a Google Drive", async ({ page }) => {
