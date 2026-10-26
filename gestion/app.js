@@ -553,6 +553,7 @@
     var t = truckById(id);
     if(!t) return 'Camión '+id;
     var lines = [t.label];
+    if(t.patente) lines.push('Patente: '+t.patente);
     if(t.driver) lines.push('Chofer: '+t.driver);
     if(t.helper) lines.push('Ayudante: '+t.helper);
     return lines.join(' — ');
@@ -563,6 +564,12 @@
   }
   function activeTrucks(){
     return state.trucks.filter(function(t){return t.active!==false;});
+  }
+  // Camiones que se pueden asignar a un viaje: los de scope 'gastos'
+  // (autoelevadores, utilitarios de administración, acoplado) existen solo
+  // para imputarles gastos en las facturas, no salen a reparto.
+  function tripTrucks(){
+    return activeTrucks().filter(function(t){ return t.scope!=='gastos'; });
   }
   function activeDrivers(){
     return state.drivers.filter(function(d){return d.active!==false;}).sort(function(a,b){return a.name.localeCompare(b.name);});
@@ -857,7 +864,7 @@
       if(cargoLines.length) tip += ' — Carga: '+cargoLines.map(function(c){ return cargoTypeLabel(c.type)+(c.qty?' x'+c.qty+(c.unit?' '+c.unit:''):''); }).join(', ');
       if(trip.note) tip += ' — Nota: '+trip.note;
       return '<span class="pill'+(cargoLines.length?' cargo':'')+'" data-trip-id="'+esc(trip.id)+'" title="'+esc(tip)+'" style="background:'+truckColorVar(trip.truck)+'; color:'+truckInkVar(trip.truck)+';">'+
-        '<span class="truck-no">'+trip.truck+'</span>'+
+        '<span class="truck-no">'+esc(trip.truck)+'</span>'+
         (crewLine ? '<span class="crew">'+crewLine+'</span>' : '')+
         (trip.note ? '<span class="note-badge" title="Nota: '+esc(trip.note)+'">📝</span>' : '')+
         '</span>';
@@ -929,7 +936,7 @@
             var suggT = truckById(sugg);
             var suggCrew = suggT && suggT.driver ? esc(suggT.driver) : '';
             td.innerHTML = '<span class="pill ghost" title="Sugerido — '+truckTooltip(sugg)+'">'+
-              '<span class="truck-no">'+sugg+'</span>'+
+              '<span class="truck-no">'+esc(sugg)+'</span>'+
               (suggCrew ? '<span class="crew">'+suggCrew+'</span>' : '')+
               '</span>';
           } else {
@@ -967,7 +974,7 @@
       var n = counts[t.id]||0;
       var chip = document.createElement('div');
       chip.className = 'chip-stat';
-      chip.innerHTML = '<span class="swatch" style="background:'+truckColorVar(t.id)+';"></span><span class="n">'+n+'</span><span class="lbl">'+t.label+'</span>';
+      chip.innerHTML = '<span class="swatch" style="background:'+truckColorVar(t.id)+';"></span><span class="n">'+n+'</span><span class="lbl">'+esc(t.label)+'</span>';
       stripe.appendChild(chip);
     });
   }
@@ -1606,7 +1613,7 @@
     var driverSel = document.getElementById(kind.modalPrefix+'-driver');
     var helperSel = document.getElementById(kind.modalPrefix+'-helper');
     var helper2Sel = document.getElementById(kind.modalPrefix+'-helper2');
-    fillSelect(truckSel, activeTrucks(), 'id', 'label', 'Sin camión');
+    fillSelect(truckSel, tripTrucks(), 'id', 'label', 'Sin camión');
     fillSelect(driverSel, driversForScope('sucursales'), 'name', 'name', 'Sin asignar');
     fillSelect(helperSel, helpersForScope('sucursales'), 'name', 'name', 'Sin asignar');
     fillSelect(helper2Sel, helpersForScope('sucursales'), 'name', 'name', 'Sin asignar');
@@ -1861,7 +1868,7 @@
     var vmDriverSel = document.getElementById('vm-driver');
     var vmHelperSel = document.getElementById('vm-helper');
     var vmHelper2Sel = document.getElementById('vm-helper2');
-    fillSelect(vmTruckSel, activeTrucks(), 'id', 'label', 'Sin camión');
+    fillSelect(vmTruckSel, tripTrucks(), 'id', 'label', 'Sin camión');
     fillSelect(vmDriverSel, driversForScope('sucursales'), 'name', 'name', 'Sin asignar');
     fillSelect(vmHelperSel, helpersForScope('sucursales'), 'name', 'name', 'Sin asignar');
     fillSelect(vmHelper2Sel, helpersForScope('sucursales'), 'name', 'name', 'Sin asignar');
@@ -2461,10 +2468,16 @@
       var truckScopeSel = document.createElement('select');
       truckScopeSel.className = 'scope-select';
       truckScopeSel.title = 'Dónde puede aparecer para asignar';
-      truckScopeSel.innerHTML = '<option value="both">Ambos</option><option value="flota">Solo FlotaPesada</option><option value="sucursales">Solo Sucursales</option>';
+      truckScopeSel.innerHTML = '<option value="both">Ambos</option><option value="flota">Solo FlotaPesada</option><option value="sucursales">Solo Sucursales</option><option value="gastos">Solo gastos (no hace viajes)</option>';
       truckScopeSel.value = t.scope || 'both';
       truckScopeSel.addEventListener('change', function(){ t.scope = this.value; writeTruck(t); renderGrid(); renderBranchGrid(); });
       top.appendChild(truckScopeSel);
+      var ficha = null, datosT = [t.patente, t.modelo, t.anio, t.funcion, t.flota].filter(Boolean);
+      if(datosT.length){
+        ficha = document.createElement('div');
+        ficha.className = 'truck-card-ficha muted small';
+        ficha.textContent = datosT.join(' · ');
+      }
 
       var sub = document.createElement('div');
       sub.className = 'truck-card-sub';
@@ -2478,7 +2491,7 @@
       helperSel.addEventListener('change', function(){ t.helper=this.value; writeTruck(t); });
       sub.appendChild(driverSel); sub.appendChild(helperSel);
 
-      card.appendChild(top); card.appendChild(sub);
+      card.appendChild(top); if(ficha) card.appendChild(ficha); card.appendChild(sub);
       tl.appendChild(card);
     });
 
@@ -7089,7 +7102,8 @@
 
   // ---------- Supabase wiring ----------
   function mapRouteRow(row){ return {id:row.id, label:row.label||row.id, order:row.sort_order||99, active:row.active!==false}; }
-  function mapTruckRow(row){ return {id:row.id, label:row.label||('Camión '+row.id), active:row.active!==false, driver:row.driver||'', helper:row.helper||'', scope:row.scope||'both'}; }
+  function mapTruckRow(row){ return {id:row.id, label:row.label||('Camión '+row.id), active:row.active!==false, driver:row.driver||'', helper:row.helper||'', scope:row.scope||'both',
+    patente:row.patente||'', modelo:row.modelo||'', anio:row.anio||'', funcion:row.funcion||'', flota:row.flota||''}; }
   function mapPersonRow(row){ return {id:row.id, name:row.name||row.id, active:row.active!==false, scope:row.scope||'both'}; }
   function mapCargoTypeRow(row){ return {id:row.id, name:row.name||row.id, active:row.active!==false, order:row.sort_order||99}; }
   function mapBranchRow(row){ return {id:row.id, label:row.label||row.id, order:row.sort_order||99, active:row.active!==false}; }

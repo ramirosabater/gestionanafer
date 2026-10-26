@@ -29,8 +29,16 @@ create index if not exists articulos_descripcion_idx on articulos (lower(descrip
 
 alter table articulos enable row level security;
 drop policy if exists "anon full access articulos" on articulos;
-create policy "anon full access articulos" on articulos for all using (true) with check (true);
-grant select, insert, update, delete on articulos to anon, authenticated;
+drop policy if exists "seg: ver" on articulos;
+drop policy if exists "seg: crear" on articulos;
+drop policy if exists "seg: cambiar" on articulos;
+drop policy if exists "seg: borrar" on articulos;
+create policy "seg: ver" on articulos for select to authenticated using ((select public.puede_ver(array['compras','pagos','tesoreria','tableros'])));
+create policy "seg: crear" on articulos for insert to authenticated with check ((select public.puede_editar(array['compras','pagos'])));
+create policy "seg: cambiar" on articulos for update to authenticated using ((select public.puede_editar(array['compras','pagos']))) with check ((select public.puede_editar(array['compras','pagos'])));
+create policy "seg: borrar" on articulos for delete to authenticated using ((select public.puede_editar(array['compras','pagos'])));
+revoke all on articulos from anon;
+grant select, insert, update, delete on articulos to authenticated;
 
 alter table proveedores add column if not exists lleva_articulos boolean not null default false;
 alter table facturas    add column if not exists articulos jsonb not null default '[]'::jsonb;
@@ -42,7 +50,7 @@ do $$ begin
   end if;
 end $$;
 
-create or replace view factura_articulos_v as
+create or replace view factura_articulos_v with (security_invoker = true) as
 select f.id                          as factura_id,
        f.proveedor_id,
        f.numero                      as factura_numero,
@@ -55,7 +63,8 @@ select f.id                          as factura_id,
 from facturas f
 cross join lateral jsonb_array_elements(coalesce(f.articulos, '[]'::jsonb)) with ordinality as a(item, ord)
 where coalesce(f.estado, '') <> 'anulada';
-grant select on factura_articulos_v to anon, authenticated;
+revoke all on factura_articulos_v from anon;
+grant select on factura_articulos_v to authenticated;
 
 -- Control
 select (select count(*) from articulos) as articulos,

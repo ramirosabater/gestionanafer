@@ -1,3 +1,5 @@
+-- ⚠ SEGURIDAD: este archivo crea políticas abiertas ("anon full access"). Si lo
+--   volvés a correr, corré DESPUÉS base-de-datos/seguridad-etapa1.sql para cerrarlas.
 -- =====================================================================
 -- Calidad: cliente y origen en los reclamos + productos nuevos
 -- =====================================================================

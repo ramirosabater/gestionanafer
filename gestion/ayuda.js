@@ -54,6 +54,7 @@
       { titulo: "Configurar la flota", pasos: [
         { t: "En <b>⚙ → Flota y viajes</b> se cargan rutas, camiones (con su chofer y ayudante habitual), choferes, ayudantes y tipos de carga.", foco: "#settings-btn" },
         { t: "Los camiones que cargues ahí son los mismos que después aparecen como <b>móvil</b> al imputar gastos de flota en Administración." },
+        { t: "Cada camión tiene un <b>alcance</b>: <b>Ambos</b>, <b>Solo FlotaPesada</b>, <b>Solo Sucursales</b> o <b>Solo gastos</b>. Los de <b>Solo gastos</b> (autoelevadores, utilitarios de administración, el acoplado) no salen para asignar viajes, pero sí para imputarles gastos. Debajo del nombre se ve la ficha: patente, modelo, año, función y flota." },
       ] },
     ],
     administracion: [

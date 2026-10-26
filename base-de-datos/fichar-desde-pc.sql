@@ -1,3 +1,5 @@
+-- ⚠ SEGURIDAD: este archivo crea políticas abiertas ("anon full access"). Si lo
+--   volvés a correr, corré DESPUÉS base-de-datos/seguridad-etapa1.sql para cerrarlas.
 -- =====================================================================
 -- RR.HH.: fichar desde la computadora del escritorio (sin GPS)
 -- =====================================================================

@@ -45,7 +45,24 @@
 <script>
 const SUPABASE_URL="https://sjhonbjphfacajftptgg.supabase.co";
 const SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaG9uYmpwaGZhY2FqZnRwdGdnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzOTMyNjUsImV4cCI6MjEwMzk2OTI2NX0.KdKps-zzoT0IRJGzuAGZg_EFJ6lXCzRsqf2pm81x_ew";
-const H=()=>({apikey:SUPABASE_KEY,Authorization:"Bearer "+SUPABASE_KEY,"Content-Type":"application/json"});
+// Usa la sesión de Gestión (mismo ingreso con email). Sin sesión no se puede
+// cargar: la base ya no acepta escrituras con la clave pública.
+function tokenSesion(){
+  try{
+    const k=Object.keys(localStorage).find(x=>/^sb-.*-auth-token$/.test(x));
+    const v=k?JSON.parse(localStorage.getItem(k)):null;
+    const s=v&&(v.access_token?v:(v.currentSession||v.session));
+    if(s&&s.access_token&&(!s.expires_at||s.expires_at*1000>Date.now())) return s.access_token;
+  }catch(e){}
+  return null;
+}
+const TOKEN=tokenSesion();
+if(!TOKEN){
+  document.addEventListener("DOMContentLoaded",()=>{
+    document.body.innerHTML='<div style="font-family:sans-serif;max-width:480px;margin:80px auto;text-align:center"><h2>Tenés que ingresar</h2><p>Para cargar altas y bajas, primero entrá a Gestión Anafer con tu email.</p><p><a href="/">Ir al ingreso →</a></p></div>';
+  });
+}
+const H=()=>({apikey:SUPABASE_KEY,Authorization:"Bearer "+(TOKEN||SUPABASE_KEY),"Content-Type":"application/json"});
 const UMAP={'FAMILIA':'Familia','NEGOCIO':'Negocios','NEGOCIOS':'Negocios','EMPRESA':'Empresas','EMPRESAS':'Empresas','DISTRIBUIDOR':'Distribuidores','DISTRIBUIDORES':'Distribuidores','REVENTA':'Reventa','SUCURSALES':'Sucursales','PERSONAL':'Personal'};
 const $=(id)=>document.getElementById(id);
 let parsed=null;

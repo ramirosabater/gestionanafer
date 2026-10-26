@@ -1,3 +1,5 @@
+-- ⚠ SEGURIDAD: este archivo crea políticas abiertas ("anon full access"). Si lo
+--   volvés a correr, corré DESPUÉS base-de-datos/seguridad-etapa1.sql para cerrarlas.
 -- =====================================================================
 -- RR.HH.: vacaciones (saldo por período + pedido desde el fichaje)
 -- =====================================================================

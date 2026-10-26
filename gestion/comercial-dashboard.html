@@ -433,7 +433,7 @@ async function setAnio(anio){
   const actual=$("unidad").value;
   const unidades=[...new Set(REF.filter(r=>MENSUAL.some(m=>m.anio===ANIO && m.unidad===r.unidad)).map(r=>r.unidad))]
     .sort((a,b)=> a==='Compañía'?-1 : b==='Compañía'?1 : a.localeCompare(b,'es'));
-  $("unidad").innerHTML=unidades.map(u=>'<option'+(u===actual?' selected':'')+'>'+u+'</option>').join('');
+  $("unidad").innerHTML=unidades.map(u=>'<option'+(u===actual?' selected':'')+'>'+escH(u)+'</option>').join('');
   // Meses: Ene → último mes con real del año (o todo el año si no hay real)
   let ultimo=-1; REF.filter(r=>r.unidad==='Compañía').forEach(r=>{ if(r.real2026_monto>0 && r.mes-1>ultimo) ultimo=r.mes-1; });
   mesDesde=0; mesHasta=ultimo>=0? ultimo : 11;
