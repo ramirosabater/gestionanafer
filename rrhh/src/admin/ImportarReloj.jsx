@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { sbGet, sbPost, registrarAuditoria } from "./supabase-admin.js";
 import { calcularEstado } from "../lib/fichaje.js";
 import { contextoFichada } from "../lib/jornada.js";
-import { leerArchivoReloj, asignarTipos } from "./importar-reloj.js";
+import { leerArchivoReloj, asignarTipos, unirLecturas } from "./importar-reloj.js";
 
 const LS_LOCAL = "importar_reloj_local";
 const LS_DUP = "importar_reloj_dupmin";
@@ -12,12 +12,13 @@ const DIAS = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
 const fmtDia = (iso) => { const d = new Date(iso + "T12:00:00"); return `${DIAS[d.getDay()]} ${iso.slice(8)}/${iso.slice(5, 7)}`; };
 const clave = (legajo, ts) => `${legajo}|${ts.getTime()}`;
 const labelCls = "text-[10px] uppercase tracking-wider text-[#94a1ab]";
+const LETRAS = "ABCDEFGH";
 
 export default function ImportarReloj() {
   const [locales, setLocales] = useState([]);
   const [localId, setLocalId] = useState(lsGet(LS_LOCAL));
-  const [archivo, setArchivo] = useState(null);
-  const [datos, setDatos] = useState(null);      // { desde, hasta, empleados: [...] }
+  // Archivos subidos (pueden ser de relojes distintos): { nombre, datos, localId }
+  const [lecturas, setLecturas] = useState([]);
   const [empleadosDB, setEmpleadosDB] = useState({});
   const [horarios, setHorarios] = useState([]);
   const [existentes, setExistentes] = useState({}); // legajo -> [timestamps ms]
@@ -42,16 +43,12 @@ export default function ImportarReloj() {
     }).catch(() => {});
   }, []);
 
-  const elegirArchivo = async (ev) => {
-    const file = ev.target.files?.[0];
-    ev.target.value = "";
-    if (!file) return;
-    setError(null); setResultado(null); setDatos(null); setOverrides({}); setExcluidos({}); setAbiertos({});
-    setLeyendo(true); setArchivo(file);
-    try {
-      const d = await leerArchivoReloj(file);
-      if (!d.empleados.length) throw new Error("El archivo no tiene fichadas en el período.");
-      const legajos = d.empleados.map((e) => e.legajo);
+  // Todas las marcas de todos los archivos, unidas por legajo
+  const datos = useMemo(() => (lecturas.length ? unirLecturas(lecturas.map((l) => l.datos)) : null), [lecturas]);
+
+  // Empleados, horarios y fichadas ya cargadas del período (de todos los archivos juntos)
+  const cargarContexto = async (d) => {
+    const legajos = d.empleados.map((e) => e.legajo);
       const desde = new Date(`${d.desde}T00:00:00-03:00`);
       const hasta = new Date(new Date(`${d.hasta}T00:00:00-03:00`).getTime() + 2 * 864e5);
       const [emps, hs, prev] = await Promise.all([
@@ -59,12 +56,51 @@ export default function ImportarReloj() {
         sbGet("horarios?select=*"),
         sbGet(`fichajes?select=legajo,timestamp&legajo=in.(${legajos.join(",")})&timestamp=gte.${desde.toISOString()}&timestamp=lt.${hasta.toISOString()}&limit=100000`),
       ]);
-      const mapE = {}; emps.forEach((e) => (mapE[e.legajo] = e));
-      const mapX = {}; prev.forEach((f) => { (mapX[f.legajo] ||= []).push(new Date(f.timestamp).getTime()); });
-      setEmpleadosDB(mapE); setHorarios(hs); setExistentes(mapX); setDatos(d);
-    } catch (e) {
-      setError(e.message || "No se pudo leer el archivo.");
-    } finally { setLeyendo(false); }
+    const mapE = {}; emps.forEach((e) => (mapE[e.legajo] = e));
+    const mapX = {}; prev.forEach((f) => { (mapX[f.legajo] ||= []).push(new Date(f.timestamp).getTime()); });
+    setEmpleadosDB(mapE); setHorarios(hs); setExistentes(mapX);
+  };
+
+  // Se pueden elegir varios archivos a la vez, o sumar otro después (ej. el reloj de Sopladora y la
+  // planilla de E-S de los camioneros): las marcas del mismo legajo se juntan antes de deducir E/S.
+  const elegirArchivo = async (ev) => {
+    const files = [...(ev.target.files || [])];
+    ev.target.value = "";
+    if (!files.length) return;
+    setError(null); setResultado(null);
+    setLeyendo(true);
+    const nuevas = [...lecturas], errores = [];
+    for (const file of files) {
+      if (nuevas.some((l) => l.nombre === file.name)) { errores.push(`${file.name}: ya está agregado.`); continue; }
+      try {
+        const d = await leerArchivoReloj(file);
+        if (!d.empleados.length) throw new Error("no tiene fichadas en el período.");
+        nuevas.push({ nombre: file.name, datos: d, localId });
+      } catch (e) {
+        errores.push(`${file.name}: ${e.message || "no se pudo leer."}`);
+      }
+    }
+    try {
+      if (nuevas.length !== lecturas.length) await cargarContexto(unirLecturas(nuevas.map((l) => l.datos)));
+      setLecturas(nuevas);
+    } catch {
+      errores.push("No se pudieron traer los empleados y las fichadas ya cargadas. Probá de nuevo.");
+    }
+    if (errores.length) setError(errores.join(" · "));
+    setLeyendo(false);
+  };
+
+  const quitarArchivo = async (i) => {
+    const nuevas = lecturas.filter((_, j) => j !== i);
+    setError(null);
+    if (nuevas.length) { try { await cargarContexto(unirLecturas(nuevas.map((l) => l.datos))); } catch { /* se mantiene el contexto anterior */ } }
+    setLecturas(nuevas);
+    if (!nuevas.length) { setOverrides({}); setExcluidos({}); setAbiertos({}); }
+  };
+
+  const cambiarLocal = (i, v) => {
+    setLecturas((ls) => ls.map((l, j) => (j === i ? { ...l, localId: v } : l)));
+    setLocalId(v); lsSet(LS_LOCAL, v);
   };
 
   // Vista previa calculada: tipos deducidos + overrides + marcas ya cargadas
@@ -113,19 +149,19 @@ export default function ImportarReloj() {
 
   const importar = async () => {
     if (!totalNuevas) return;
-    const local = locales.find((l) => String(l.id) === String(localId));
-    if (!confirm(`Se van a cargar ${totalNuevas} fichadas de ${validos.filter((p) => p.nuevas.length).length} empleados${local ? ` en ${local.nombre}` : ""}. ¿Continuar?`)) return;
+    if (!confirm(`Se van a cargar ${totalNuevas} fichadas de ${validos.filter((p) => p.nuevas.length).length} empleados (${lecturas.length === 1 ? "1 archivo" : `${lecturas.length} archivos unidos`}). ¿Continuar?`)) return;
     const filas = [];
     for (const p of validos) {
       const horario = horarios.find((h) => String(h.id) === String(p.emp.horario_id)) || null;
       const ordenadas = p.nuevas.slice().sort((a, b) => a.ts - b.ts);
       for (const m of p.nuevas) {
         const est = calcularEstado(m.tipo, m.ts, horario, contextoFichada(ordenadas.filter((x) => x !== m), m.ts));
+        const lec = lecturas[m.origen] || lecturas[0];
         filas.push({
           legajo: p.legajo, tipo: m.tipo, timestamp: m.ts.toISOString(),
           estado: est.estado, minutos_tarde: est.minutosTarde || 0,
-          local_id: localId || null, lat: null, lng: null, distancia_metros: null,
-          device_id: null, user_agent: `Reloj (importado) · ${archivo?.name || "archivo"}`,
+          local_id: lec?.localId || null, lat: null, lng: null, distancia_metros: null,
+          device_id: null, user_agent: `Reloj (importado) · ${lec?.nombre || "archivo"}`,
         });
       }
     }
@@ -137,11 +173,11 @@ export default function ImportarReloj() {
         ok += Math.min(400, filas.length - i);
       }
       registrarAuditoria(`Importó fichadas del reloj (${datos.desde} a ${datos.hasta})`,
-        `${ok} fichadas · ${validos.length} empleados · ${archivo?.name || ""}`);
+        `${ok} fichadas · ${validos.length} empleados · ${lecturas.map((l) => l.nombre).join(" + ")}`);
       setResultado({ ok, total: filas.length, desde: datos.desde, hasta: datos.hasta });
-      setDatos(null);
+      setLecturas([]); setOverrides({}); setExcluidos({}); setAbiertos({});
     } catch {
-      setError(`Se cortó la carga: entraron ${ok} de ${filas.length}. Volvé a subir el mismo archivo; las ya cargadas se saltean solas.`);
+      setError(`Se cortó la carga: entraron ${ok} de ${filas.length}. Volvé a subir los mismos archivos; las ya cargadas se saltean solas.`);
     } finally { setImportando(null); }
   };
 
@@ -150,22 +186,15 @@ export default function ImportarReloj() {
       <div className="bg-white border border-[#e3e8ed] rounded-xl p-4">
         <p className="text-sm font-bold">Importar fichadas del reloj</p>
         <p className="text-xs text-[#5c6b78] mt-1 max-w-3xl">
-          Subí el reporte del reloj (ej. <b>Sumario.xls</b>). Se lee la hoja <b>Registros</b>, se descartan los empleados sin marcas
-          y se deduce entrada/salida. Podés subirlo semanal, quincenal o mensual: si un período se pisa con otro ya importado,
-          las fichadas que ya están cargadas se saltean.
+          Subí el reporte del reloj (ej. <b>Sumario.xls</b>, hoja <b>Registros</b>) o la <b>planilla de E-S</b> (columnas LEG, FECHA, HORA 1…).
+          Si la misma gente ficha en dos relojes (camioneros, sopladora), subí los dos archivos: las marcas de cada legajo se
+          juntan antes de deducir entrada/salida (ej. entra 8:17 en uno y sale 19:52 en el otro). Se descartan los empleados sin
+          marcas. Podés subirlo semanal, quincenal o mensual: las fichadas que ya están cargadas se saltean.
         </p>
         <div className="flex gap-3 mt-3 flex-wrap items-end">
-          <div>
-            <label className={labelCls}>Reloj ubicado en</label>
-            <select value={localId} onChange={(e) => { setLocalId(e.target.value); lsSet(LS_LOCAL, e.target.value); }}
-              className="block bg-[#f1f4f7] border border-[#cfd6dd] rounded-lg px-2.5 py-2 text-sm outline-none mt-1 min-w-[200px]">
-              <option value="">— Sin depósito —</option>
-              {locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-            </select>
-          </div>
           <label className={`px-4 py-2 rounded-lg text-sm font-bold text-white cursor-pointer ${leyendo ? "bg-[#94a1ab]" : "bg-[#223c7e]"}`}>
-            {leyendo ? "Leyendo…" : "📂 Elegir archivo del reloj"}
-            <input type="file" accept=".xls,.xlsx" onChange={elegirArchivo} disabled={leyendo || !!importando} className="hidden" />
+            {leyendo ? "Leyendo…" : lecturas.length ? "➕ Sumar otro archivo" : "📂 Elegir archivo(s) del reloj"}
+            <input type="file" accept=".xls,.xlsx" multiple onChange={elegirArchivo} disabled={leyendo || !!importando} className="hidden" />
           </label>
           <div>
             <label className={labelCls}>Marcas repetidas</label>
@@ -177,8 +206,25 @@ export default function ImportarReloj() {
               min
             </div>
           </div>
-          {archivo && <span className="text-xs text-[#5c6b78] pb-2">{archivo.name}</span>}
         </div>
+        {lecturas.length > 0 && (
+          <div className="mt-3 grid gap-1.5" data-archivos>
+            {lecturas.map((l, i) => (
+              <div key={l.nombre} className="flex items-center gap-2 flex-wrap text-xs bg-[#f6f8fa] border border-[#e3e8ed] rounded-lg px-2.5 py-1.5">
+                {lecturas.length > 1 && <span className="font-bold text-[#223c7e] w-4">{LETRAS[i]}</span>}
+                <span className="font-semibold">{l.nombre}</span>
+                <span className="text-[#5c6b78]">{l.datos.formato} · {fmtDia(l.datos.desde)} → {fmtDia(l.datos.hasta)} · {l.datos.empleados.length} con marcas</span>
+                <span className="ml-auto text-[#94a1ab]">reloj en</span>
+                <select value={l.localId} onChange={(e) => cambiarLocal(i, e.target.value)} aria-label={`Ubicación del reloj de ${l.nombre}`}
+                  className="bg-white border border-[#cfd6dd] rounded-md px-1.5 py-1 text-xs outline-none">
+                  <option value="">— Sin depósito —</option>
+                  {locales.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+                </select>
+                <button onClick={() => quitarArchivo(i)} disabled={!!importando} title="Quitar este archivo" className="text-[#94a1ab] hover:text-[#e5484d] px-1">✕</button>
+              </div>
+            ))}
+          </div>
+        )}
         {error && <p className="text-sm text-[#e5484d] mt-3">{error}</p>}
         {resultado && <p className="text-sm text-[#16a34a] font-semibold mt-3">✓ Listo: se cargaron {resultado.ok} fichadas del {fmtDia(resultado.desde)} al {fmtDia(resultado.hasta)}. Para verlas en Reportes, Dashboard o Corrección, mové el mes con las flechas hasta {new Date(resultado.desde + "T12:00:00").toLocaleDateString("es-AR", { month: "long", year: "numeric" })}.</p>}
       </div>
@@ -186,7 +232,7 @@ export default function ImportarReloj() {
       {datos && (
         <>
           <div className="bg-white border border-[#e3e8ed] rounded-xl p-4 flex flex-wrap gap-x-6 gap-y-2 items-center">
-            <Dato n={`${fmtDia(datos.desde)} → ${fmtDia(datos.hasta)}`} t="Período del archivo" />
+            <Dato n={`${fmtDia(datos.desde)} → ${fmtDia(datos.hasta)}`} t={lecturas.length > 1 ? "Período (archivos unidos)" : "Período del archivo"} />
             <Dato n={validos.length} t="Empleados a importar" />
             <Dato n={totalNuevas} t="Fichadas nuevas" color="#16a34a" />
             <Dato n={validos.reduce((s, p) => s + p.yaCargadas, 0)} t="Ya estaban cargadas" />
@@ -196,6 +242,12 @@ export default function ImportarReloj() {
               {importando || `Importar ${totalNuevas} fichadas`}
             </button>
           </div>
+
+          {lecturas.length > 1 && (
+            <p className="text-[11px] text-[#5c6b78]">
+              Archivos unidos: la letra al lado de cada hora dice de qué archivo vino ({lecturas.map((l, i) => `${LETRAS[i]} = ${l.nombre}`).join(" · ")}).
+            </p>
+          )}
 
           {noExisten.length > 0 && (
             <p className="text-xs bg-[#fdecec] text-[#b42318] border border-[#f5c2c0] rounded-lg px-3 py-2">
@@ -245,6 +297,7 @@ export default function ImportarReloj() {
                                 ? { color: "#16a34a", borderColor: "rgba(22,163,74,.4)", backgroundColor: "rgba(22,163,74,.08)" }
                                 : { color: "#e5484d", borderColor: "rgba(229,72,77,.4)", backgroundColor: "rgba(229,72,77,.08)" }}>
                             {m.descartada ? "✕" : m.tipo === "entrada" ? "E" : "S"} {m.hora}
+                            {lecturas.length > 1 && <sup className="ml-0.5 text-[9px] opacity-70" title={lecturas[m.origen]?.nombre}>{LETRAS[m.origen]}</sup>}
                           </button>
                         ))}
                         {d.revisar && <span className="text-[11px] text-[#9a6700]">marcas impares, falta una entrada o salida</span>}

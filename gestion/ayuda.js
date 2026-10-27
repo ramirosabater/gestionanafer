@@ -177,6 +177,12 @@
         { t: "En <b>Aprobaciones</b> autorizás fichadas fuera de zona u horario, y en <b>Ausencias</b> cargás licencias y faltas." },
         { t: "Si cambiaste un horario, usá <b>Recalcular estados</b> del mes para que se actualicen las llegadas tarde." },
       ] },
+      { titulo: "Importar fichadas de los relojes", pasos: [
+        { t: "En <b>Asistencia → Importar reloj</b> subís el reporte del reloj (hoja <b>Registros</b> del Sumario.xls) o la <b>planilla de E-S</b> (columnas LEG, FECHA, HORA 1…).", foco: { texto: "Asistencia" } },
+        { t: "Los camioneros y la gente de sopladora a veces fichan en <b>dos relojes</b>: subí los dos archivos juntos (o uno y después <b>➕ Sumar otro archivo</b>). Las marcas del mismo legajo se juntan antes de decidir entrada y salida: si entró 8:17 en uno y salió 19:52 en el otro, queda como una jornada." },
+        { t: "Cada archivo lleva su ubicación (“reloj en”) y la letra al lado de cada hora dice de qué archivo vino. Los días en amarillo tienen marcas impares: tocá una marca para cambiarla a entrada, salida o descartarla." },
+        { t: "Las fichadas que ya estaban cargadas se saltean, así que podés volver a subir los mismos archivos sin duplicar." },
+      ] },
       { titulo: "Empleados y horarios", pasos: [
         { t: "En <b>Personal → Empleados</b> das de alta, editás datos, asignás horario, sector y ubicaciones, y reseteás el PIN.", foco: { texto: "Personal" } },
         { t: "Los horarios se arman en <b>Personal → Horarios</b>; las ubicaciones donde se puede fichar, en <b>Configuración → Ubicaciones</b>." },
