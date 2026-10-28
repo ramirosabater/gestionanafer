@@ -318,6 +318,28 @@
   .tipo-toggle button.on[data-tipo="ingreso"]{background:color-mix(in srgb, #1f9d55 16%, var(--surface)); color:#1a7f47;}
   .tipo-toggle button.on[data-tipo="egreso"]{background:color-mix(in srgb, var(--danger) 12%, var(--surface)); color:var(--danger);}
   .tipo-toggle button:disabled{cursor:default;}
+  .tipo-toggle button.on[data-tipo="pago"]{background:color-mix(in srgb, var(--accent) 14%, var(--surface)); color:var(--accent);}
+  .tipo-toggle button.on[data-tipo="anticipo"]{background:color-mix(in srgb, var(--chart-driver) 18%, var(--surface)); color:var(--chart-driver);}
+  .comb-box{border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin:6px 0 12px; background:var(--surface-2);}
+  .comb-box .crew-fields{margin-top:6px;}
+  .di-aviso{margin:-6px 0 12px; padding:8px 10px; border-radius:8px; background:color-mix(in srgb, var(--chart-driver) 10%, var(--surface));}
+  .oc-badge.di{background:color-mix(in srgb, var(--chart-driver) 14%, var(--surface)); color:var(--chart-driver); font-size:10.5px; padding:1px 7px; margin-left:6px;}
+  .tipo-toggle button.on[data-tipo="factura"]{background:color-mix(in srgb, var(--accent) 14%, var(--surface)); color:var(--accent);}
+  .tipo-toggle button.on[data-tipo="debito_interno"]{background:color-mix(in srgb, var(--chart-driver) 18%, var(--surface)); color:var(--chart-driver);}
+  .ant-box{border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin:6px 0 12px; background:var(--surface-2);}
+  .ant-line{display:flex; align-items:center; gap:8px; padding:5px 0; font-size:13px; flex-wrap:wrap;}
+  .ant-line .ant-desc{flex:1; min-width:180px;}
+  .field .ant-line input[type=text], .field .fact-line input[type=text], .ant-line input[type=text], .setting-row.fact-line input[type=text]{flex:none; width:130px; text-align:right; font-family:inherit; font-size:13px; padding:4px 6px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--ink);}
+  .fact-line .fact-desc{flex:1;}
+  .fact-line .fact-saldo{font-size:11.5px; color:var(--muted); margin-left:6px;}
+  .pom-resumen{font-size:12.5px; color:var(--ink-2); margin:-4px 0 12px; padding:0 2px; display:flex; gap:14px; flex-wrap:wrap;}
+  .pom-resumen b{color:var(--ink);}
+  .oc-badge.parcial{background:color-mix(in srgb, var(--chart-driver) 22%, var(--surface)); color:var(--chart-driver); border:1px dashed color-mix(in srgb, var(--chart-driver) 55%, transparent);}
+  .oc-badge.sin_pagar{background:var(--surface-2); color:var(--muted);}
+  .oc-badge.anticipo{background:color-mix(in srgb, var(--chart-driver) 14%, var(--surface)); color:var(--chart-driver);}
+  .oc-pagos{font-size:12.5px; border:1px solid var(--border); border-radius:10px; padding:8px 12px; margin:4px 0 12px; background:var(--surface-2);}
+  .oc-pagos .fila{display:flex; justify-content:space-between; gap:10px; padding:2px 0;}
+  .oc-pagos .tot{border-top:1px solid var(--border); margin-top:4px; padding-top:4px; font-weight:600;}
   .medio-nombre{font-weight:700; color:var(--danger); font-size:14px; padding:8px 0; text-transform:uppercase; letter-spacing:0.02em;}
   .cheque-fields{border:1px dashed var(--border-strong); border-radius:10px; padding:10px 10px 0; margin-bottom:12px;}
   .cheque-fields[hidden]{display:none;}
@@ -534,6 +556,7 @@
   .attach-add-row input[type=file]{font-size:12px; color:var(--ink-2); max-width:100%;}
   .attach-empty{font-size:12px; color:var(--muted); margin-bottom:8px;}
   .factura-read-row{display:flex; align-items:center; gap:10px; margin-bottom:14px; padding:10px 12px; background:var(--ghost-bg); border-radius:8px;}
+  .factura-read-row[hidden], .ant-box[hidden], .comb-box[hidden], .oc-pagos[hidden], .pom-resumen[hidden], .di-aviso[hidden]{display:none;}
   .factura-read-row .sub2{font-size:12px; color:var(--ink-2); flex:1; margin:0;}
   .factura-read-row label.btn{white-space:nowrap;}
 
@@ -1282,13 +1305,18 @@
           <option value="aprobada">Aprobada</option>
           <option value="recibida">Recibida</option>
           <option value="anulada">Anulada</option>
+          <optgroup label="Pago">
+            <option value="pago:sin_pagar">Sin pagar</option>
+            <option value="pago:parcial">Pago parcial</option>
+            <option value="pago:pagada">Pagada</option>
+          </optgroup>
         </select>
         <button class="btn primary edit-action" id="new-oc-btn">+ Nueva orden de compra</button>
       </div>
     </div>
     <div class="day-wrap">
       <table class="day-table" id="oc-table">
-        <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Descripción</th><th>Monto</th><th>Estado</th></tr></thead>
+        <thead><tr><th>N°</th><th>Proveedor</th><th>Fecha</th><th>Descripción</th><th>Monto</th><th>Estado</th><th>Pago</th></tr></thead>
         <tbody id="oc-body"></tbody>
       </table>
     </div>
@@ -1366,8 +1394,11 @@
         <select id="factura-filter-estado" class="scope-select">
           <option value="">Todos los estados</option>
           <option value="pendiente">Pendiente</option>
+          <option value="parcial">Pago parcial</option>
           <option value="pagada">Pagada</option>
           <option value="anulada">Anulada</option>
+          <option value="tipo:debito_interno">Débitos internos</option>
+          <option value="tipo:combustible">Con litros / km (combustible)</option>
         </select>
         <button class="btn primary edit-action" id="new-factura-btn">+ Nueva factura</button>
       </div>
@@ -1389,6 +1420,8 @@
           <option value="pendiente">Pendiente</option>
           <option value="pagada">Pagada</option>
           <option value="anulada">Anulada</option>
+          <option value="anticipo">Anticipos</option>
+          <option value="anticipo_favor">Anticipos con saldo a favor</option>
         </select>
         <button class="btn primary edit-action" id="new-pago-btn">+ Nueva orden de pago</button>
       </div>
@@ -2079,6 +2112,7 @@
       <label for="ocm-descripcion">Descripción</label>
       <textarea id="ocm-descripcion" placeholder="Qué se compra..."></textarea>
     </div>
+    <div class="oc-pagos" id="ocm-pagos" hidden></div>
     <div class="field">
       <label for="ocm-estado">Estado</label>
       <select id="ocm-estado">
@@ -2096,6 +2130,7 @@
         <button class="btn" id="ocm-cancel">Cancelar</button>
         <button class="btn" id="ocm-delete" style="display:none; color:var(--danger);">Anular</button>
         <button class="btn" id="ocm-imprimir" style="display:none;">🖨 Imprimir</button>
+        <button class="btn edit-action" id="ocm-anticipo" style="display:none;" title="Pagar una parte (o todo) antes de que llegue la factura">💸 Pago anticipado</button>
       </div>
       <button class="btn primary" id="ocm-save">Guardar</button>
     </div>
@@ -2105,8 +2140,13 @@
 <div class="overlay" id="factura-overlay">
   <div class="modal wide modal-lg" id="factura-modal">
     <h3 id="fm-title">Nueva factura</h3>
-    <div class="sub">Datos de la factura — cargalos a mano o subí el archivo para completarlos automáticamente</div>
+    <div class="sub" id="fm-sub">Datos de la factura — cargalos a mano o subí el archivo para completarlos automáticamente</div>
     <div class="modal-scroll-body">
+    <div class="tipo-toggle" id="fm-tipo-toggle" role="group" aria-label="Tipo de comprobante">
+      <button type="button" data-tipo="factura" class="on">Factura</button>
+      <button type="button" data-tipo="debito_interno">Débito interno</button>
+    </div>
+    <div class="fm-hint di-aviso" id="fm-di-aviso" hidden>Débito interno: para lo que se paga <b>sin factura y sin impuestos</b>. Lleva número propio, no tiene IVA ni retención de Ganancias y se paga con una orden de pago como cualquier factura.</div>
     <div class="factura-read-row" id="fm-read-row" hidden>
       <div class="sub2">Subí el PDF o la foto de la factura y complete los campos por vos. Revisá los datos antes de guardar.</div>
       <label class="btn" for="fm-read-input" id="fm-read-label" style="cursor:pointer;">📄 Leer desde archivo</label>
@@ -2114,7 +2154,7 @@
     </div>
     <div class="crew-fields">
       <div class="field">
-        <label for="fm-proveedor-input">Proveedor</label>
+        <label for="fm-proveedor-input" id="fm-proveedor-label">Proveedor</label>
         <div class="combo" id="fm-proveedor-combo">
           <input type="text" id="fm-proveedor-input" placeholder="Buscar proveedor por nombre..." autocomplete="off">
           <input type="hidden" id="fm-proveedor">
@@ -2153,6 +2193,16 @@
       </div>
     </div>
     <div class="split-toggle-row"><button type="button" class="link-btn" id="fm-split-on">Repartir esta factura en varias imputaciones</button></div>
+    <div class="comb-box" id="fm-combustible" hidden>
+      <div class="split-head">
+        <span class="lbl">⛽ Combustible <span class="fm-hint">(opcional)</span></span>
+        <span class="fm-hint" id="fm-comb-hint"></span>
+      </div>
+      <div class="crew-fields">
+        <div class="field"><label for="fm-km">Kilómetros (lo que marca el odómetro)</label><input type="text" id="fm-km" inputmode="decimal" placeholder="Ej: 152.300" autocomplete="off"></div>
+        <div class="field"><label for="fm-litros">Litros</label><input type="text" id="fm-litros" inputmode="decimal" placeholder="Ej: 120,5" autocomplete="off"></div>
+      </div>
+    </div>
     <div class="art-box" id="fm-articulos" hidden>
       <div class="split-head">
         <span class="lbl">📦 Artículos de la factura</span>
@@ -2167,17 +2217,19 @@
       </div>
     </div>
     <div class="crew-fields">
-      <div class="field"><label for="fm-numero">N° de factura</label><input type="text" id="fm-numero" maxlength="40" placeholder="Ej: A-0001-00012345"></div>
+      <div class="field"><label for="fm-numero" id="fm-numero-label">N° de factura</label><input type="text" id="fm-numero" maxlength="40" placeholder="Ej: A-0001-00012345"></div>
       <div class="field"><label for="fm-fecha">Fecha</label><input type="date" id="fm-fecha"></div>
     </div>
     <div class="crew-fields">
       <div class="field">
         <label for="fm-monto">Monto total</label>
         <input type="text" id="fm-monto" inputmode="decimal" placeholder="0,00">
+        <div id="fm-impuestos">
         <label for="fm-neto" style="margin-top:8px;">Neto gravado (sin IVA) <span class="fm-hint" id="fm-neto-hint"></span></label>
         <input type="text" id="fm-neto" inputmode="decimal" placeholder="Automático">
         <label for="fm-regimen" style="margin-top:8px;">Retención de Ganancias</label>
         <select id="fm-regimen"></select>
+        </div>
       </div>
       <div class="field">
         <label>Archivos adjuntos</label>
@@ -2196,6 +2248,7 @@
       <div class="left">
         <button class="btn" id="fm-cancel">Cancelar</button>
         <button class="btn" id="fm-delete" style="display:none; color:var(--danger);">Anular</button>
+        <button class="btn" id="fm-imprimir" style="display:none;">🖨 Imprimir</button>
       </div>
       <button class="btn primary" id="fm-save">Guardar</button>
     </div>
@@ -2207,6 +2260,10 @@
     <h3 id="pom-title">Nueva orden de pago</h3>
     <div class="sub" id="pom-sub">—</div>
     <div class="modal-scroll-body">
+    <div class="tipo-toggle" id="pom-tipo-toggle" role="group" aria-label="Tipo de orden de pago">
+      <button type="button" data-tipo="pago" class="on">Pago de facturas</button>
+      <button type="button" data-tipo="anticipo">Pago anticipado</button>
+    </div>
     <div class="crew-fields">
       <div class="field">
         <label for="pom-proveedor-input">Proveedor</label>
@@ -2216,15 +2273,38 @@
           <div class="combo-menu" id="pom-proveedor-menu" hidden></div>
         </div>
       </div>
-      <div class="field">
-        <label style="margin-bottom:2px;">Monto total</label>
+      <div class="field" id="pom-monto-field">
+        <label style="margin-bottom:2px;" id="pom-monto-label">Monto total</label>
         <div class="num" id="pom-monto-total" style="font-size:16px; font-weight:700; padding:8px 0;">$0,00</div>
       </div>
     </div>
-    <div class="field">
-      <label style="margin-bottom:5px;">Facturas a pagar</label>
+    <div class="field" id="pom-facturas-field">
+      <label style="margin-bottom:5px;">Facturas a pagar <span class="fm-hint">— el importe se puede bajar para pagar una parte (la factura queda con pago parcial)</span></label>
       <div class="cargo-table-wrap" id="pom-facturas-list" style="padding:6px 8px;"></div>
     </div>
+    <div class="ant-box" id="pom-ant-usar-box" hidden>
+      <div class="ret-head">Anticipos a favor de este proveedor <span class="fm-hint">— tildá los que se descuentan de este pago</span></div>
+      <div id="pom-ant-usar"></div>
+    </div>
+    <div class="ant-box" id="pom-anticipo-box" hidden>
+      <div class="crew-fields">
+        <div class="field">
+          <label for="pom-ant-oc">A cuenta de la orden de compra <span class="fm-hint">(opcional)</span></label>
+          <select id="pom-ant-oc"><option value="">Sin orden de compra (anticipo general)</option></select>
+        </div>
+        <div class="field">
+          <label for="pom-ant-importe">Importe del anticipo</label>
+          <input type="text" id="pom-ant-importe" inputmode="decimal" placeholder="0,00" autocomplete="off">
+        </div>
+      </div>
+      <div class="field">
+        <label for="pom-ant-base">Base para la retención de Ganancias (neto de IVA)</label>
+        <input type="text" id="pom-ant-base" inputmode="decimal" placeholder="0,00" autocomplete="off">
+        <div class="fm-hint" id="pom-ant-base-hint">Se calcula sola (importe ÷ 1,21 si es Responsable Inscripto); cambiala si el anticipo no lleva IVA.</div>
+      </div>
+      <div class="fm-hint">El anticipo queda a favor del proveedor: cuando llegue la factura, en la orden de pago que la cancela lo tildás en “Anticipos a favor” y no se vuelve a retener sobre lo ya anticipado.</div>
+    </div>
+    <div class="pom-resumen" id="pom-resumen" hidden></div>
     <div class="crew-fields">
       <div class="field"><label for="pom-fecha">Fecha</label><input type="date" id="pom-fecha"></div>
       <div class="field">

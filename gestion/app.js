@@ -3812,10 +3812,12 @@
     if(!body) return;
     body.innerHTML = '';
     var list = state.ordenesCompra.slice();
-    if(state.ocFilterEstado) list = list.filter(function(o){ return o.estado===state.ocFilterEstado; });
+    var fe = state.ocFilterEstado||'';
+    if(fe.indexOf('pago:')===0) list = list.filter(function(o){ return !esAnulado(o) && o.estado!=='anulada' && ocPagos(o).estado===fe.slice(5); });
+    else if(fe) list = list.filter(function(o){ return o.estado===fe; });
     list.sort(function(a,b){ return (b.numero||0)-(a.numero||0); });
     if(list.length===0){
-      body.innerHTML = '<tr class="day-row empty"><td colspan="6">No hay órdenes de compra'+(state.ocFilterEstado?' con ese estado':'')+'.</td></tr>';
+      body.innerHTML = '<tr class="day-row empty"><td colspan="7">No hay órdenes de compra'+(state.ocFilterEstado?' con ese estado':'')+'.</td></tr>';
       return;
     }
     list.forEach(function(o){
@@ -3828,6 +3830,10 @@
         +'<td class="day-note">'+esc(o.descripcion||'—')+'</td>'
         +'<td class="num">$'+montoStr+'</td>'
         +'<td><span class="oc-badge '+esc(o.estado||'pendiente')+'">'+ocEstadoLabel(o.estado)+'</span></td>';
+      var pg = ocPagos(o);
+      tr.innerHTML += (esAnulado(o) || o.estado==='anulada') ? '<td>—</td>'
+        : '<td><span class="oc-badge '+pg.estado+'">'+ocPagoLabel(pg.estado)+'</span>'
+          +(pg.estado==='parcial' ? '<div class="fm-hint">pagado '+fmtMoney(pg.pagado)+' · falta '+fmtMoney(pg.saldo)+'</div>' : '')+'</td>';
       if(esAnulado(o)){ tr.className += ' anulado'; tr.title = anulacionTexto(o); }
       tr.addEventListener('click', function(){ openOCModal(o.id); });
       body.appendChild(tr);
@@ -4069,12 +4075,42 @@
     document.getElementById('ocm-notas').value = o ? (o.notas||'') : '';
     document.getElementById('ocm-delete').style.display = o ? '' : 'none';
     document.getElementById('ocm-imprimir').style.display = o ? '' : 'none';
+    var vigente = o && !esAnulado(o) && o.estado!=='anulada';
+    document.getElementById('ocm-anticipo').style.display = vigente && canEdit('pagos') ? '' : 'none';
+    renderOCPagos(vigente ? o : null);
     marcarModalAnulado('ocm-save', 'ocm-delete', o, 'a');
     document.getElementById('oc-overlay').classList.add('show');
   }
   function closeOCModal(){
     document.getElementById('oc-overlay').classList.remove('show');
   }
+  // Pagos de la orden de compra: facturas (pagadas o a medias) y anticipos
+  function renderOCPagos(o){
+    var box = document.getElementById('ocm-pagos');
+    if(!o){ box.hidden = true; return; }
+    var pg = ocPagos(o);
+    if(!pg.facturas.length && !pg.anticipos.length){ box.hidden = false; box.innerHTML = '<div class="fila"><span>Pago</span><span class="oc-badge sin_pagar">Sin pagar</span></div><div class="fm-hint">Todavía no tiene facturas ni anticipos. Con <b>💸 Pago anticipado</b> se le paga antes de que llegue la factura.</div>'; return; }
+    var filas = pg.facturas.map(function(f){
+      var pag = facturaPagado(f.id);
+      return '<div class="fila"><span>Factura '+esc(f.numero||'')+' ('+fmtMoney(f.monto)+')'+(f.estado==='parcial' ? ' · pago parcial' : '')+'</span><b>'+fmtMoney(pag)+'</b></div>';
+    }).concat(pg.anticipos.map(function(a){
+      var sal = anticipoSaldo(a);
+      return '<div class="fila"><span>Anticipo '+pagoNumeroLabel(a.numero)+' ('+esc(a.fecha||'')+')'+(sal < Number(a.monto)-0.005 ? ' · '+fmtMoney(r2(Number(a.monto)-sal))+' ya usado en facturas' : '')+'</span><b>'+fmtMoney(sal)+'</b></div>';
+    }));
+    box.hidden = false;
+    box.innerHTML = '<div class="fila"><span>Pago</span><span class="oc-badge '+pg.estado+'">'+ocPagoLabel(pg.estado)+'</span></div>'+filas.join('')
+      +'<div class="fila tot"><span>Pagado</span><span>'+fmtMoney(pg.pagado)+'</span></div>'
+      +'<div class="fila"><span>Falta pagar de la orden ('+fmtMoney(o.monto)+')</span><span>'+fmtMoney(pg.saldo)+'</span></div>';
+  }
+  document.getElementById('ocm-anticipo').addEventListener('click', function(){
+    var o = state.editingOCId ? state.ordenesCompra.find(function(x){ return x.id===state.editingOCId; }) : null;
+    if(!o) return;
+    if(!state.colAnticipos){ showToast('Para hacer pagos anticipados falta correr pagos-parciales-y-anticipos.sql en Supabase.', 6000); return; }
+    closeOCModal();
+    setView('pagos');
+    mostrarSubtab('pagos', 'ordenes');
+    openPagoModal(null, {tipo:'anticipo', proveedorId:o.proveedorId, ocId:o.id, importe:ocPagos(o).saldo});
+  });
 
   document.getElementById('new-oc-btn').addEventListener('click', function(){ openOCModal(null); });
   document.getElementById('ocm-cancel').addEventListener('click', closeOCModal);
@@ -4223,7 +4259,7 @@
   }
 
   // ---------- Pagos: facturas y órdenes de pago ----------
-  function facturaEstadoLabel(e){ return e==='pagada' ? 'Pagada' : e==='anulada' ? 'Anulada' : 'Pendiente'; }
+  function facturaEstadoLabel(e){ return e==='pagada' ? 'Pagada' : e==='parcial' ? 'Pago parcial' : e==='anulada' ? 'Anulada' : 'Pendiente'; }
   function pagoEstadoLabel(e){ return e==='pagada' ? 'Pagada' : e==='anulada' ? 'Anulada' : 'Pendiente'; }
 
   // ---------- Anulación de comprobantes ----------
@@ -4314,6 +4350,41 @@
   function facturaById(id){
     return state.facturas.find(function(x){ return x.id===id; }) || null;
   }
+  // ---------- Débitos internos y combustible ----------
+  // Débito interno: comprobante propio para lo que se paga sin factura y sin
+  // impuestos (sin IVA ni retención). Número correlativo DI-0001, DI-0002…
+  function esDebitoInterno(f){ return !!f && f.tipoComprobante==='debito_interno'; }
+  function nextDINumero(){
+    var max = 0;
+    state.facturas.forEach(function(f){ var m = esDebitoInterno(f) && /^DI-(\d+)$/i.exec(String(f.numero||'')); if(m) max = Math.max(max, Number(m[1])); });
+    return 'DI-'+String(max+1).padStart(4, '0');
+  }
+  // Proveedores de combustibles y lubricantes (por el rubro): su factura
+  // pide, opcionales, kilómetros y litros.
+  function provEsCombustible(provId){
+    var p = state.proveedores.find(function(x){ return x.id===provId; });
+    var r = normTxt(p && p.rubro);
+    return r.indexOf('combust')!==-1 || r.indexOf('lubric')!==-1;
+  }
+  function fmtKm(n){ return Number(n||0).toLocaleString('es-AR', {maximumFractionDigits:0}); }
+  function fmtLitros(n){ return Number(n||0).toLocaleString('es-AR', {maximumFractionDigits:2}); }
+  // Móvil de una factura (para el consumo): el de su imputación
+  function facturaMovil(f){
+    var refs = facturaLineas(f).map(function(l){ return ccRefEfectiva(l.centroCostoId, l.ccRef); }).filter(function(r){ return r && r.indexOf('movil:')===0; });
+    return refs[0] || '';
+  }
+  // Consumo desde la carga anterior del mismo móvil (con km menor)
+  function consumoDesdeAnterior(movil, km, litros, excluirId){
+    if(!movil || !(km>0) || !(litros>0)) return null;
+    var prev = null;
+    state.facturas.forEach(function(f){
+      if(f.id===excluirId || esAnulado(f) || f.estado==='anulada' || !(f.km>0) || f.km>=km || facturaMovil(f)!==movil) return;
+      if(!prev || f.km>prev.km) prev = f;
+    });
+    if(!prev) return null;
+    var rec = km - prev.km;
+    return {anterior:prev, km:rec, l100:r2(litros/rec*100)};
+  }
   function generateFacturaId(proveedorId, numero){
     var base = slug(proveedorId+'_'+numero);
     var used = {};
@@ -4330,10 +4401,122 @@
     writeFactura(f);
   }
 
+  // ---------- Pagos parciales y anticipos ----------
+  // Una orden de pago puede cancelar solo una parte de cada factura
+  // (p.aplicaciones = [{facturaId, importe}]; las órdenes viejas, sin
+  // aplicaciones, cancelan sus facturas enteras) y usar anticipos pagados
+  // antes al mismo proveedor (p.anticiposUsados = [{opId, importe}]).
+  // Un anticipo es una orden de pago tipo 'anticipo', sin facturas, con o
+  // sin orden de compra: se paga (con su retención) y queda a favor.
+  function esAnticipo(p){ return !!p && p.tipo==='anticipo'; }
+  function opVigente(p){ return p && p.estado!=='anulada' && !esAnulado(p); }
+  function opAplicaciones(p){
+    if(!p || esAnticipo(p)) return [];
+    if(p.aplicaciones && p.aplicaciones.length) return p.aplicaciones;
+    return (p.facturaIds||[]).map(function(fid){ var f = facturaById(fid); return {facturaId:fid, importe: f ? Number(f.monto||0) : 0}; });
+  }
+  function opAnticiposTotal(p){ return r2(((p && p.anticiposUsados)||[]).reduce(function(t,a){ return t+Number(a.importe||0); }, 0)); }
+  // Lo que la orden cancela sin contar la parte que ya se había pagado como anticipo
+  function opMontoSinAnticipos(p){ return r2(Number(p.monto||0) - opAnticiposTotal(p)); }
+  // Lo que sale de caja/banco: cancelado − retenciones − anticipos usados
+  function opNetoEfectivo(p){ return r2(Number(p.monto||0) - Number(p.retenido||0) - opAnticiposTotal(p)); }
+  // Lo cancelado de una factura por órdenes de pago: solo las pagadas, o
+  // también las pendientes ("comprometido", para no pagar dos veces lo mismo).
+  function facturaAplicado(fid, excluirOpId, conPendientes){
+    var t = 0;
+    state.ordenesPago.forEach(function(p){
+      if(p.id===excluirOpId || !opVigente(p) || (!conPendientes && p.estado!=='pagada')) return;
+      opAplicaciones(p).forEach(function(a){ if(a.facturaId===fid) t += Number(a.importe||0); });
+    });
+    return r2(t);
+  }
+  function facturaPagado(fid, excluirOpId){ return facturaAplicado(fid, excluirOpId, false); }
+  function facturaSaldo(f, excluirOpId){ return f ? r2(Number(f.monto||0) - facturaPagado(f.id, excluirOpId)) : 0; }
+  // Lo que todavía se puede poner en una orden de pago nueva
+  function facturaDisponible(f, excluirOpId){ return f ? r2(Number(f.monto||0) - facturaAplicado(f.id, excluirOpId, true)) : 0; }
+  function facturaEstaAbierta(f){ return f && (f.estado==='pendiente' || f.estado==='parcial'); }
+  // Estado de la factura según sus pagos: pagada si no queda saldo, parcial
+  // si se pagó una parte, pendiente si nada.
+  function facturaEstadoCalc(f){
+    if(!f) return 'pendiente';
+    if(esAnulado(f) || f.estado==='anulada') return 'anulada';
+    var hay = state.ordenesPago.some(function(p){ return opVigente(p) && p.estado==='pagada' && opAplicaciones(p).some(function(a){ return a.facturaId===f.id; }); });
+    if(!hay) return 'pendiente';
+    return Math.abs(facturaSaldo(f)) < 0.005 ? 'pagada' : 'parcial';
+  }
+  function recalcFacturaEstado(fid){ var f = facturaById(fid); if(f && f.estado!=='anulada' && !esAnulado(f)) setFacturaEstado(fid, facturaEstadoCalc(f)); }
+  // Anticipos: lo usado en otras órdenes (pendientes o pagadas) y el saldo a favor
+  function anticipoUsado(antId, excluirOpId){
+    var t = 0;
+    state.ordenesPago.forEach(function(p){
+      if(p.id===excluirOpId || !opVigente(p)) return;
+      (p.anticiposUsados||[]).forEach(function(a){ if(a.opId===antId) t += Number(a.importe||0); });
+    });
+    return r2(t);
+  }
+  function anticipoSaldo(ant, excluirOpId){ return ant ? r2(Number(ant.monto||0) - anticipoUsado(ant.id, excluirOpId)) : 0; }
+  // Anticipos pagados del proveedor con saldo a favor (para usar en un pago)
+  function anticiposDisponibles(provId, opId, usadosAhora){
+    usadosAhora = usadosAhora || [];
+    return state.ordenesPago.filter(function(p){
+      if(!esAnticipo(p) || p.proveedorId!==provId || !opVigente(p) || p.estado!=='pagada' || p.id===opId) return false;
+      return anticipoSaldo(p, opId) > 0.005 || usadosAhora.some(function(a){ return a.opId===p.id; });
+    }).sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
+  }
+  // Régimen de Ganancias de un anticipo: el del proveedor
+  function anticipoRegimen(p){
+    var r = (p.retenciones||[]).find(function(e){ return e.impuesto!=='iva'; });
+    if(r) return Number(r.regimen);
+    return provGanRegimen(state.proveedores.find(function(x){ return x.id===p.proveedorId; })) || 0;
+  }
+  // Neto de IVA sugerido para la base de retención de un anticipo
+  function anticipoBaseAuto(provId, importe){
+    var p = state.proveedores.find(function(x){ return x.id===provId; });
+    var c = normTxt(p && p.condicionIva);
+    var ri = c.indexOf('inscripto')!==-1 && c.indexOf('monotrib')===-1;
+    return r2(ri ? Number(importe||0)/1.21 : Number(importe||0));
+  }
+  // Base de Ganancias por régimen de lo que se paga: el neto proporcional a
+  // lo que se cancela de cada factura, menos la parte que ya se retuvo como
+  // anticipo.
+  function basesRetencion(aplicaciones, anticiposUsados){
+    var porReg = {};
+    (aplicaciones||[]).forEach(function(a){
+      var f = facturaById(a.facturaId); if(!f) return;
+      var reg = facturaRegimen(f); if(!reg) return;
+      var m = Number(f.monto||0);
+      var prop = m ? Number(a.importe||0)/m : 1;
+      porReg[reg] = (porReg[reg]||0) + facturaNeto(f)*prop;
+    });
+    (anticiposUsados||[]).forEach(function(u){
+      var ant = state.ordenesPago.find(function(p){ return p.id===u.opId; });
+      if(!ant || !Number(ant.monto)) return;
+      var reg = anticipoRegimen(ant);
+      if(!reg || porReg[reg]==null) return;
+      var base = ant.baseRetencion!=null ? Number(ant.baseRetencion) : anticipoBaseAuto(ant.proveedorId, ant.monto);
+      porReg[reg] = Math.max(0, porReg[reg] - base*Number(u.importe||0)/Number(ant.monto));
+    });
+    Object.keys(porReg).forEach(function(k){ porReg[k] = r2(porReg[k]); });
+    return porReg;
+  }
+  // Orden de compra: lo pagado de sus facturas + lo anticipado a cuenta de
+  // ella que todavía no se usó en una factura.
+  function ocPagos(o){
+    var facts = state.facturas.filter(function(f){ return f.ocId===o.id && !esAnulado(f) && f.estado!=='anulada'; });
+    var deFacturas = r2(facts.reduce(function(t,f){ return t+facturaPagado(f.id); }, 0));
+    var ants = state.ordenesPago.filter(function(p){ return esAnticipo(p) && p.ocId===o.id && opVigente(p) && p.estado==='pagada'; });
+    var anticipado = r2(ants.reduce(function(t,p){ return t+anticipoSaldo(p); }, 0));
+    var pagado = r2(deFacturas + anticipado), total = Number(o.monto||0);
+    var estado = pagado<=0.005 ? 'sin_pagar' : (total>0 && pagado>=total-0.005 ? 'pagada' : 'parcial');
+    return {pagado:pagado, deFacturas:deFacturas, anticipado:anticipado, saldo:r2(Math.max(0, total-pagado)), estado:estado, facturas:facts, anticipos:ants};
+  }
+  function ocPagoLabel(e){ return e==='pagada' ? 'Pagada' : e==='parcial' ? 'Pago parcial' : 'Sin pagar'; }
+
   function renderPagos(){
     renderSugerenciaPagos();
     renderFacturasList();
     renderPagosList();
+    renderOCList();   // el estado de pago de las OC sale de facturas y órdenes de pago
     renderRetencionesList();
     actualizarSubtabs();
   }
@@ -4343,7 +4526,10 @@
     if(!body) return;
     body.innerHTML = '';
     var list = state.facturas.slice();
-    if(state.facturaFilterEstado) list = list.filter(function(f){ return f.estado===state.facturaFilterEstado; });
+    var ffe = state.facturaFilterEstado||'';
+    if(ffe==='tipo:debito_interno') list = list.filter(esDebitoInterno);
+    else if(ffe==='tipo:combustible') list = list.filter(function(f){ return f.km>0 || f.litros>0; });
+    else if(ffe) list = list.filter(function(f){ return f.estado===ffe; });
     list.sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
     if(list.length===0){
       body.innerHTML = '<tr class="day-row empty"><td colspan="6">No hay facturas'+(state.facturaFilterEstado?' con ese estado':' cargadas')+'.</td></tr>';
@@ -4355,11 +4541,12 @@
       var montoStr = Number(f.monto||0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
       var oc = f.ocId ? state.ordenesCompra.find(function(o){ return o.id===f.ocId; }) : null;
       if(esAnulado(f)){ tr.className += ' anulado'; tr.title = anulacionTexto(f); }
+      var comb = (f.litros>0 || f.km>0) ? '<div class="fm-hint">⛽ '+[f.litros>0 ? fmtLitros(f.litros)+' L' : '', f.km>0 ? fmtKm(f.km)+' km' : ''].filter(Boolean).join(' · ')+'</div>' : '';
       tr.innerHTML = '<td class="day-route">'+esc(proveedorNombre(f.proveedorId))+'</td>'
-        +'<td class="num">'+esc(f.numero||'—')+'</td>'
+        +'<td class="num">'+esc(f.numero||'—')+(esDebitoInterno(f) ? '<span class="oc-badge di">Débito interno</span>' : '')+comb+'</td>'
         +'<td class="num">'+esc(f.fecha||'—')+'</td>'
         +'<td>'+(oc ? esc(ocNumeroLabel(oc.numero)) : '—')+'</td>'
-        +'<td class="num">$'+montoStr+'</td>'
+        +'<td class="num">$'+montoStr+(f.estado==='parcial' ? '<div class="fm-hint">falta pagar '+fmtMoney(facturaSaldo(f))+'</div>' : '')+'</td>'
         +'<td><span class="oc-badge '+esc(f.estado||'pendiente')+'">'+facturaEstadoLabel(f.estado)+'</span></td>';
       tr.addEventListener('click', function(){ openFacturaModal(f.id); });
       body.appendChild(tr);
@@ -4371,7 +4558,9 @@
     if(!body) return;
     body.innerHTML = '';
     var list = state.ordenesPago.slice();
-    if(state.pagoFilterEstado) list = list.filter(function(p){ return p.estado===state.pagoFilterEstado; });
+    if(state.pagoFilterEstado==='anticipo') list = list.filter(function(p){ return esAnticipo(p); });
+    else if(state.pagoFilterEstado==='anticipo_favor') list = list.filter(function(p){ return esAnticipo(p) && opVigente(p) && p.estado==='pagada' && anticipoSaldo(p)>0.005; });
+    else if(state.pagoFilterEstado) list = list.filter(function(p){ return p.estado===state.pagoFilterEstado; });
     list.sort(function(a,b){ return (b.numero||0)-(a.numero||0); });
     if(list.length===0){
       body.innerHTML = '<tr class="day-row empty"><td colspan="6">No hay órdenes de pago'+(state.pagoFilterEstado?' con ese estado':'')+'.</td></tr>';
@@ -4381,13 +4570,23 @@
       var tr = document.createElement('tr');
       tr.className = 'day-row';
       var montoStr = Number(p.monto||0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
-      var facturasLabel = (p.facturaIds||[]).map(function(fid){ var f=facturaById(fid); return f ? f.numero : '(eliminada)'; }).join(', ') || '—';
+      var facturasLabel, detalleHtml = '';
+      if(esAnticipo(p)){
+        var ocA = p.ocId ? state.ordenesCompra.find(function(o){ return o.id===p.ocId; }) : null;
+        facturasLabel = 'Anticipo'+(ocA ? ' · '+ocNumeroLabel(ocA.numero) : '');
+        var saldoA = anticipoSaldo(p);
+        if(opVigente(p) && p.estado==='pagada') detalleHtml = '<div class="fm-hint">'+(saldoA>0.005 ? 'a favor '+fmtMoney(saldoA) : 'usado completo')+'</div>';
+      } else {
+        facturasLabel = opAplicaciones(p).map(function(a){ var f=facturaById(a.facturaId); if(!f) return '(eliminada)';
+          return f.numero+(Math.abs(Number(f.monto||0)-a.importe)>0.005 ? ' (parcial '+fmtMoney(a.importe)+')' : ''); }).join(', ') || '—';
+        if(opAnticiposTotal(p)) detalleHtml = '<div class="fm-hint">anticipo − '+fmtMoney(opAnticiposTotal(p))+'</div>';
+      }
       if(esAnulado(p)){ tr.className += ' anulado'; tr.title = anulacionTexto(p); }
       tr.innerHTML = '<td class="day-route num">'+pagoNumeroLabel(p.numero)+'</td>'
         +'<td>'+esc(proveedorNombre(p.proveedorId))+'</td>'
         +'<td class="num">'+esc(p.fecha||'—')+'</td>'
-        +'<td class="day-note">'+esc(facturasLabel)+'</td>'
-        +'<td class="num">$'+montoStr+(p.retenido ? '<div class="fm-hint">ret. '+fmtMoney(p.retenido)+'</div>' : '')+'</td>'
+        +'<td class="day-note">'+(esAnticipo(p) ? '<span class="oc-badge anticipo">'+esc(facturasLabel)+'</span>' : esc(facturasLabel))+'</td>'
+        +'<td class="num">$'+montoStr+(p.retenido ? '<div class="fm-hint">ret. '+fmtMoney(p.retenido)+'</div>' : '')+detalleHtml+'</td>'
         +'<td><span class="oc-badge '+esc(p.estado||'pendiente')+'">'+pagoEstadoLabel(p.estado)+'</span></td>';
       tr.addEventListener('click', function(){ openPagoModal(p.id); });
       body.appendChild(tr);
@@ -4409,6 +4608,10 @@
     if(!state.sb) return;
     // ¿Existe la columna ordenes_pago.formas (pagos mixtos)?
     state.sb.from('ordenes_pago').select('formas').limit(1).then(function(res){ if(!res.error) state.colFormas = true; });
+    // ¿Débitos internos y combustible (debitos-internos-y-combustible.sql)?
+    state.sb.from('facturas').select('tipo_comprobante,km,litros').limit(1).then(function(res){ if(!res.error) state.colDI = true; });
+    // ¿Pagos parciales y anticipos (pagos-parciales-y-anticipos.sql)?
+    state.sb.from('ordenes_pago').select('aplicaciones,anticipos_usados,tipo').limit(1).then(function(res){ if(!res.error) state.colAnticipos = true; });
     // ¿Existen las columnas de anulación (anulacion-comprobantes.sql)?
     state.sb.from('movimientos').select('anulado_en').limit(1).then(function(res){ if(!res.error) state.colAnulacion = true; });
     state.sb.from('gan_regimenes').select('*').then(function(res){
@@ -4473,6 +4676,7 @@
   // Neto gravado: el cargado o, si está vacío, total/1,21 para Responsables
   // Inscriptos (factura A) y el total para el resto.
   function facturaNetoAuto(f){
+    if(esDebitoInterno(f)) return r2(Number(f.monto||0));   // débito interno: sin IVA
     var p = state.proveedores.find(function(x){ return x.id===f.proveedorId; });
     var ri = normTxt(p && p.condicionIva).indexOf('inscripto')!==-1 && normTxt(p && p.condicionIva).indexOf('monotrib')===-1;
     return Math.round((ri ? Number(f.monto||0)/1.21 : Number(f.monto||0))*100)/100;
@@ -4482,6 +4686,7 @@
   function regimenFacturaM(){ var r = state.ganRegimenes.find(function(x){ return x.activo && x.ivaPct>0; }); return r ? r.codigo : null; }
   function esFacturaM(f){ return /^\s*M\s*[-\s]?\s*\d{4,5}\s*-\s*\d+/i.test(String(f && f.numero || '')); }  // "M-0001-00001234"
   function facturaRegimen(f){
+    if(esDebitoInterno(f)) return 0;   // débito interno: sin retención
     if(f.regimenGan===0) return 0;
     if(f.regimenGan) return f.regimenGan;
     if(esFacturaM(f) && regimenFacturaM()) return regimenFacturaM();   // número "M-0001-…": Factura M
@@ -4501,16 +4706,19 @@
   function mesDe(fecha){ return String(fecha||'').slice(0,7); }
   // Retenciones de una orden de pago (sin guardar). Devuelve una línea por
   // régimen: {regimen, base, acum_prev, ret_prev, importe, condicion, detalle}.
-  function calcularRetenciones(proveedorId, facturaIds, fecha, opId){
+  // facturas: lista de ids (facturas enteras) o directamente las bases por
+  // régimen {regimen: neto} (pagos parciales, anticipos).
+  function calcularRetenciones(proveedorId, facturas, fecha, opId){
     var p = state.proveedores.find(function(x){ return x.id===proveedorId; });
     if(!p || !state.ganRegimenes.length) return [];
     var cond = provGanCondicion(p);
     var porReg = {};
-    facturaIds.forEach(function(fid){
+    if(Array.isArray(facturas)) facturas.forEach(function(fid){
       var f = facturaById(fid); if(!f) return;
       var reg = facturaRegimen(f); if(!reg) return;
       porReg[reg] = (porReg[reg]||0) + facturaNeto(f);
     });
+    else Object.keys(facturas||{}).forEach(function(k){ if(Number(k) && facturas[k]>0) porReg[k] = facturas[k]; });
     var mes = mesDe(fecha);
     var ph = esPersonaHumana(p.cuit);
     return Object.keys(porReg).map(function(k){
@@ -4637,23 +4845,37 @@
   // ---------- Orden de pago ----------
   function imprimirOrdenPago(op){
     var p = state.proveedores.find(function(x){ return x.id===op.proveedorId; }) || {};
-    var facts = (op.facturaIds||[]).map(facturaById).filter(Boolean);
-    var totalFact = r2(facts.reduce(function(t,f){ return t+Number(f.monto||0); }, 0));
+    var apls = opAplicaciones(op).map(function(a){ return {f:facturaById(a.facturaId), importe:a.importe}; }).filter(function(x){ return x.f; });
+    var hayParcial = apls.some(function(x){ return Math.abs(Number(x.f.monto||0)-x.importe)>0.005; });
+    var totalFact = esAnticipo(op) ? r2(op.monto) : r2(apls.reduce(function(t,x){ return t+x.importe; }, 0));
+    var antUs = (op.anticiposUsados||[]).map(function(a){ return {ant:state.ordenesPago.find(function(x){ return x.id===a.opId; }), importe:a.importe}; }).filter(function(x){ return x.ant; });
+    var totAnt = r2(antUs.reduce(function(t,x){ return t+x.importe; }, 0));
+    var ocAnt = esAnticipo(op) && op.ocId ? state.ordenesCompra.find(function(o){ return o.id===op.ocId; }) : null;
     var rets = (op.retenciones||[]).filter(function(e){ return e.importe>0; });
     var retenido = r2(rets.reduce(function(t,e){ return t+Number(e.importe||0); }, 0));
     var formas = formasDePago(op).filter(function(f){ return f.medioId || f.importe; });
     var anul = esAnulado(op);
     var estadoTxt = anul ? 'Anulada' : (op.estado==='pagada' ? 'Pagada' : 'Pendiente de pago');
     imprimirDocumento({
-      tipo:'Orden de pago', numero:pagoNumeroLabel(op.numero), fecha:op.fecha,
+      tipo: esAnticipo(op) ? 'Orden de pago · anticipo' : 'Orden de pago', numero:pagoNumeroLabel(op.numero), fecha:op.fecha,
       estado:{ texto:estadoTxt, color: anul ? '#e1251b' : (op.estado==='pagada' ? '#16a34a' : '#d48f00') },
       anulado: anul ? anulacionTexto(op) : null,
       bloques:[
         { titulo:'Beneficiario', html:'<div class="cols">'+impKV([['Proveedor', p.nombre||proveedorNombre(op.proveedorId)], ['CUIT', p.cuit], ['Condición IVA', p.condicionIva]])+
           impKV([['Domicilio', [p.direccion, p.localidad, p.provincia].filter(Boolean).join(', ')], ['Banco', p.banco], ['CBU / alias', p.cbu]])+'</div>' },
-        { titulo:'Comprobantes que se cancelan', html: impTabla([{t:'Comprobante'},{t:'Fecha'},{t:'Imputación'},{t:'Importe',num:true}],
-            facts.map(function(f){ var l = facturaLineas(f)[0] || {}; return [esc(f.numero||''), impFecha(f.fecha), esc(l.centroCostoId ? centroCostoLabel(l.centroCostoId) : '—'), fmtMoney(f.monto)]; }),
-            ['<b>Total comprobantes</b>','','',fmtMoney(totalFact)]) },
+        esAnticipo(op)
+          ? { titulo:'Pago anticipado (a cuenta, sin factura)', html: impKV([['Orden de compra', ocAnt ? ocNumeroLabel(ocAnt.numero)+(ocAnt.descripcion ? ' — '+ocAnt.descripcion : '') : 'Anticipo general, sin orden de compra'],
+              ['Importe anticipado', fmtMoney(op.monto)], ['Base de la retención (neto)', op.baseRetencion!=null ? fmtMoney(op.baseRetencion) : ''],
+              ['Saldo a favor del proveedor', opVigente(op) && op.estado==='pagada' ? fmtMoney(anticipoSaldo(op)) : '']]) }
+          : { titulo:'Comprobantes que se cancelan', html: hayParcial
+            ? impTabla([{t:'Comprobante'},{t:'Fecha'},{t:'Imputación'},{t:'Importe factura',num:true},{t:'Se cancela',num:true}],
+                apls.map(function(x){ var f = x.f, l = facturaLineas(f)[0] || {}; return [esc(f.numero||'')+(Math.abs(Number(f.monto||0)-x.importe)>0.005 ? ' <i>(pago parcial)</i>' : ''), impFecha(f.fecha), esc(l.centroCostoId ? centroCostoLabel(l.centroCostoId) : '—'), fmtMoney(f.monto), fmtMoney(x.importe)]; }),
+                ['<b>Total que se cancela</b>','','','',fmtMoney(totalFact)])
+            : impTabla([{t:'Comprobante'},{t:'Fecha'},{t:'Imputación'},{t:'Importe',num:true}],
+                apls.map(function(x){ var f = x.f, l = facturaLineas(f)[0] || {}; return [esc(f.numero||''), impFecha(f.fecha), esc(l.centroCostoId ? centroCostoLabel(l.centroCostoId) : '—'), fmtMoney(f.monto)]; }),
+                ['<b>Total comprobantes</b>','','',fmtMoney(totalFact)]) },
+        antUs.length ? { titulo:'Anticipos que se descuentan', html: impTabla([{t:'Anticipo'},{t:'Fecha'},{t:'Importe',num:true}],
+            antUs.map(function(x){ return [pagoNumeroLabel(x.ant.numero), impFecha(x.ant.fecha), fmtMoney(x.importe)]; })) } : null,
         rets.length ? { titulo:'Retenciones practicadas', html: impTabla([{t:'Impuesto'},{t:'Régimen'},{t:'Certificado'},{t:'Base',num:true},{t:'Retenido',num:true}],
             rets.map(function(e){ return [impuestoLabel(e), esc(regimenLabel(e.regimen)), e.certificado ? certNumeroLabel(e.certificado) : '—', fmtMoney(e.base), fmtMoney(e.importe)]; })) } : null,
         { titulo:'Forma de pago', html: formas.length ? impTabla([{t:'Concepto'},{t:'Cuenta'},{t:'Cheque / echeq'},{t:'Fecha de cobro'},{t:'Importe',num:true}],
@@ -4662,7 +4884,7 @@
               var cobro = formaModo(f)==='cartera' ? (f.chequeIds||[]).map(chequeById).filter(Boolean).map(function(c){ return impFecha(c.fechaCobro); }).join('<br>') : (f.chequeFecha ? impFecha(f.chequeFecha) : '');
               return [esc(medioLabel(f.medioId)||'—'), esc(f.cuentaId ? cuentaNombre(f.cuentaId) : '—'), chq||'—', cobro||'—', fmtMoney(f.importe)];
             })) : '<div class="nota">Todavía no se cargó cómo se paga (la orden está pendiente).</div>' },
-        { html: impTotales([['Total comprobantes', fmtMoney(totalFact)]].concat(retenido ? [['Retenciones', '− '+fmtMoney(retenido), 'menos']] : []).concat([['Neto a pagar', fmtMoney(r2(totalFact-retenido)), 'total']])) },
+        { html: impTotales([[esAnticipo(op) ? 'Importe anticipado' : 'Total comprobantes', fmtMoney(totalFact)]].concat(totAnt ? [['Anticipos', '− '+fmtMoney(totAnt), 'menos']] : []).concat(retenido ? [['Retenciones', '− '+fmtMoney(retenido), 'menos']] : []).concat([['Neto a pagar', fmtMoney(r2(totalFact-totAnt-retenido)), 'total']])) },
         op.notas ? { titulo:'Observaciones', html:'<div class="texto">'+esc(op.notas)+'</div>' } : null
       ],
       firmas:['Confeccionó', 'Autorizó', 'Recibí conforme · firma y aclaración']
@@ -4680,7 +4902,11 @@
         { titulo:'Proveedor', html:'<div class="cols">'+impKV([['Proveedor', p.nombre||proveedorNombre(o.proveedorId)], ['CUIT', p.cuit], ['Contacto', p.contacto]])+
           impKV([['Teléfono', p.telefono], ['Email', p.email], ['Domicilio', [p.direccion, p.localidad, p.provincia].filter(Boolean).join(', ')]])+'</div>' },
         { titulo:'Detalle del pedido', html:'<div class="texto">'+esc(o.descripcion||'—')+'</div>' },
-        { html: impTotales([['Importe estimado', fmtMoney(o.monto), 'total']]) },
+        { html: impTotales([['Importe estimado', fmtMoney(o.monto), 'total']].concat((function(){
+            if(anul) return [];
+            var pg = ocPagos(o);
+            return pg.pagado ? [['Pagado ('+ocPagoLabel(pg.estado).toLowerCase()+')', fmtMoney(pg.pagado)], ['Falta pagar', fmtMoney(pg.saldo)]] : [];
+          })())) },
         o.notas ? { titulo:'Observaciones', html:'<div class="texto">'+esc(o.notas)+'</div>' } : null
       ],
       firmas:['Solicitó', 'Autorizó', 'Recibió el proveedor']
@@ -4690,7 +4916,7 @@
   function imprimirCertificado(op, e){
     var p = state.proveedores.find(function(x){ return x.id===op.proveedorId; }) || {};
     var ag = state.agente || {};
-    var facts = (op.facturaIds||[]).map(function(fid){ var f = facturaById(fid); return f && facturaRegimen(f)===Number(e.regimen) ? f : null; }).filter(Boolean);
+    var facts = opAplicaciones(op).map(function(a){ var f = facturaById(a.facturaId); return f && facturaRegimen(f)===Number(e.regimen) ? f : null; }).filter(Boolean);
     var reg = regimenByCodigo(e.regimen);
     var anul = esAnulado(op);
     imprimirDocumento({
@@ -4702,7 +4928,8 @@
         { titulo:'Agente de retención', html: impKV([['Razón social', ag.razon_social||''], ['CUIT', ag.cuit||''], ['Domicilio', [ag.domicilio, ag.localidad, ag.provincia].filter(Boolean).join(', ')]]) },
         { titulo:'Sujeto retenido', html: impKV([['Nombre / razón social', p.nombre||''], ['CUIT', p.cuit||''], ['Domicilio', [p.direccion, p.localidad, p.provincia].filter(Boolean).join(', ')], ['Condición', GAN_COND_LABEL[e.condicion]||e.condicion||'']]) },
         { titulo:'Retención', html: impKV([['Régimen', reg ? reg.codigo+' — '+reg.descripcion : String(e.regimen)], ['Orden de pago', pagoNumeroLabel(op.numero)],
-            ['Comprobantes', facts.map(function(f){ return (f.numero||'')+' ('+impFecha(f.fecha)+')'; }).join(', ')]]) +
+            ['Comprobantes', esAnticipo(op) ? 'Pago anticipado a cuenta'+(op.ocId ? ' de la '+ocNumeroLabel((state.ordenesCompra.find(function(o){ return o.id===op.ocId; })||{}).numero) : '')
+              : facts.map(function(f){ return (f.numero||'')+' ('+impFecha(f.fecha)+')'; }).join(', ')]]) +
           impTotales(e.impuesto==='iva'
             ? [['Neto gravado de los comprobantes', fmtMoney(e.base)], ['IVA retenido', fmtMoney(e.importe), 'total']]
             : [['Importe neto de este pago', fmtMoney(e.base)], ['Pagos anteriores del mes', fmtMoney(e.acum_prev)], ['Retenido anteriormente en el mes', fmtMoney(e.ret_prev)], ['Importe retenido', fmtMoney(e.importe), 'total']]) }
@@ -4894,10 +5121,8 @@
     cnt('compras', 'proveedores', state.proveedores.length);
     cnt('compras', 'ocs', state.ordenesCompra.filter(function(o){ return o.estado==='pendiente'; }).length);
     cnt('compras', 'articulos', state.articulos.filter(function(a){ return a.activo; }).length);
-    var enOP = {};
-    state.ordenesPago.forEach(function(p){ if(noAnulado(p)) (p.facturaIds||[]).forEach(function(fid){ enOP[fid] = true; }); });
-    cnt('pagos', 'sugerencia', state.facturas.filter(function(f){ return f.estado==='pendiente' && !enOP[f.id] && Number(f.monto||0)!==0; }).length);
-    cnt('pagos', 'facturas', state.facturas.filter(function(f){ return f.estado==='pendiente'; }).length);
+    cnt('pagos', 'sugerencia', sugCandidatas().length);
+    cnt('pagos', 'facturas', state.facturas.filter(facturaEstaAbierta).length);
     cnt('pagos', 'ordenes', state.ordenesPago.filter(function(p){ return p.estado==='pendiente'; }).length);
     cnt('pagos', 'retenciones', 0);
     cnt('tesoreria', 'cuentas', 0);
@@ -4919,17 +5144,17 @@
     if(cartera>0 || state.cheques.length) fondos.push({id:'__cheques__', nombre:'Cheques en cartera', saldo:cartera, on:!excl.__cheques__});
     // Lo ya comprometido en órdenes de pago pendientes (todavía no salió de
     // ninguna cuenta) se resta.
-    var comprometido = state.ordenesPago.filter(function(p){ return p.estado==='pendiente'; }).reduce(function(t,p){ return t+Number(p.monto||0); }, 0);
+    var comprometido = state.ordenesPago.filter(function(p){ return p.estado==='pendiente'; }).reduce(function(t,p){ return t+opMontoSinAnticipos(p); }, 0);
     if(comprometido>0) fondos.push({id:'__ops__', nombre:'− Órdenes de pago pendientes', saldo:-comprometido, on:!excl.__ops__});
     return fondos;
   }
+  // Facturas con algo para pagar que no esté ya en una orden de pago (las
+  // pagadas a medias proponen solo lo que les falta).
   function sugCandidatas(){
-    var enOP = {};
-    state.ordenesPago.forEach(function(p){ if(noAnulado(p)) (p.facturaIds||[]).forEach(function(fid){ enOP[fid] = true; }); });
     var prio = {};
     state.proveedores.forEach(function(p){ if(p.prioritario) prio[p.id] = true; });
-    return state.facturas.filter(function(f){ return f.estado==='pendiente' && !enOP[f.id] && Number(f.monto||0)!==0; })
-      .map(function(f){ return {f:f, prio:!!prio[f.proveedorId]}; })
+    return state.facturas.filter(function(f){ return facturaEstaAbierta(f) && Number(f.monto||0)!==0 && Math.abs(facturaDisponible(f))>0.005; })
+      .map(function(f){ return {f:f, prio:!!prio[f.proveedorId], disp:facturaDisponible(f)}; })
       .sort(function(a,b){
         if(a.prio!==b.prio) return a.prio ? -1 : 1;
         var fa = a.f.fecha||'9999', fb = b.f.fecha||'9999';
@@ -4974,14 +5199,14 @@
     var cands = sugCandidatas();
     var resto = monto;
     cands.forEach(function(c){
-      var m = Number(c.f.monto||0);
+      var m = c.disp;
       c.auto = m<=resto+0.004;
       if(c.auto) resto -= m;
       c.sel = state.sugManual.hasOwnProperty(c.f.id) ? state.sugManual[c.f.id] : c.auto;
     });
-    var totalSel = cands.reduce(function(t,c){ return t+(c.sel ? Number(c.f.monto||0) : 0); }, 0);
+    var totalSel = cands.reduce(function(t,c){ return t+(c.sel ? c.disp : 0); }, 0);
     var nSel = cands.filter(function(c){ return c.sel; }).length;
-    var totalPend = cands.reduce(function(t,c){ return t+Number(c.f.monto||0); }, 0);
+    var totalPend = cands.reduce(function(t,c){ return t+c.disp; }, 0);
 
     // Agrupado por proveedor, en el orden en que aparece cada uno.
     var grupos = [], porProv = {};
@@ -4998,7 +5223,7 @@
     tb.innerHTML = '';
     if(!cands.length) tb.innerHTML = '<tr class="day-row empty"><td colspan="6">No hay facturas pendientes fuera de una orden de pago.</td></tr>';
     mostrar.forEach(function(g){
-      var sub = g.items.reduce(function(t,c){ return t+(c.sel ? Number(c.f.monto||0) : 0); }, 0);
+      var sub = g.items.reduce(function(t,c){ return t+(c.sel ? c.disp : 0); }, 0);
       var trh = document.createElement('tr');
       trh.className = 'sug-prov';
       trh.innerHTML = '<td></td><td colspan="4">'+(g.prio?'<span class="sug-star">★</span> ':'')+esc(proveedorNombre(g.id))+'</td><td class="num">'+(sub ? fmtMoney(sub) : '')+'</td>';
@@ -5012,7 +5237,7 @@
           +'<td class="num">'+esc(f.numero||'—')+'</td>'
           +'<td class="num">'+esc(f.fecha||'—')+'</td>'
           +'<td class="num">'+(dias==null ? '—' : dias+' días')+'</td>'
-          +'<td class="num">'+fmtMoney(f.monto)+(!c.auto && !c.sel ? '<span class="sug-tag">no alcanza</span>' : '')+'</td>';
+          +'<td class="num">'+fmtMoney(c.disp)+(Math.abs(c.disp-Number(f.monto||0))>0.005 ? '<div class="fm-hint">de '+fmtMoney(f.monto)+' (pago parcial)</div>' : '')+(!c.auto && !c.sel ? '<span class="sug-tag">no alcanza</span>' : '')+'</td>';
         tr.querySelector('input').addEventListener('change', function(){
           if(!canEdit('pagos')){ this.checked = !this.checked; return; }
           state.sugManual[f.id] = this.checked;
@@ -5060,18 +5285,20 @@
   document.getElementById('sug-crear').addEventListener('click', function(){
     if(!canEdit('pagos')) return;
     var grupos = (state.sugGrupos||[]).map(function(g){
-      return {proveedorId:g.id, facturas:g.items.filter(function(c){ return c.sel; }).map(function(c){ return c.f; })};
-    }).filter(function(g){ return g.facturas.length; });
+      return {proveedorId:g.id, items:g.items.filter(function(c){ return c.sel; })};
+    }).filter(function(g){ return g.items.length; });
     if(!grupos.length) return;
-    var total = grupos.reduce(function(t,g){ return t+g.facturas.reduce(function(s,f){ return s+Number(f.monto||0); },0); }, 0);
+    var total = grupos.reduce(function(t,g){ return t+g.items.reduce(function(s,c){ return s+c.disp; },0); }, 0);
     if(!window.confirm('Se van a crear '+grupos.length+' órdenes de pago pendientes por '+fmtMoney(total)+'. ¿Seguimos?')) return;
     var hoy = todayStr(), quien = whoName();
     grupos.forEach(function(g){
       var numero = nextPagoNumero();
       var p = {
         id:'op_'+numero, numero:numero, proveedorId:g.proveedorId,
-        facturaIds:g.facturas.map(function(f){ return f.id; }),
-        fecha:hoy, monto:g.facturas.reduce(function(s,f){ return s+Number(f.monto||0); },0),
+        facturaIds:g.items.map(function(c){ return c.f.id; }),
+        aplicaciones: state.colAnticipos ? g.items.map(function(c){ return {facturaId:c.f.id, importe:r2(c.disp)}; }) : [],
+        tipo:'pago', anticiposUsados:[],
+        fecha:hoy, monto:r2(g.items.reduce(function(s,c){ return s+c.disp; },0)),
         medioPago:'transferencia', medioId:'', chequeIds:[], estado:'pendiente', cuentaId:'',
         notas:'Creada desde la sugerencia de pagos', who:quien
       };
@@ -5347,6 +5574,7 @@
       fecha:f.fecha||'', monto:f.monto||0, estado:f.estado||'pendiente', notas:f.notas||'', archivos:f.archivos||[],
       items:(f.items||[]).map(function(it){ return {centro_costo_id:it.centroCostoId, concepto_id:it.conceptoId, cc_ref:it.ccRef||'', monto:it.monto||0, detalle:it.detalle||''}; })
     }, state.schemaV3 ? {cc_ref:f.ccRef||'', neto:(f.neto==null ? null : f.neto), regimen_gan:(f.regimenGan||null)} : {},
+       state.colDI ? {tipo_comprobante:f.tipoComprobante||'factura', km:(f.km==null ? null : f.km), litros:(f.litros==null ? null : f.litros)} : {},
        (state.colArticulos || state.tablaArticulos) ? {articulos:(f.articulos||[]).map(function(a){ return {articulo_id:a.articuloId, cantidad:a.cantidad, precio:a.precio, importe:a.importe}; })} : {},
        camposAnulacion(f))).then(function(res){
       if(res.error) showToast('No se pudo guardar la factura: '+res.error.message);
@@ -5559,6 +5787,80 @@
     sel.value = current;
   }
 
+  // Tipo de comprobante en el modal: factura o débito interno
+  function fmTipo(){ return state.editingFacturaTipo==='debito_interno' ? 'debito_interno' : 'factura'; }
+  function setFmTipo(tipo){
+    state.editingFacturaTipo = tipo==='debito_interno' ? 'debito_interno' : 'factura';
+    var di = state.editingFacturaTipo==='debito_interno';
+    var f = state.editingFacturaId ? facturaById(state.editingFacturaId) : null;
+    Array.prototype.forEach.call(document.querySelectorAll('#fm-tipo-toggle button'), function(b){ b.classList.toggle('on', b.dataset.tipo===state.editingFacturaTipo); });
+    document.getElementById('fm-title').textContent = di ? (f ? 'Editar débito interno' : 'Nuevo débito interno') : (f ? 'Editar factura' : 'Nueva factura');
+    document.getElementById('fm-sub').textContent = di ? 'Comprobante propio, sin factura ni impuestos' : 'Datos de la factura — cargalos a mano o subí el archivo para completarlos automáticamente';
+    document.getElementById('fm-di-aviso').hidden = !di;
+    document.getElementById('fm-impuestos').hidden = di;
+    document.getElementById('fm-proveedor-label').textContent = di ? 'Proveedor o beneficiario' : 'Proveedor';
+    document.getElementById('fm-numero-label').textContent = di ? 'N° de débito interno' : 'N° de factura';
+    var num = document.getElementById('fm-numero');
+    num.readOnly = di;
+    if(di && !(f && esDebitoInterno(f))) num.value = nextDINumero();
+    else if(!di && /^DI-\d+$/.test(num.value) && !f) num.value = '';
+    refreshFacturaReadAvailability();
+    if(di) document.getElementById('fm-read-row').hidden = true;
+    document.getElementById('fm-imprimir').style.display = (f && esDebitoInterno(f)) ? '' : 'none';
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#fm-tipo-toggle button'), function(b){
+    b.addEventListener('click', function(){
+      if(this.disabled) return;
+      if(this.dataset.tipo==='debito_interno' && !state.colDI){ showToast('Para cargar débitos internos falta correr debitos-internos-y-combustible.sql en Supabase.', 6000); return; }
+      setFmTipo(this.dataset.tipo);
+    });
+  });
+  // Bloque de combustible: proveedores de combustibles y lubricantes (o si ya tiene datos)
+  function actualizarFmCombustible(){
+    var provId = document.getElementById('fm-proveedor').value;
+    var km = parseMontoInput(document.getElementById('fm-km').value), lt = parseMontoInput(document.getElementById('fm-litros').value);
+    var box = document.getElementById('fm-combustible');
+    box.hidden = !(provEsCombustible(provId) || km>0 || lt>0);
+    var hint = document.getElementById('fm-comb-hint');
+    hint.textContent = '';
+    if(box.hidden) return;
+    var cc = document.getElementById('fm-centro-costo').value;
+    var movil = state.editingFacturaItems ? '' : (ccRequiere(cc)==='movil' ? document.getElementById('fm-ccref').value : ccRefEfectiva(cc, ''));
+    if(!movil || movil.indexOf('movil:')!==0){ hint.textContent = 'Con el móvil en la imputación, calculo el consumo.'; return; }
+    var c = consumoDesdeAnterior(movil, km, lt, state.editingFacturaId);
+    if(c) hint.textContent = 'Desde la carga anterior ('+impFecha(c.anterior.fecha)+', '+fmtKm(c.anterior.km)+' km): '+fmtKm(c.km)+' km · '+String(c.l100).replace('.',',')+' L/100 km';
+  }
+  ['fm-km','fm-litros'].forEach(function(idc){
+    var el = document.getElementById(idc);
+    el.addEventListener('input', actualizarFmCombustible);
+    el.addEventListener('change', function(){ var v = parseMontoInput(this.value); this.value = isNaN(v) ? '' : (idc==='fm-km' ? fmtKm(v) : fmtLitros(v)); actualizarFmCombustible(); });
+  });
+  document.getElementById('fm-proveedor').addEventListener('change', actualizarFmCombustible);
+  document.getElementById('fm-centro-costo').addEventListener('change', actualizarFmCombustible);
+  document.getElementById('fm-ccref').addEventListener('change', actualizarFmCombustible);
+  function imprimirDebitoInterno(f){
+    var p = state.proveedores.find(function(x){ return x.id===f.proveedorId; }) || {};
+    var anul = esAnulado(f);
+    imprimirDocumento({
+      tipo:'Débito interno', numero:f.numero, fecha:f.fecha,
+      estado:{ texto: anul ? 'Anulado' : facturaEstadoLabel(f.estado), color: anul ? '#e1251b' : (f.estado==='pagada' ? '#16a34a' : '#d48f00') },
+      anulado: anul ? anulacionTexto(f) : null,
+      bloques:[
+        { titulo:'Proveedor o beneficiario', html: impKV([['Nombre', p.nombre||proveedorNombre(f.proveedorId)], ['CUIT', p.cuit], ['Domicilio', [p.direccion, p.localidad, p.provincia].filter(Boolean).join(', ')]]) },
+        { titulo:'Imputación', html: impTabla([{t:'Centro de costo'},{t:'Concepto'},{t:'Detalle'},{t:'Importe',num:true}],
+            facturaLineas(f).map(function(l){ var co = state.conceptos.find(function(c){ return c.id===l.conceptoId; });
+              return [esc(l.centroCostoId ? centroCostoLabel(l.centroCostoId) : '—'), esc(co ? co.nombre : '—'), esc(l.detalle||''), fmtMoney(l.monto)]; })) },
+        { html: impTotales([['Total (sin IVA ni retenciones)', fmtMoney(f.monto), 'total']]) },
+        f.notas ? { titulo:'Concepto / observaciones', html:'<div class="texto">'+esc(f.notas)+'</div>' } : null
+      ],
+      firmas:['Confeccionó', 'Autorizó', 'Recibí conforme · firma y aclaración']
+    });
+  }
+  document.getElementById('fm-imprimir').addEventListener('click', function(){
+    var f = state.editingFacturaId ? facturaById(state.editingFacturaId) : null;
+    if(f) imprimirDebitoInterno(f);
+  });
+
   function openFacturaModal(id){
     marcarModalAnulado('fm-save', 'fm-delete', null);
     state.editingFacturaId = id || null;
@@ -5587,6 +5889,12 @@
     refreshFacturaReadAvailability();
     renderSplitUI();
     renderFacturaArts();
+    document.getElementById('fm-km').value = (f && f.km!=null) ? fmtKm(f.km) : '';
+    document.getElementById('fm-litros').value = (f && f.litros!=null) ? fmtLitros(f.litros) : '';
+    // El tipo no se cambia en un comprobante ya guardado
+    Array.prototype.forEach.call(document.querySelectorAll('#fm-tipo-toggle button'), function(b){ b.disabled = !!f; });
+    setFmTipo(esDebitoInterno(f) ? 'debito_interno' : 'factura');
+    actualizarFmCombustible();
     marcarModalAnulado('fm-save', 'fm-delete', f, 'a');
     document.getElementById('factura-overlay').classList.add('show');
   }
@@ -5603,8 +5911,14 @@
   document.getElementById('fm-save').addEventListener('click', function(){
     var proveedorId = document.getElementById('fm-proveedor').value;
     if(!proveedorId){ showToast('Elegí un proveedor (buscalo por nombre en el campo Proveedor).'); return; }
+    var esDI = fmTipo()==='debito_interno';
+    if(esDI && !state.colDI){ showToast('Para cargar débitos internos falta correr debitos-internos-y-combustible.sql en Supabase.', 6000); return; }
     var numero = document.getElementById('fm-numero').value.trim();
+    if(esDI && !state.editingFacturaId) numero = nextDINumero();   // por si otro cargó uno mientras tanto
     if(!numero){ showToast('Ingresá el número de factura.'); return; }
+    var kmV = parseMontoInput(document.getElementById('fm-km').value), ltV = parseMontoInput(document.getElementById('fm-litros').value);
+    kmV = (kmV>0) ? Math.round(kmV) : null; ltV = (ltV>0) ? r2(ltV) : null;
+    if((kmV || ltV) && !state.colDI){ showToast('Para guardar kilómetros y litros falta correr debitos-internos-y-combustible.sql en Supabase.', 6000); return; }
     var monto = parseMontoInput(document.getElementById('fm-monto').value);
     if(isNaN(monto) || monto<0) monto = 0;
     var centroCostoId, conceptoId, ccRef = '', items = [];
@@ -5651,8 +5965,10 @@
       centroCostoId: centroCostoId,
       conceptoId: conceptoId,
       ccRef: ccRef,
-      neto: (function(){ var t = document.getElementById('fm-neto').value.trim(); if(!t) return null; var n = parseMontoInput(t); return isNaN(n) ? null : r2(n); })(),
-      regimenGan: document.getElementById('fm-regimen').value==='' ? null : Number(document.getElementById('fm-regimen').value),
+      neto: esDI ? r2(monto) : (function(){ var t = document.getElementById('fm-neto').value.trim(); if(!t) return null; var n = parseMontoInput(t); return isNaN(n) ? null : r2(n); })(),
+      regimenGan: esDI ? 0 : (document.getElementById('fm-regimen').value==='' ? null : Number(document.getElementById('fm-regimen').value)),
+      tipoComprobante: esDI ? 'debito_interno' : 'factura',
+      km: kmV, litros: ltV,
       items: items,
       articulos: arts,
       numero:numero,
@@ -5669,13 +5985,15 @@
       if(isNew) state.facturas.push(f);
       else { var idx = state.facturas.findIndex(function(x){ return x.id===id; }); if(idx>=0) state.facturas[idx]=f; }
       writeFactura(f);
+      // Si cambió el importe de una factura con pagos, su estado (pagada / pago parcial) se recalcula
+      if(!isNew && f.estado!=='pendiente') recalcFacturaEstado(f.id);
       // El asistente mira el historial ANTES de sumar la imputación al proveedor.
       if(isNew) revisarFacturaNueva(f);
       facturaLineas(f).forEach(function(l){ sumarImputacionAProveedor(f.proveedorId, l.centroCostoId, l.conceptoId); });
       closeFacturaModal();
       renderPagos();
       renderProveedoresList();
-      showToast('Factura guardada.');
+      showToast(esDI ? 'Débito interno '+f.numero+' guardado. Se paga con una orden de pago, como una factura.' : 'Factura guardada.', esDI ? 5000 : 2600);
     }).catch(function(err){
       showToast('No se pudieron subir uno o más adjuntos a Drive: '+((err&&err.message)||'error')+'. Probá guardar de nuevo.');
     }).finally(function(){ saveBtn.disabled = false; });
@@ -5706,23 +6024,47 @@
       estado:p.estado||'pendiente', cuenta_id:p.cuentaId||null, notas:p.notas||'', who:p.who||''
     }, state.schemaV3 ? {retenciones:p.retenciones||[], retenido:p.retenido||0} : {},
        state.colFormas ? {formas:(p.formas||[]).map(function(f){ return {medio_id:f.medioId, cuenta_id:f.cuentaId, importe:f.importe, cheque_ids:f.chequeIds||[], cheque_numero:f.chequeNumero||'', cheque_fecha:f.chequeFecha||''}; })} : {},
+       state.colAnticipos ? {tipo:p.tipo||'pago', oc_id:p.ocId||null, base_retencion:(p.baseRetencion==null ? null : p.baseRetencion),
+         aplicaciones:(p.aplicaciones||[]).map(function(a){ return {factura_id:a.facturaId, importe:r2(a.importe)}; }),
+         anticipos_usados:(p.anticiposUsados||[]).map(function(a){ return {op_id:a.opId, importe:r2(a.importe)}; })} : {},
        camposAnulacion(p))).then(function(res){
       if(res.error) showToast('No se pudo guardar la orden de pago: '+res.error.message);
     });
   }
 
-  function selectedPagoFacturaIds(){
-    return Array.prototype.slice.call(document.querySelectorAll('#pom-facturas-list input[type=checkbox]:checked')).map(function(c){ return c.value; });
+  function pomTipo(){ return state.editingTipo==='anticipo' ? 'anticipo' : 'pago'; }
+  // Lo que se cancela de cada factura tildada: [{facturaId, importe}]
+  function pagoAplicacionesActuales(){
+    if(pomTipo()==='anticipo') return [];
+    return Array.prototype.slice.call(document.querySelectorAll('#pom-facturas-list .fact-line')).filter(function(row){
+      var c = row.querySelector('input[type=checkbox]'); return c && c.checked;
+    }).map(function(row){
+      var v = parseMontoInput(row.querySelector('.f-cancela').value);
+      return {facturaId: row.dataset.fid, importe: isNaN(v) ? 0 : r2(v)};
+    });
   }
+  function selectedPagoFacturaIds(){ return pagoAplicacionesActuales().map(function(a){ return a.facturaId; }); }
+  function pomAnticipoImporte(){ var v = parseMontoInput(document.getElementById('pom-ant-importe').value); return isNaN(v) ? 0 : r2(v); }
+  function pomAnticipoBase(){ var v = parseMontoInput(document.getElementById('pom-ant-base').value); return isNaN(v) ? anticipoBaseAuto(document.getElementById('pom-proveedor').value, pomAnticipoImporte()) : r2(v); }
+  function pomAnticiposUsados(){ return (state.editingAntUsados||[]).filter(function(a){ return a.importe>0; }); }
+  function pomAnticiposTotal(){ return r2(pomAnticiposUsados().reduce(function(t,a){ return t+a.importe; }, 0)); }
   // Retenciones de la OP que se está editando (cálculo en vivo).
+  function pomBasesRetencion(){
+    var provId = document.getElementById('pom-proveedor').value;
+    if(pomTipo()==='anticipo'){
+      var reg = provGanRegimen(state.proveedores.find(function(x){ return x.id===provId; }));
+      var o = {}; if(reg) o[reg] = pomAnticipoBase(); return o;
+    }
+    return basesRetencion(pagoAplicacionesActuales(), pomAnticiposUsados());
+  }
   function pomRetencionesActuales(){
     var provId = document.getElementById('pom-proveedor').value;
     if(!provId) return [];
-    return calcularRetenciones(provId, selectedPagoFacturaIds(), document.getElementById('pom-fecha').value || todayStr(), state.editingPagoId);
+    return calcularRetenciones(provId, pomBasesRetencion(), document.getElementById('pom-fecha').value || todayStr(), state.editingPagoId);
   }
   function pomNetoPagar(){
     var ret = pomRetencionesActuales().reduce(function(t,e){ return t+e.importe; }, 0);
-    return r2(pomTotalFacturas() - ret);
+    return r2(pomTotalFacturas() - ret - (pomTipo()==='anticipo' ? 0 : pomAnticiposTotal()));
   }
   function renderPomRetenciones(){
     var box = document.getElementById('pom-ret-box');
@@ -5740,7 +6082,7 @@
       d.innerHTML = '<div><div>'+(e.impuesto==='iva' ? '<b>IVA</b> · ' : '')+esc(regimenLabel(e.regimen))+'</div><div class="det">Neto de este pago '+fmtMoney(e.base)+(e.detalle ? ' · '+esc(e.detalle) : '')+'</div></div><b>'+fmtMoney(e.importe)+'</b>';
       lines.appendChild(d);
     });
-    document.getElementById('pom-neto').textContent = fmtMoney(pomTotalFacturas() - rets.reduce(function(t,e){ return t+e.importe; }, 0));
+    document.getElementById('pom-neto').textContent = fmtMoney(pomNetoPagar());
     var certs = document.getElementById('pom-ret-certs');
     certs.innerHTML = '';
     var op = state.editingPagoId ? state.ordenesPago.find(function(x){ return x.id===state.editingPagoId; }) : null;
@@ -5763,43 +6105,186 @@
       if(inp) inp.value = fs[0].importe ? fmtMontoMiles(fs[0].importe) : '';
     }
     actualizarEstadoFormas();
-    var ids = selectedPagoFacturaIds();
-    var total = ids.reduce(function(s,id){ var f=facturaById(id); return s+(f?Number(f.monto||0):0); },0);
+    var total = pomTotalFacturas();
     document.getElementById('pom-monto-total').textContent = '$'+total.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
+    // Resumen: cancela − anticipos − retenciones = neto
+    var res = document.getElementById('pom-resumen');
+    var ant = pomTipo()==='anticipo' ? 0 : pomAnticiposTotal();
+    var ret = r2(pomRetencionesActuales().reduce(function(t,e){ return t+e.importe; }, 0));
+    var parcial = pagoAplicacionesActuales().some(function(a){ var f = facturaById(a.facturaId); return f && Math.abs(Number(f.monto||0)-a.importe)>0.005; });
+    if(res){
+      res.hidden = !(ant || parcial || pomTipo()==='anticipo') || !total;
+      res.innerHTML = (pomTipo()==='anticipo' ? '<span>Anticipo <b>'+fmtMoney(total)+'</b></span>' : '<span>Cancela <b>'+fmtMoney(total)+'</b>'+(parcial ? ' (con pago parcial)' : '')+'</span>')
+        +(ant ? '<span>Anticipos usados <b>− '+fmtMoney(ant)+'</b></span>' : '')
+        +(ret ? '<span>Retenciones <b>− '+fmtMoney(ret)+'</b></span>' : '')
+        +'<span>Neto a pagar <b>'+fmtMoney(pomNetoPagar())+'</b></span>';
+    }
   }
-  function renderPagoFacturasChecklist(proveedorId, selectedIds){
-    selectedIds = selectedIds || [];
+  // Facturas pendientes (o pagadas a medias) del proveedor. Cada una con lo
+  // que se cancela en esta orden: por defecto lo que le falta pagar; se puede
+  // bajar para pagar una parte (la factura queda en "Pago parcial").
+  function renderPagoFacturasChecklist(proveedorId, apl){
+    apl = apl || [];
+    var sel = {}; apl.forEach(function(a){ sel[a.facturaId] = a.importe; });
+    var opId = state.editingPagoId;
     var wrap = document.getElementById('pom-facturas-list');
     wrap.innerHTML = '';
     if(!proveedorId){
       wrap.innerHTML = '<div class="cargo-empty">Elegí un proveedor para ver sus facturas pendientes.</div>';
+      renderPomAnticiposUsar();
       updatePagoMontoTotal();
       return;
     }
     var list = state.facturas.filter(function(f){
-      return f.proveedorId===proveedorId && (f.estado==='pendiente' || selectedIds.indexOf(f.id)!==-1);
+      if(f.proveedorId!==proveedorId) return false;
+      if(sel[f.id]!=null) return true;
+      return facturaEstaAbierta(f) && Math.abs(facturaDisponible(f, opId))>0.005;
     }).sort(function(a,b){ return (a.fecha||'').localeCompare(b.fecha||''); });
     if(list.length===0){
-      wrap.innerHTML = '<div class="cargo-empty">Este proveedor no tiene facturas pendientes.</div>';
+      wrap.innerHTML = '<div class="cargo-empty">Este proveedor no tiene facturas pendientes. Si se le paga antes de la factura, elegí <b>Pago anticipado</b> arriba.</div>';
+      renderPomAnticiposUsar();
       updatePagoMontoTotal();
       return;
     }
     list.forEach(function(f){
-      var row = document.createElement('label');
-      row.className = 'setting-row';
+      var m = Number(f.monto||0), disp = facturaDisponible(f, opId);
+      var row = document.createElement('div');
+      row.className = 'setting-row fact-line';
+      row.dataset.fid = f.id;
+      var lab = document.createElement('label');
+      lab.style.cssText = 'display:flex; align-items:center; gap:8px; flex:1; cursor:pointer;';
       var chk = document.createElement('input');
       chk.type = 'checkbox'; chk.value = f.id;
-      chk.checked = selectedIds.indexOf(f.id)!==-1;
-      chk.addEventListener('change', updatePagoMontoTotal);
+      chk.checked = sel[f.id]!=null;
       var span = document.createElement('span');
-      span.style.flex = '1';
-      span.textContent = f.numero+' — '+(f.fecha||'—')+' — $'+Number(f.monto||0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2});
-      row.appendChild(chk); row.appendChild(span);
+      span.className = 'fact-desc';
+      span.innerHTML = esc(f.numero)+' — '+esc(f.fecha||'—')+' — '+fmtMoney(m)
+        +(Math.abs(disp-m)>0.005 ? '<span class="fact-saldo">'+(f.estado==='parcial' ? 'pago parcial · ' : '')+'falta pagar '+fmtMoney(disp)+'</span>' : '');
+      lab.appendChild(chk); lab.appendChild(span);
+      var inp = document.createElement('input');
+      inp.type = 'text'; inp.inputMode = 'decimal'; inp.className = 'f-cancela'; inp.autocomplete = 'off';
+      inp.title = 'Importe que se cancela de esta factura en esta orden';
+      inp.setAttribute('aria-label', 'Importe a cancelar de la factura '+(f.numero||''));
+      inp.value = fmtMontoMiles(sel[f.id]!=null ? sel[f.id] : disp);
+      inp.disabled = !chk.checked;
+      chk.addEventListener('change', function(){
+        inp.disabled = !chk.checked;
+        if(chk.checked && !(parseMontoInput(inp.value)>0 || parseMontoInput(inp.value)<0)) inp.value = fmtMontoMiles(disp);
+        updatePagoMontoTotal();
+      });
+      inp.addEventListener('change', function(){
+        var v = parseMontoInput(inp.value);
+        if(isNaN(v)) v = disp;
+        // No más de lo que le falta pagar (ni el signo contrario, en notas de crédito)
+        if(m>=0 && v>disp+0.005){ v = disp; showToast('A la factura '+(f.numero||'')+' le faltan pagar '+fmtMoney(disp)+': no se puede cancelar más.'); }
+        if(m>=0 && v<0) v = 0;
+        if(m<0) v = disp;
+        inp.value = fmtMontoMiles(r2(v));
+        updatePagoMontoTotal();
+      });
+      row.appendChild(lab); row.appendChild(inp);
       wrap.appendChild(row);
     });
+    renderPomAnticiposUsar();
     updatePagoMontoTotal();
   }
-  document.getElementById('pom-proveedor').addEventListener('change', function(){ renderPagoFacturasChecklist(this.value, []); sifCerrarSi('pago:'); sugerirFormaHabitual(); });
+  // Anticipos a favor del proveedor que se pueden descontar de este pago
+  function renderPomAnticiposUsar(){
+    var box = document.getElementById('pom-ant-usar-box'), cont = document.getElementById('pom-ant-usar');
+    var provId = document.getElementById('pom-proveedor').value;
+    var opId = state.editingPagoId;
+    var usados = state.editingAntUsados || [];
+    var lista = (pomTipo()==='pago' && provId) ? anticiposDisponibles(provId, opId, usados) : [];
+    box.hidden = !lista.length;
+    cont.innerHTML = '';
+    lista.forEach(function(ant){
+      var saldo = anticipoSaldo(ant, opId);
+      var u = usados.find(function(a){ return a.opId===ant.id; });
+      var oc = ant.ocId ? state.ordenesCompra.find(function(o){ return o.id===ant.ocId; }) : null;
+      var row = document.createElement('div');
+      row.className = 'ant-line';
+      row.dataset.ant = ant.id;
+      row.innerHTML = '<label style="display:flex; align-items:center; gap:8px; flex:1; cursor:pointer;"><input type="checkbox"'+(u && u.importe>0 ? ' checked' : '')+'>'
+        +'<span class="ant-desc">'+pagoNumeroLabel(ant.numero)+' — '+esc(ant.fecha||'')+(oc ? ' — '+esc(ocNumeroLabel(oc.numero)) : '')+' · a favor <b>'+fmtMoney(saldo)+'</b></span></label>'
+        +'<input type="text" inputmode="decimal" class="a-importe" aria-label="Importe a usar del anticipo '+pagoNumeroLabel(ant.numero)+'" value="'+(u && u.importe>0 ? fmtMontoMiles(u.importe) : '')+'"'+(u && u.importe>0 ? '' : ' disabled')+'>';
+      var chk = row.querySelector('input[type=checkbox]'), inp = row.querySelector('.a-importe');
+      function guardar(v){
+        state.editingAntUsados = (state.editingAntUsados||[]).filter(function(a){ return a.opId!==ant.id; });
+        if(v>0) state.editingAntUsados.push({opId:ant.id, importe:r2(v)});
+        updatePagoMontoTotal();
+      }
+      chk.addEventListener('change', function(){
+        inp.disabled = !chk.checked;
+        if(chk.checked){
+          // Por defecto: lo que tiene a favor, sin pasarse de lo que se cancela
+          var otros = r2((state.editingAntUsados||[]).filter(function(a){ return a.opId!==ant.id; }).reduce(function(t,a){ return t+a.importe; }, 0));
+          var v = r2(Math.max(0, Math.min(saldo, pomTotalFacturas() - otros)));
+          inp.value = v ? fmtMontoMiles(v) : '';
+          guardar(v);
+        } else { inp.value = ''; guardar(0); }
+      });
+      inp.addEventListener('change', function(){
+        var v = parseMontoInput(inp.value);
+        if(isNaN(v) || v<0) v = 0;
+        if(v>saldo+0.005){ v = saldo; showToast('El anticipo '+pagoNumeroLabel(ant.numero)+' tiene '+fmtMoney(saldo)+' a favor.'); }
+        inp.value = v ? fmtMontoMiles(v) : '';
+        guardar(v);
+      });
+      cont.appendChild(row);
+    });
+  }
+  // Órdenes de compra del proveedor para un anticipo
+  function fillAnticipoOCSelect(provId, ocId){
+    var sel = document.getElementById('pom-ant-oc');
+    var ocs = state.ordenesCompra.filter(function(o){ return o.proveedorId===provId && (!esAnulado(o) && o.estado!=='anulada' || o.id===ocId); })
+      .sort(function(a,b){ return (b.numero||0)-(a.numero||0); });
+    sel.innerHTML = '<option value="">Sin orden de compra (anticipo general)</option>'+ocs.map(function(o){
+      var pg = ocPagos(o);
+      return '<option value="'+esc(o.id)+'">'+esc(ocNumeroLabel(o.numero)+' — '+(o.descripcion||'').slice(0,40)+' — '+fmtMoney(o.monto)+(pg.pagado ? ' (pagado '+fmtMoney(pg.pagado)+')' : ''))+'</option>';
+    }).join('');
+    sel.value = ocId || '';
+  }
+  function setPomTipo(tipo){
+    state.editingTipo = tipo==='anticipo' ? 'anticipo' : 'pago';
+    var ant = state.editingTipo==='anticipo';
+    Array.prototype.forEach.call(document.querySelectorAll('#pom-tipo-toggle button'), function(b){ b.classList.toggle('on', b.dataset.tipo===state.editingTipo); });
+    document.getElementById('pom-facturas-field').hidden = ant;
+    document.getElementById('pom-anticipo-box').hidden = !ant;
+    document.getElementById('pom-monto-field').style.visibility = ant ? 'hidden' : '';
+    if(ant){ state.editingAntUsados = []; fillAnticipoOCSelect(document.getElementById('pom-proveedor').value, document.getElementById('pom-ant-oc').value); }
+    renderPomAnticiposUsar();
+    updatePagoMontoTotal();
+    if(document.getElementById('pom-estado').value==='pagada') renderPomFormas();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#pom-tipo-toggle button'), function(b){
+    b.addEventListener('click', function(){
+      if(this.disabled) return;
+      if(this.dataset.tipo==='anticipo' && !state.colAnticipos){ showToast('Para hacer pagos anticipados falta correr pagos-parciales-y-anticipos.sql en Supabase.', 6000); return; }
+      setPomTipo(this.dataset.tipo);
+    });
+  });
+  function pomAnticipoCambio(){
+    var base = document.getElementById('pom-ant-base');
+    if(!base.dataset.manual) base.value = fmtMontoMiles(anticipoBaseAuto(document.getElementById('pom-proveedor').value, pomAnticipoImporte()));
+    var fs = state.editingFormas || [];
+    if(fs.length===1) fs[0].importeManual = false;
+    updatePagoMontoTotal();
+  }
+  document.getElementById('pom-ant-importe').addEventListener('input', pomAnticipoCambio);
+  document.getElementById('pom-ant-importe').addEventListener('change', function(){ var v = pomAnticipoImporte(); this.value = v ? fmtMontoMiles(v) : ''; pomAnticipoCambio(); renderPomFormas(); });
+  document.getElementById('pom-ant-base').addEventListener('change', function(){
+    var v = parseMontoInput(this.value);
+    if(isNaN(v)){ delete this.dataset.manual; this.value = fmtMontoMiles(anticipoBaseAuto(document.getElementById('pom-proveedor').value, pomAnticipoImporte())); }
+    else { this.dataset.manual = '1'; this.value = fmtMontoMiles(r2(v)); }
+    updatePagoMontoTotal();
+  });
+  document.getElementById('pom-proveedor').addEventListener('change', function(){
+    state.editingAntUsados = [];
+    renderPagoFacturasChecklist(this.value, []);
+    fillAnticipoOCSelect(this.value, '');
+    if(pomTipo()==='anticipo') pomAnticipoCambio();
+    sifCerrarSi('pago:'); sugerirFormaHabitual();
+  });
 
   // ---------- Formas de pago de la orden (pagos mixtos) ----------
   // Una orden se puede pagar con varias formas a la vez: cheques de cartera,
@@ -5808,8 +6293,10 @@
   // state.editingFormas = [{medioId, cuentaId, importe, chequeIds, chequeNumero, chequeFecha}]
   function formaModo(f){ var md = medioById(f.medioId); return md ? md.cheque : 'no'; }
   function formaVacia(importe){ return {medioId:'', cuentaId:'', importe:importe||0, chequeIds:[], chequeNumero:'', chequeFecha:''}; }
+  // Lo que cancela la orden: la suma de lo tildado de cada factura (o el importe del anticipo)
   function pomTotalFacturas(){
-    return selectedPagoFacturaIds().reduce(function(s,id){ var f=facturaById(id); return s+(f?Number(f.monto||0):0); },0);
+    if(pomTipo()==='anticipo') return pomAnticipoImporte();
+    return r2(pagoAplicacionesActuales().reduce(function(s,a){ return s+a.importe; },0));
   }
   function formasAsignado(){ return r2((state.editingFormas||[]).reduce(function(t,f){ return t+Number(f.importe||0); },0)); }
   function actualizarEstadoFormas(){
@@ -5829,8 +6316,10 @@
   function renderPomFormas(){
     var box = document.getElementById('pom-formas-box');
     var pagada = document.getElementById('pom-estado').value==='pagada';
-    box.hidden = !pagada;
-    if(!pagada) return;
+    // Si los anticipos cubren todo, no sale plata: no hay formas de pago
+    var cubierto = pomTipo()==='pago' && pomAnticiposTotal()>0 && Math.abs(pomNetoPagar())<0.005;
+    box.hidden = !pagada || cubierto;
+    if(!pagada || cubierto) return;
     if(!state.editingFormas || !state.editingFormas.length) state.editingFormas = [formaVacia(pomNetoPagar())];
     var cont = document.getElementById('pom-formas');
     cont.innerHTML = '';
@@ -5901,20 +6390,40 @@
   document.getElementById('pom-estado').addEventListener('change', function(){ renderPomRetenciones(); renderPomFormas(); sugerirFormaHabitual(); });
   document.getElementById('pom-fecha').addEventListener('change', updatePagoMontoTotal);
 
-  function openPagoModal(id){
+  // opts (orden nueva): {tipo:'anticipo', proveedorId, ocId} para abrirla
+  // ya armada, por ejemplo desde una orden de compra.
+  function openPagoModal(id, opts){
     marcarModalAnulado('pom-save', 'pom-delete', null);
     state.editingPagoId = id || null;
     var p = id ? state.ordenesPago.find(function(x){ return x.id===id; }) : null;
     document.getElementById('pom-title').textContent = p ? 'Editar orden de pago' : 'Nueva orden de pago';
     document.getElementById('pom-sub').textContent = p ? pagoNumeroLabel(p.numero) : 'Se le asigna un número al guardar';
     setProveedorComboValue('pom-proveedor', p ? p.proveedorId : '');
-    renderPagoFacturasChecklist(p ? p.proveedorId : '', p ? (p.facturaIds||[]) : []);
+    state.editingTipo = esAnticipo(p) ? 'anticipo' : 'pago';
+    state.editingAntUsados = p ? (p.anticiposUsados||[]).map(function(a){ return {opId:a.opId, importe:a.importe}; }) : [];
+    document.getElementById('pom-estado').value = p ? (p.estado||'pendiente') : 'pendiente';
+    var antImp = document.getElementById('pom-ant-importe'), antBase = document.getElementById('pom-ant-base');
+    antImp.value = esAnticipo(p) ? fmtMontoMiles(p.monto) : '';
+    delete antBase.dataset.manual;
+    if(esAnticipo(p) && p.baseRetencion!=null && Math.abs(p.baseRetencion - anticipoBaseAuto(p.proveedorId, p.monto))>0.005) antBase.dataset.manual = '1';
+    antBase.value = esAnticipo(p) ? fmtMontoMiles(p.baseRetencion!=null ? p.baseRetencion : anticipoBaseAuto(p.proveedorId, p.monto)) : '';
+    fillAnticipoOCSelect(p ? p.proveedorId : '', esAnticipo(p) ? p.ocId : (opts && opts.ocId) || '');
+    renderPagoFacturasChecklist(p ? p.proveedorId : '', p ? opAplicaciones(p) : []);
+    // El tipo no se cambia en una orden ya guardada
+    Array.prototype.forEach.call(document.querySelectorAll('#pom-tipo-toggle button'), function(b){ b.disabled = !!p; });
+    setPomTipo(state.editingTipo);
     document.getElementById('pom-fecha').value = p ? (p.fecha||todayStr()) : todayStr();
     state.editingFormas = p ? formasDePago(p) : [];
-    document.getElementById('pom-estado').value = p ? (p.estado||'pendiente') : 'pendiente';
     document.getElementById('pom-notas').value = p ? (p.notas||'') : '';
     document.getElementById('pom-delete').style.display = p ? '' : 'none';
     document.getElementById('pom-imprimir').style.display = p ? '' : 'none';
+    if(!p && opts && opts.proveedorId){
+      setProveedorComboValue('pom-proveedor', opts.proveedorId);
+      renderPagoFacturasChecklist(opts.proveedorId, []);
+      fillAnticipoOCSelect(opts.proveedorId, opts.ocId||'');
+      if(opts.tipo==='anticipo') setPomTipo('anticipo');
+      if(opts.importe){ document.getElementById('pom-ant-importe').value = fmtMontoMiles(opts.importe); pomAnticipoCambio(); }
+    }
     updatePagoMontoTotal();
     renderPomFormas();
     marcarModalAnulado('pom-save', 'pom-delete', p, 'a');
@@ -5934,13 +6443,39 @@
   document.getElementById('pom-save').addEventListener('click', function(){
     var proveedorId = document.getElementById('pom-proveedor').value;
     if(!proveedorId){ showToast('Elegí un proveedor.'); return; }
-    var facturaIds = selectedPagoFacturaIds();
-    if(facturaIds.length===0){ showToast('Elegí al menos una factura.'); return; }
+    var tipo = pomTipo();
+    var opIdEd = state.editingPagoId;
+    var aplicaciones = pagoAplicacionesActuales();
+    var antUsados = tipo==='pago' ? pomAnticiposUsados() : [];
+    var facturaIds = aplicaciones.map(function(a){ return a.facturaId; });
+    var monto;
+    if(tipo==='anticipo'){
+      monto = pomAnticipoImporte();
+      if(!(monto>0)){ showToast('Ingresá el importe del anticipo.'); return; }
+      var usadoYa = opIdEd ? anticipoUsado(opIdEd) : 0;
+      if(usadoYa > monto+0.005){ showToast('Este anticipo ya se usó por '+fmtMoney(usadoYa)+' en otros pagos: el importe no puede ser menor.', 6000); return; }
+    } else {
+      if(facturaIds.length===0){ showToast('Elegí al menos una factura.'); return; }
+      for(var ai=0; ai<aplicaciones.length; ai++){
+        var fa = facturaById(aplicaciones[ai].facturaId), dispA = facturaDisponible(fa, opIdEd), impA = aplicaciones[ai].importe;
+        if(Number(fa.monto||0)>=0 && !(impA>0)){ showToast('Factura '+(fa.numero||'')+': ingresá cuánto se paga.'); return; }
+        if(Number(fa.monto||0)>=0 && impA>dispA+0.005){ showToast('A la factura '+(fa.numero||'')+' le faltan pagar '+fmtMoney(dispA)+': no se puede cancelar más.', 6000); return; }
+      }
+      var parcialSinCol = !state.colAnticipos && aplicaciones.some(function(a){ var f = facturaById(a.facturaId); return Math.abs(Number(f.monto||0)-a.importe)>0.005; });
+      if(parcialSinCol || (antUsados.length && !state.colAnticipos)){ showToast('Para pagar facturas a medias o usar anticipos falta correr pagos-parciales-y-anticipos.sql en Supabase.', 6000); return; }
+      for(var ui=0; ui<antUsados.length; ui++){
+        var antU = state.ordenesPago.find(function(x){ return x.id===antUsados[ui].opId; });
+        if(!antU || antUsados[ui].importe > anticipoSaldo(antU, opIdEd)+0.005){ showToast('El anticipo '+(antU ? pagoNumeroLabel(antU.numero) : '')+' no tiene tanto a favor.', 6000); return; }
+      }
+      monto = r2(aplicaciones.reduce(function(t,a){ return t+a.importe; }, 0));
+      if(r2(antUsados.reduce(function(t,a){ return t+a.importe; }, 0)) > monto+0.005){ showToast('Los anticipos usados no pueden superar lo que se paga ('+fmtMoney(monto)+').', 6000); return; }
+    }
     var estado = document.getElementById('pom-estado').value || 'pendiente';
-    var monto = facturaIds.reduce(function(s,id){ var f=facturaById(id); return s+(f?Number(f.monto||0):0); },0);
+    var cubierto = tipo==='pago' && antUsados.length && Math.abs(pomNetoPagar())<0.005;
+    if(estado==='pagada' && pomNetoPagar() < -0.005){ showToast('Con los anticipos y las retenciones el neto da negativo: bajá lo que se usa de los anticipos.', 6000); return; }
     // Formas de pago (solo si queda Pagada): cada una completa y entre todas = neto.
     var formas = [];
-    if(estado==='pagada'){
+    if(estado==='pagada' && !cubierto){
       formas = (state.editingFormas||[]).filter(function(f){ return f.medioId || f.importe || (f.chequeIds||[]).length; });
       if(!formas.length){ showToast('Cargá al menos una forma de pago.'); return; }
       for(var fi=0; fi<formas.length; fi++){
@@ -5969,7 +6504,7 @@
       var prevCert = {};
       (existing && existing.retenciones || []).forEach(function(e){ if(e.certificado) prevCert[(e.impuesto||'gan')+e.regimen] = e.certificado; });
       var proxCert = proximoCertificado();
-      retenciones = calcularRetenciones(proveedorId, facturaIds, document.getElementById('pom-fecha').value || todayStr(), id)
+      retenciones = calcularRetenciones(proveedorId, pomBasesRetencion(), document.getElementById('pom-fecha').value || todayStr(), id)
         .map(function(e){
           var o = {regimen:e.regimen, base:e.base, acum_prev:e.acum_prev, ret_prev:e.ret_prev, importe:e.importe, condicion:e.condicion};
           if(e.impuesto) o.impuesto = e.impuesto;
@@ -5993,6 +6528,12 @@
       retenciones: retenciones,
       retenido: retenido,
       cuentaId: estado==='pagada' ? (f0.cuentaId||'') : '',
+      tipo: tipo,
+      ocId: tipo==='anticipo' ? (document.getElementById('pom-ant-oc').value||'') : '',
+      baseRetencion: tipo==='anticipo' ? pomAnticipoBase() : null,
+      // Solo se guarda el detalle si algo no es la factura entera (o hay columnas nuevas)
+      aplicaciones: state.colAnticipos ? aplicaciones : [],
+      anticiposUsados: antUsados,
       notas: document.getElementById('pom-notas').value.trim(),
       who: whoName()
     };
@@ -6000,11 +6541,10 @@
     else { var idx = state.ordenesPago.findIndex(function(x){ return x.id===id; }); if(idx>=0) state.ordenesPago[idx]=p; }
     writePago(p);
     syncPagoMovimiento(p);
-    // Las facturas que ya no quedaron incluidas vuelven a pendiente; las que
-    // quedan incluidas toman el estado de la orden de pago.
-    var prevIds = existing ? (existing.facturaIds||[]) : [];
-    prevIds.filter(function(fid){ return facturaIds.indexOf(fid)===-1; }).forEach(function(fid){ setFacturaEstado(fid, 'pendiente'); });
-    facturaIds.forEach(function(fid){ setFacturaEstado(fid, estado==='pagada' ? 'pagada' : 'pendiente'); });
+    // Estado de las facturas (las que salieron de la orden y las que quedan):
+    // pagada, pago parcial o pendiente, según todo lo que tienen pagado.
+    var prevIds = existing ? opAplicaciones(existing).map(function(a){ return a.facturaId; }) : [];
+    prevIds.concat(facturaIds).forEach(recalcFacturaEstado);
     closePagoModal();
     renderPagos();
     renderTesoreria();
@@ -6018,7 +6558,7 @@
     sellarAnulacion(p, motivo);
     p.estado = 'anulada';
     var leyenda = 'Anulado ('+pagoNumeroLabel(p.numero)+')';
-    (p.facturaIds||[]).forEach(function(fid){ setFacturaEstado(fid, 'pendiente'); });
+    opAplicaciones(p).forEach(function(a){ recalcFacturaEstado(a.facturaId); });
     state.cheques.filter(function(c){ return c.pagoId===p.id; }).forEach(function(c){
       if(c.estado==='entregado') chequeVolverACartera(c);
       else if(c.estado==='emitido') writeCheque(Object.assign({}, c, {estado:'anulado', destino:leyenda+' — '+(c.destino||'')}));
@@ -6040,10 +6580,15 @@
     var id = state.editingPagoId;
     var p = id ? state.ordenesPago.find(function(x){ return x.id===id; }) : null;
     if(!p || esAnulado(p)) return;
+    if(esAnticipo(p) && anticipoUsado(p.id)>0.005){
+      var usaron = state.ordenesPago.filter(function(o){ return opVigente(o) && (o.anticiposUsados||[]).some(function(a){ return a.opId===p.id; }); }).map(function(o){ return pagoNumeroLabel(o.numero); });
+      showToast('Este anticipo ya se usó en '+usaron.join(', ')+'. Para anularlo, primero anulá o sacalo de esas órdenes de pago.', 7000);
+      return;
+    }
     var conCert = (p.retenciones||[]).filter(function(e){ return e.importe>0 && e.certificado; }).length;
     pedirAnulacion('Anular '+pagoNumeroLabel(p.numero), proveedorNombre(p.proveedorId)+' — '+fmtMoney(p.monto)+'. '
       +(p.estado==='pagada' ? 'Los egresos quedan anulados, los cheques de cartera vuelven a la cartera y los propios quedan anulados. ' : '')
-      +'Las facturas vuelven a pendiente.'+(conCert ? ' El certificado de retención queda anulado (su número no se reutiliza).' : ''), function(motivo){
+      +(esAnticipo(p) ? 'El anticipo deja de estar a favor del proveedor.' : 'Las facturas vuelven a quedar con lo que les falta pagar.')+(conCert ? ' El certificado de retención queda anulado (su número no se reutiliza).' : ''), function(motivo){
       anularOrdenPago(p, motivo);
       closePagoModal();
       renderPagos();
@@ -6060,6 +6605,9 @@
       estado:row.estado||'pendiente', notas:row.notas||'',
       archivos: Array.isArray(row.archivos) ? row.archivos : [],
       ccRef: row.cc_ref||'',
+      tipoComprobante: row.tipo_comprobante==='debito_interno' ? 'debito_interno' : 'factura',
+      km: (row.km===null || row.km===undefined || row.km==='') ? null : Number(row.km),
+      litros: (row.litros===null || row.litros===undefined || row.litros==='') ? null : Number(row.litros),
       neto: (row.neto===null || row.neto===undefined || row.neto==='') ? null : Number(row.neto),
       regimenGan: row.regimen_gan==null ? null : Number(row.regimen_gan),
       articulos: (function(){
@@ -6084,6 +6632,10 @@
       retenciones: Array.isArray(row.retenciones) ? row.retenciones : [], retenido: Number(row.retenido||0),
       formas: (Array.isArray(row.formas) ? row.formas : []).map(function(f){ return {medioId:f.medio_id||'', cuentaId:f.cuenta_id||'', importe:Number(f.importe||0),
         chequeIds:Array.isArray(f.cheque_ids)?f.cheque_ids:[], chequeNumero:f.cheque_numero||'', chequeFecha:f.cheque_fecha||''}; }),
+      tipo: row.tipo==='anticipo' ? 'anticipo' : 'pago', ocId: row.oc_id||'',
+      baseRetencion: (row.base_retencion===null || row.base_retencion===undefined || row.base_retencion==='') ? null : Number(row.base_retencion),
+      aplicaciones: (Array.isArray(row.aplicaciones) ? row.aplicaciones : []).filter(function(a){ return a && a.factura_id; }).map(function(a){ return {facturaId:a.factura_id, importe:Number(a.importe||0)}; }),
+      anticiposUsados: (Array.isArray(row.anticipos_usados) ? row.anticipos_usados : []).filter(function(a){ return a && a.op_id; }).map(function(a){ return {opId:a.op_id, importe:Number(a.importe||0)}; }),
       notas:row.notas||'', who:row.who||''
     });
   }
@@ -6455,7 +7007,7 @@
       upsertMovimientoLocal({
         id:movId, cuentaId:f.cuentaId, tipo:'egreso', medioId:f.medioId||'',
         fecha: modo==='datos' ? fechaImpacto(pago.fecha, f.chequeFecha) : (pago.fecha||todayStr()),
-        concepto:'Pago '+pagoNumeroLabel(pago.numero)+' — '+proveedorNombre(pago.proveedorId)+(formas.length>1 ? ' ('+(i+1)+'/'+formas.length+')' : ''),
+        concepto:(esAnticipo(pago) ? 'Anticipo ' : 'Pago ')+pagoNumeroLabel(pago.numero)+' — '+proveedorNombre(pago.proveedorId)+(formas.length>1 ? ' ('+(i+1)+'/'+formas.length+')' : ''),
         monto:r2(f.importe), pagoId:pago.id,
         notas:(i===0 && pago.retenido ? 'Retención Ganancias '+fmtMoney(pago.retenido) : ''),
         chequeIds: modo==='cartera' ? (f.chequeIds||[]).slice() : (chqId ? [chqId] : [])
@@ -7199,7 +7751,7 @@
     // Para los Dashboards: lo que Gestión ya tiene cargado y cómo leerlo
     datos: function(){ return { facturas: state.facturas, ordenesPago: state.ordenesPago, proveedores: state.proveedores, cuentas: state.cuentas,
       movimientos: state.movimientos, cheques: state.cheques, routes: state.routes, trucks: state.trucks, branches: state.branches, facturasCargadas: !!state.facturasCargadas }; },
-    esAnulado: esAnulado, facturaLineas: facturaLineas, ccRaiz: ccRaiz, ccNombre: ccNombre, ccRuta: ccRuta, proveedorNombre: proveedorNombre,
+    esAnulado: esAnulado, facturaSaldo: function(f){ return facturaSaldo(f); }, opMontoSinAnticipos: opMontoSinAnticipos, facturaLineas: facturaLineas, ccRaiz: ccRaiz, ccNombre: ccNombre, ccRuta: ccRuta, proveedorNombre: proveedorNombre,
     labelForRoute: labelForRoute, branchLabel: branchLabel, cuentaSaldoActual: cuentaSaldoActual, cuentaSaldoProyectado: cuentaSaldoProyectado,
     fmtMoney: fmtMoney, AREAS: AREAS,
     imprimirDocumento: imprimirDocumento, impKV: impKV, impTabla: impTabla, impTotales: impTotales, impFecha: impFecha,
@@ -7321,10 +7873,11 @@
   }
   function revisarFacturaNueva(f){
     return memListo().then(function(){
-      var otras = facturasVigentesProveedor(f.proveedorId, f.id);
+      // Facturas con facturas y débitos internos con débitos internos
+      var otras = facturasVigentesProveedor(f.proveedorId, f.id).filter(function(o){ return esDebitoInterno(o)===esDebitoInterno(f); });
       var prov = proveedorNombre(f.proveedorId);
-      // a) ¿Ya está cargada?
-      var mismoNum = numComparable(f.numero) && otras.find(function(o){ return numComparable(o.numero)===numComparable(f.numero); });
+      // a) ¿Ya está cargada? (el débito interno tiene número propio: solo se mira el importe)
+      var mismoNum = !esDebitoInterno(f) && numComparable(f.numero) && otras.find(function(o){ return numComparable(o.numero)===numComparable(f.numero); });
       var mismoMonto = !mismoNum && Number(f.monto)>0 && otras.find(function(o){
         return Math.abs(Number(o.monto)-Number(f.monto)) <= Math.max(1, Number(f.monto)*0.005) && o.fecha && f.fecha && Math.abs(difDias(o.fecha, f.fecha))<=10;
       });

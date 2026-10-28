@@ -224,11 +224,14 @@
       var areaU = porArea(ult), areaA = porArea(ant);
       var porAreaR = Object.keys(areaU).map(function (k) { return { label: k, v: areaU[k], antes: areaA[k] || 0 }; }).sort(function (a, b) { return b.v - a.v; });
       var porProv = agrupar(ult, function (f) { return G.proveedorNombre(f.proveedorId); }, function (f) { return f.monto; });
-      var pend = facts.filter(function (f) { return f.estado === 'pendiente'; });
-      var pendTot = pend.reduce(function (t, f) { return t + n(f.monto); }, 0);
+      // Pendientes: también las pagadas a medias, por lo que les falta pagar
+      var saldo = function (f) { return G.facturaSaldo ? G.facturaSaldo(f) : n(f.monto); };
+      var pend = facts.filter(function (f) { return f.estado === 'pendiente' || f.estado === 'parcial'; });
+      var pendTot = pend.reduce(function (t, f) { return t + saldo(f); }, 0);
       var viejas = pend.filter(function (f) { return diasDesde(f.fecha) > 60; });
       var ops = (D.ordenesPago || []).filter(function (p) { return !G.esAnulado(p); });
-      var pagado = serie(ops.filter(function (p) { return p.estado === 'pagada'; }), function (p) { return p.fecha; }, function (p) { return p.monto; });
+      // Lo pagado por mes (los anticipos cuentan cuando se pagan, no de nuevo al usarlos)
+      var pagado = serie(ops.filter(function (p) { return p.estado === 'pagada'; }), function (p) { return p.fecha; }, function (p) { return G.opMontoSinAnticipos ? G.opMontoSinAnticipos(p) : p.monto; });
       var cuentas = (D.cuentas || []).filter(function (c) { return c.tipo !== 'cartera'; });
       var saldoHoy = cuentas.reduce(function (t, c) { return t + G.cuentaSaldoActual(c.id); }, 0);
       var saldoProy = cuentas.reduce(function (t, c) { return t + G.cuentaSaldoProyectado(c.id); }, 0);
@@ -237,7 +240,7 @@
         con('p:Gasto por mes', leerSerie({ nombre: 'El gasto (facturas de proveedores)', serie: sg, subirEsBueno: false, fmt: fmtPlata })),
         subas.slice(0, 2).map(function (x) { return { ver: 'p:Gasto por área', tono: 'mal', peso: Math.min(x.v / x.antes - 1, 2), texto: 'El gasto de <b>' + esc(x.label) + '</b> en los últimos 90 días subió un <b>' + fmtPct(x.v / x.antes - 1) + '</b> contra los 90 anteriores (' + fmtPlata(x.antes) + ' → ' + fmtPlata(x.v) + ').' }; }),
         con('p:Principales proveedores', concentracion('proveedores', porProv, 0.3, 'info', 'del gasto de los últimos 90 días')),
-        viejas.length ? [{ ver: 'k:Facturas pendientes', tono: 'mal', peso: 0.9, texto: 'Hay <b>' + viejas.length + ' factura' + (viejas.length > 1 ? 's' : '') + ' pendiente' + (viejas.length > 1 ? 's' : '') + ' de más de 60 días</b> (' + fmtPlata(viejas.reduce(function (t, f) { return t + n(f.monto); }, 0)) + '). Revisá la Sugerencia de pagos.' }] : (pend.length ? [{ ver: 'k:Facturas pendientes', tono: 'bien', peso: 0.3, texto: 'Ninguna factura pendiente tiene más de 60 días.' }] : []),
+        viejas.length ? [{ ver: 'k:Facturas pendientes', tono: 'mal', peso: 0.9, texto: 'Hay <b>' + viejas.length + ' factura' + (viejas.length > 1 ? 's' : '') + ' pendiente' + (viejas.length > 1 ? 's' : '') + ' de más de 60 días</b> (' + fmtPlata(viejas.reduce(function (t, f) { return t + saldo(f); }, 0)) + '). Revisá la Sugerencia de pagos.' }] : (pend.length ? [{ ver: 'k:Facturas pendientes', tono: 'bien', peso: 0.3, texto: 'Ninguna factura pendiente tiene más de 60 días.' }] : []),
         cuentas.length && saldoProy < 0 ? [{ ver: 'k:Saldo de cajas', tono: 'mal', peso: 1.2, texto: 'El <b>saldo proyectado</b> de cajas y bancos da negativo (' + fmtPlata(saldoProy) + ') cuando se debiten los cheques emitidos.' }] : []
       );
       var iAct = sg.length - 2;

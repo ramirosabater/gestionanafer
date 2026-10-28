@@ -67,6 +67,13 @@
         { t: "Si el proveedor tiene tildado <b>📦 Carga artículos</b>, aparece el bloque de artículos: elegís cada artículo, la cantidad y el precio sin IVA (te propongo el último pagado). Si no existe, lo creás ahí mismo. Va aparte de la imputación." },
         { t: "También podés <b>📄 Leer desde archivo</b> el PDF o la foto: completa los datos y vos los revisás antes de guardar." },
       ] },
+      { titulo: "Débitos internos y combustible", pasos: [
+        { t: "Lo que se paga <b>sin factura y sin impuestos</b> se carga como <b>débito interno</b>: en <b>+ Nueva factura</b> elegí arriba “Débito interno”.", ir: ["#tab-pagos", '#subtabs-pagos .stabbtn[data-sub="facturas"]'], foco: "#new-factura-btn" },
+        { t: "Toma solo un número correlativo (DI-0001, DI-0002…). No lleva IVA ni retención de Ganancias; se imputa a un centro de costo como cualquier gasto y se paga con una <b>orden de pago</b>. Desde el comprobante lo podés <b>🖨 imprimir</b> para que lo firmen." },
+        { t: "En Facturas, el filtro <b>Débitos internos</b> te los muestra todos.", foco: "#factura-filter-estado" },
+        { t: "En las facturas de proveedores de <b>Combustibles y lubricantes</b> (por el rubro) aparece el bloque <b>⛽ Combustible</b>: los <b>kilómetros</b> que marca el odómetro y los <b>litros</b>. Son opcionales." },
+        { t: "Si la factura está imputada a un <b>móvil</b>, te muestro los km recorridos desde la carga anterior de ese móvil y el consumo en litros cada 100 km." },
+      ] },
       { titulo: "Pagar a proveedores", pasos: [
         { t: "Empezá por la <b>Sugerencia de pagos</b>: te dice qué pagar con la plata disponible.", ir: ["#tab-pagos", '#subtabs-pagos .stabbtn[data-sub="sugerencia"]'], foco: "#sug-box" },
         { t: "Arriba ves los saldos de cada cuenta y los cheques en cartera; lo ya comprometido en órdenes pendientes se resta. Podés cambiar el <b>monto a destinar</b>.", foco: "#sug-fondos" },
@@ -75,7 +82,15 @@
         { t: "En <b>Órdenes de pago</b> abrís cada una, elegís <b>Pagada</b> y cargás cómo se paga: concepto (TR1, CHE, ECS…), cuenta e importe.", ir: '#subtabs-pagos .stabbtn[data-sub="ordenes"]', foco: "#pagos-table" },
         { t: "Se puede pagar <b>mixto</b>: con <b>+ Agregar forma de pago</b> sumás, por ejemplo, cheques de cartera y una transferencia por la diferencia. Entre todas tienen que dar el neto a pagar." },
         { t: "Al marcarla Pagada se calcula sola la <b>retención de Ganancias</b>: ves el detalle y el <b>neto a pagar</b>. En Tesorería sale el neto y queda el certificado para imprimir." },
-        { t: "Si una factura u orden estaba mal, no se borra: se <b>anula</b> con un motivo. Queda tachada con quién y cuándo, las facturas de esa orden vuelven a pendiente y el número no se reutiliza." },
+        { t: "Si una factura u orden estaba mal, no se borra: se <b>anula</b> con un motivo. Queda tachada con quién y cuándo, las facturas de esa orden vuelven a quedar con lo que les falta pagar y el número no se reutiliza." },
+      ] },
+      { titulo: "Pagos parciales y pagos anticipados", pasos: [
+        { t: "Una factura se puede pagar <b>en partes</b>: en la orden de pago, al tildarla te propongo lo que le falta pagar; bajá ese importe y la factura queda en <b>Pago parcial</b> con su saldo. La próxima orden te propone solo lo que falta.", ir: ["#tab-pagos", '#subtabs-pagos .stabbtn[data-sub="ordenes"]'], foco: "#new-pago-btn" },
+        { t: "La retención de Ganancias se calcula sobre lo que se paga en cada orden (el neto proporcional), sumando lo pagado en el mes." },
+        { t: "Para pagar <b>antes de que llegue la factura</b>: en la orden de pago elegí <b>Pago anticipado</b>, o desde la orden de compra tocá <b>💸 Pago anticipado</b>. Puede ir a cuenta de una orden de compra o ser un anticipo general." },
+        { t: "Al anticipo se le retiene Ganancias al pagarlo (RG 830), sobre su neto de IVA. Sale de la cuenta como cualquier pago y queda <b>a favor del proveedor</b>: lo ves en Órdenes de pago con el filtro <b>Anticipos con saldo a favor</b>.", foco: "#pago-filter-estado" },
+        { t: "Cuando llega la factura, en la orden que la paga aparecen los <b>Anticipos a favor</b>: tildalo y se descuenta. No se vuelve a retener sobre lo ya anticipado y, si el anticipo cubre todo, no hace falta forma de pago." },
+        { t: "Un anticipo que ya se usó en un pago no se puede anular: primero hay que anular o corregir ese pago." },
       ] },
       { titulo: "Ganancias según la condición de IVA", pasos: [
         { t: "La retención de Ganancias sale de la <b>condición de IVA</b> del proveedor (en su ficha) y de su régimen (o su rubro).", ir: ["#tab-compras", '#subtabs-compras .stabbtn[data-sub="proveedores"]'], foco: "#proveedores-search" },
@@ -93,6 +108,7 @@
         { t: "En <b>Compras → Proveedores</b> buscás por nombre, CUIT o código.", ir: ["#tab-compras", '#subtabs-compras .stabbtn[data-sub="proveedores"]'], foco: "#proveedores-search" },
         { t: "En la ficha del proveedor se define la <b>condición en Ganancias</b> y el <b>régimen</b> (si no, salen del IVA y del rubro), si es <b>★ prioritario</b> y sus imputaciones habituales.", foco: "#new-proveedor-btn" },
         { t: "En <b>Órdenes de compra</b> registrás lo que se pide; después la factura se puede asociar a la orden.", ir: '#subtabs-compras .stabbtn[data-sub="ocs"]', foco: "#new-oc-btn" },
+        { t: "La columna <b>Pago</b> dice si la orden está <b>Sin pagar</b>, con <b>Pago parcial</b> o <b>Pagada</b>: suma lo pagado de sus facturas y los anticipos hechos a cuenta de ella. Adentro de la orden ves el detalle y lo que falta.", foco: "#oc-table" },
         { t: "En <b>Artículos</b> está la base de artículos (código, descripción, unidad y categoría), con cuánto se compró y el último precio. Es la base que va a usar Stock.", ir: '#subtabs-compras .stabbtn[data-sub="articulos"]', foco: "#new-articulo-btn" },
         { t: "Si en la ficha de un proveedor tildás <b>📦 Carga artículos</b>, en sus facturas aparece el bloque de artículos: elegís cada artículo, la cantidad y el precio sin IVA (te propongo el último que se pagó). Si no existe, lo creás ahí mismo. Esto va aparte de la imputación: la factura se puede seguir repartiendo en centros de costo." },
       ] },
