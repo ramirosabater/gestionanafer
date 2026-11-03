@@ -243,6 +243,44 @@ export async function registrarAuditoria(accion, detalle) {
   } catch { /* la auditoría no debe romper la acción principal */ }
 }
 
+// ---- Legajos en Google Drive (función del servidor adjuntos-drive) ----
+// Los archivos nuevos se guardan en una unidad compartida de Drive y en la
+// base quedan como "drive:<id>". Los viejos ("123/archivo.pdf") siguen en el
+// almacenamiento de Supabase hasta que se pasan con legajosMigrar().
+export const esDrive = (path) => String(path || "").startsWith("drive:");
+async function legajosDrive(cuerpo, multipart) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/adjuntos-drive`, {
+    method: "POST",
+    headers: multipart ? { apikey: SUPABASE_KEY, Authorization: authHeader() }
+      : { apikey: SUPABASE_KEY, Authorization: authHeader(), "Content-Type": "application/json" },
+    body: multipart ? cuerpo : JSON.stringify(cuerpo),
+  });
+  if (!res.ok) {
+    let msg = ""; try { msg = (await res.json()).error || ""; } catch { /* sin cuerpo */ }
+    throw new Error(msg || `adjuntos-drive: ${res.status}`);
+  }
+  return res;
+}
+export async function legajoSubir(legajo, tipo, file, vencimiento) {
+  const fd = new FormData();
+  fd.append("accion", "documento"); fd.append("legajo", String(legajo)); fd.append("tipo", tipo);
+  if (vencimiento) fd.append("vencimiento", vencimiento);
+  fd.append("archivo", file, file.name);
+  return (await legajosDrive(fd, true)).json();
+}
+// Abre un documento en la ventana `w` (abierta antes, para que el navegador no la bloquee)
+export async function legajoAbrir(path, w) {
+  let url;
+  if (esDrive(path)) {
+    const blob = await (await legajosDrive({ accion: "ver", path })).blob();
+    url = URL.createObjectURL(blob);
+    setTimeout(() => URL.revokeObjectURL(url), 5 * 60 * 1000);
+  } else url = await sbSignedUrl("legajos", path);
+  if (w) w.location.href = url; else window.location.href = url;
+}
+export async function legajoBorrar(id) { return (await legajosDrive({ accion: "borrar", id })).json(); }
+export async function legajosMigrar() { return (await legajosDrive({ accion: "migrar" })).json(); }
+
 // Llama a una Edge Function con la sesión del usuario (sin el aviso de "sesión expirada":
 // quien la usa decide qué hacer si falla).
 export async function sbFuncion(nombre, body) {

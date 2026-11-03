@@ -45,7 +45,14 @@ test("empleado: pide licencia por enfermedad con la foto del certificado y sube 
     const req = r.request(), url = new URL(req.url());
     const json = (b) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(b) });
     if (!url.host.endsWith("supabase.co")) return r.abort();
-    if (url.pathname.startsWith("/storage/v1/object/legajos/")) { subidas.push([decodeURIComponent(url.pathname.replace("/storage/v1/object/legajos/", "")), req.headers()["content-type"]]); return json({ Key: "ok" }); }
+    // Certificados: van a la función del servidor que los guarda en la unidad compartida de Drive
+    if (url.pathname === "/functions/v1/adjuntos-drive") {
+      const cuerpo = req.postDataBuffer().toString("latin1");
+      const campo = (n) => (cuerpo.match(new RegExp(`name="${n}"\\r\\n\\r\\n([^\\r]*)`)) || [])[1];
+      const arch = (cuerpo.match(/name="archivo"; filename="([^"]+)"\r\nContent-Type: ([^\r]+)/) || []);
+      subidas.push({ accion: campo("accion"), legajo: campo("legajo"), pin: campo("pin"), solicitud: campo("solicitud"), nombre: arch[1], tipo: arch[2] });
+      return json({ ok: true });
+    }
     if (url.pathname.startsWith("/rest/v1/rpc/")) {
       const fn = url.pathname.replace("/rest/v1/rpc/", ""), body = JSON.parse(req.postData() || "{}");
       llamadas.push([fn, body]);
@@ -75,18 +82,19 @@ test("empleado: pide licencia por enfermedad con la foto del certificado y sube 
   await page.getByRole("button", { name: "Enviar solicitud" }).click();
   await expect(page.getByText("Solicitud enviada con el certificado ✓")).toBeVisible();
   expect(llamadas.find((x) => x[0] === "crear_licencia")[1]).toMatchObject({ p_legajo: 441, p_tipo: "enfermedad", p_desde: "2026-10-20", p_hasta: "2026-10-22" });
-  expect(subidas[0][0]).toMatch(/^certificados\/441\/\d+-bbbbbbbb\.pdf$/);
-  expect(llamadas.find((x) => x[0] === "adjuntar_certificado")[1]).toMatchObject({ p_id: "bbbbbbbb-1111-0000-0000-000000000009", p_path: subidas[0][0], p_mime: "application/pdf" });
+  expect(subidas[0]).toEqual({ accion: "certificado", legajo: "441", pin: "1234", solicitud: "bbbbbbbb-1111-0000-0000-000000000009", nombre: "certificado.pdf", tipo: "application/pdf" });
+  // ya no sube directo al almacenamiento de Supabase ni adjunta por su cuenta
+  expect(llamadas.find((x) => x[0] === "adjuntar_certificado")).toBeUndefined();
   // la licencia vieja sin certificado: se sube desde la lista
   await page.locator("[data-subir-cert] input").first().setInputFiles({ name: "cert2.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 dos") });
   await expect(page.getByText("Certificado subido ✓")).toBeVisible();
-  const ult = llamadas.filter((x) => x[0] === "adjuntar_certificado").pop()[1];
-  expect(ult.p_id).toBe("aaaaaaaa-0000-0000-0000-000000000001");
-  expect(ult.p_path).toMatch(/^certificados\/441\//);
+  expect(subidas.length).toBe(2);
+  expect(subidas[1]).toMatchObject({ accion: "certificado", solicitud: "aaaaaaaa-0000-0000-0000-000000000001", nombre: "cert2.pdf" });
 });
 
 test("RR.HH.: tablero de vencimientos, obligatorios por sector y licencias sin certificado", async ({ page }) => {
-  const upserts = [];
+  const upserts = [], funciones = [];
+  let migrado = false;
   let reqs = [{ sector: "Logística", tipo: "Licencia de conducir", dias_aviso: 30 }];
   await page.route(/^https?:\/\/(?!127\.0\.0\.1)/, async (r) => {
     const req = r.request(), url = new URL(req.url());
@@ -97,9 +105,15 @@ test("RR.HH.: tablero de vencimientos, obligatorios por sector y licencias sin c
     if (url.pathname === "/rest/v1/empleados") return json(EMPS);
     if (url.pathname === "/rest/v1/sectores") return json([{ nombre: "Logística" }, { nombre: "Producción" }]);
     if (url.pathname === "/rest/v1/empleado_documentos") return json([
-      { id: "d1", legajo: 10, tipo: "Licencia de conducir", nombre_archivo: "lic.jpg", path: "10/x.jpg", vencimiento: enDias(-3), created_at: "2026-01-01T00:00:00Z" },
-      { id: "d2", legajo: 11, tipo: "Credencial ART", nombre_archivo: "art.jpg", path: "11/x.jpg", vencimiento: enDias(10), created_at: "2026-01-01T00:00:00Z" },
+      { id: "d1", legajo: 10, tipo: "Licencia de conducir", nombre_archivo: "lic.jpg", path: migrado ? "drive:AAAAAAAAAAAA1" : "10/x.jpg", vencimiento: enDias(-3), created_at: "2026-01-01T00:00:00Z" },
+      { id: "d2", legajo: 11, tipo: "Credencial ART", nombre_archivo: "art.jpg", path: migrado ? "drive:AAAAAAAAAAAA2" : "11/x.jpg", vencimiento: enDias(10), created_at: "2026-01-01T00:00:00Z" },
     ]);
+    if (url.pathname === "/functions/v1/adjuntos-drive") {
+      const b = JSON.parse(req.postData() || "{}"); funciones.push(b);
+      if (b.accion === "migrar") { migrado = true; return json({ ok: true, pasados: 2, quedan: 0, fallas: [] }); }
+      if (b.accion === "ver") return r.fulfill({ status: 200, contentType: "application/pdf", body: "%PDF-1.4" });
+      return json({ ok: true });
+    }
     if (url.pathname === "/rest/v1/documentos_requeridos") {
       if (req.method() === "POST") { const f = JSON.parse(req.postData()); upserts.push([url.search, f]); reqs = [...reqs, ...f]; return json(f); }
       return json(reqs);
@@ -117,6 +131,14 @@ test("RR.HH.: tablero de vencimientos, obligatorios por sector y licencias sin c
   await page.goto("/fichaje/admin.html");
   await page.getByRole("button", { name: /Personal/ }).click();
   await page.getByRole("button", { name: "Vencimientos", exact: true }).click();
+  // Los documentos que estaban en Supabase se pasan a la unidad compartida de Drive
+  await expect(page.locator("[data-migrar]")).toContainText("Hay 2 documento(s) de legajo en el almacenamiento anterior de Supabase");
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "Pasar a Google Drive" }).click();
+  await expect(page.locator("[data-migrar]")).toContainText("✓ Listo: 2 archivo(s) pasados a Google Drive.");
+  expect(funciones.filter((f) => f.accion === "migrar")).toHaveLength(1);
+  // el aviso de vencimientos de Sifoncito aparece al entrar: lo cierro para seguir
+  await page.getByRole("button", { name: "Mañana me recordás" }).click();
   const lista = page.locator("[data-lista-venc]");
   await expect(lista.locator('[data-legajo="10"][data-estado="vencido"]')).toContainText("Venció hace 3 d");
   await expect(lista.locator('[data-legajo="11"][data-estado="por-vencer"]')).toContainText("Vence en 10 d");

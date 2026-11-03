@@ -34,16 +34,19 @@ export async function sbRpc(fn, body) {
   return res.json();
 }
 
-// Sube un archivo al bucket privado de legajos, solo en la carpeta
-// certificados/<legajo>/ (la base no deja subir a otro lado ni leer nada).
-export async function sbSubirCertificado(path, file) {
-  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/legajos/${path.split("/").map(encodeURIComponent).join("/")}`, {
-    method: "POST",
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": file.type || "application/octet-stream", "x-upsert": "false" },
-    body: file,
+// Sube el certificado de una solicitud a la carpeta del empleado en la unidad
+// compartida de Google Drive (función del servidor adjuntos-drive). El servidor
+// vuelve a verificar legajo + PIN y que la solicitud sea suya.
+export async function sbSubirCertificado(legajo, pin, solicitudId, file) {
+  const fd = new FormData();
+  fd.append("accion", "certificado"); fd.append("legajo", String(legajo)); fd.append("pin", pin);
+  fd.append("solicitud", solicitudId); fd.append("archivo", file, file.name || "certificado.jpg");
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/adjuntos-drive`, {
+    method: "POST", headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }, body: fd,
   });
-  if (!res.ok) throw new Error(`No se pudo subir el certificado: ${res.status}`);
-  return res.json();
+  let r = null; try { r = await res.json(); } catch { /* sin cuerpo */ }
+  if (!res.ok || !r?.ok) throw new Error(r?.motivo || r?.error || `No se pudo subir el certificado: ${res.status}`);
+  return r;
 }
 
 // Achica una foto (máx. 1600 px, JPEG) para que suba rápido desde el celular.

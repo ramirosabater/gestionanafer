@@ -58,11 +58,8 @@ export default function Ausencias({ empleado, pin, esJefe, onVolver }) {
   const subirCertificado = async (id, file) => {
     const f = await achicarFoto(file);
     if (f.size > 10 * 1048576) throw new Error("grande");
-    const ext = ((f.name || "").split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-    const path = `certificados/${empleado.legajo}/${Date.now()}-${id.slice(0, 8)}.${ext}`;
-    await sbSubirCertificado(path, f);
-    const r = await sbRpc("adjuntar_certificado", { p_legajo: empleado.legajo, p_pin: pin, p_id: id, p_path: path, p_nombre: f.name || "certificado", p_mime: f.type || null, p_tamano: f.size });
-    if (!r?.ok) throw new Error(r?.motivo || "error");
+    // Va a la carpeta del empleado en la unidad compartida de Drive (el servidor verifica legajo + PIN)
+    await sbSubirCertificado(empleado.legajo, pin, id, f);
   };
 
   const certificadoDespues = async (s, ev) => {

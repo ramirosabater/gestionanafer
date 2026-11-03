@@ -2636,6 +2636,7 @@
       list.appendChild(buildRoleCard(role));
     });
     renderUsuarios();
+    renderAdjMig();
   }
 
   // ---------- Usuarios (ingreso con email) ----------
@@ -2651,6 +2652,74 @@
     return huerfano+'<option value="">Solo Comercial</option>'+roles.map(function(r){
       return '<option value="'+esc(r.id)+'"'+(r.id===sel?' selected':'')+'>'+esc(r.nombre||r.id)+'</option>'; }).join('');
   }
+  // ---------- Pasar los adjuntos viejos a la unidad compartida ----------
+  // Los adjuntos que se subieron antes quedaron en el Drive de quien los subió
+  // (o en la carpeta configurada). Se bajan con la cuenta de Google del
+  // usuario que hace el pase (tiene que poder abrirlos) y se suben a la unidad
+  // compartida, a la carpeta que corresponde. Los originales no se borran.
+  function adjuntosViejos(reclamos){
+    var l = [];
+    function suma(tabla, col, fila, carpetas, modulo){
+      (fila[col]||[]).forEach(function(a){ if(a && a.id && !a.unidad) l.push({tabla:tabla, col:col, fila:fila, a:a, carpetas:carpetas, modulo:modulo}); });
+    }
+    state.proveedores.forEach(function(p){ suma('proveedores', 'archivos', p, ['Proveedores', p.nombre||'Sin nombre'], 'administracion'); });
+    state.facturas.forEach(function(f){ suma('facturas', 'archivos', f, ['Facturas', proveedorNombre(f.proveedorId)], 'administracion'); });
+    (reclamos||[]).forEach(function(r){ suma('calidad_reclamos', 'adjuntos', r, ['Reclamos '+r.anio, 'Reclamo Nº '+r.numero], 'calidad'); });
+    return l;
+  }
+  function reclamosConAdjuntos(){
+    if(!state.sb) return Promise.resolve([]);
+    return state.sb.from('calidad_reclamos').select('id,anio,numero,adjuntos').then(function(r){ return r.error ? [] : (r.data||[]).filter(function(x){ return (x.adjuntos||[]).length; }); }, function(){ return []; });
+  }
+  function renderAdjMig(){
+    var msg = document.getElementById('adj-mig-msg'), btn = document.getElementById('adj-mig-btn');
+    if(!msg || state.adjMigrando) return;
+    reclamosConAdjuntos().then(function(recs){
+      var n = adjuntosViejos(recs).length;
+      btn.hidden = !n;
+      msg.textContent = n ? ('Hay '+n+' adjunto(s) subidos antes, que todavía no están en la unidad compartida.'+(driveOAuthDisponible() ? '' : ' Para pasarlos hace falta GOOGLE_DRIVE_CLIENT_ID en config.js.')) : 'Todos los adjuntos están en la unidad compartida.';
+    });
+  }
+  document.getElementById('adj-mig-btn').addEventListener('click', function(){
+    if(!driveOAuthDisponible()){ showToast('Para bajar los adjuntos viejos hace falta GOOGLE_DRIVE_CLIENT_ID en config.js.', 6000); return; }
+    var btn = this, msg = document.getElementById('adj-mig-msg');
+    reclamosConAdjuntos().then(function(recs){
+      var items = adjuntosViejos(recs);
+      if(!items.length) return;
+      if(!window.confirm('Se van a pasar '+items.length+' adjunto(s) a la unidad compartida Gestión Anafer. Google te va a pedir permiso para leerlos. Los originales no se borran. ¿Seguimos?')) return;
+      state.adjMigrando = true; btn.disabled = true;
+      var hechos = 0, fallas = [], filas = [];
+      return items.reduce(function(p, it){
+        return p.then(function(){
+          msg.textContent = 'Pasando… '+hechos+' de '+items.length;
+          return driveApiFetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(it.a.id)+'?alt=media&supportsAllDrives=true').then(function(r){
+            if(!r.ok) throw new Error('no se pudo bajar ('+r.status+')');
+            return r.blob();
+          }).then(function(b){
+            var file = new File([b], it.a.name || 'archivo', {type: it.a.contentType || b.type || ''});
+            return uploadAdjunto(file, null, it.carpetas, it.modulo);
+          }).then(function(nuevo){
+            var arr = it.fila[it.col] || [];
+            var i = arr.indexOf(it.a);
+            if(i>=0) arr[i] = Object.assign({}, it.a, nuevo, {anterior: it.a.url||''});
+            if(filas.indexOf(it)===-1 && !filas.some(function(x){ return x.fila===it.fila; })) filas.push(it);
+            hechos++;
+          }).catch(function(e){ fallas.push((it.a.name||it.a.id)+': '+e.message); });
+        });
+      }, Promise.resolve()).then(function(){
+        // Se guarda solo la columna de adjuntos de cada fila tocada
+        return Promise.all(filas.map(function(it){
+          var o = {}; o[it.col] = it.fila[it.col];
+          return state.sb.from(it.tabla).update(o).eq('id', it.fila.id).then(function(r){ if(r.error) fallas.push(it.tabla+' '+it.fila.id+': '+r.error.message); });
+        }));
+      }).then(function(){
+        state.adjMigrando = false; btn.disabled = false;
+        msg.textContent = '✓ Se pasaron '+hechos+' adjunto(s) a la unidad compartida.'+(fallas.length ? ' No se pudieron pasar '+fallas.length+': '+fallas.slice(0,5).join(' · ')+(fallas.length>5?'…':'') : '');
+        btn.hidden = !fallas.length;
+      });
+    }).catch(function(e){ state.adjMigrando = false; btn.disabled = false; msg.textContent = 'Se cortó: '+e.message; });
+  });
+
   function renderUsuarios(){
     var box = document.getElementById('usuarios-list');
     var msg = document.getElementById('usuarios-msg');
@@ -2842,7 +2911,14 @@
   var driveRootFolderId = null;
   var driveFolderCache = {};
 
-  function driveReady(){ return !!window.GOOGLE_DRIVE_CLIENT_ID; }
+  // Los adjuntos nuevos van a la unidad compartida "Gestión Anafer" por la
+  // función del servidor "adjuntos-drive" (cuenta de Google del sistema): no
+  // hace falta que cada usuario autorice Google Drive. Alcanza con estar
+  // logueado; los permisos son los del perfil.
+  function driveReady(){ return !!(state.sb && window.SUPABASE_URL); }
+  // El acceso con la cuenta de Google de cada usuario (GOOGLE_DRIVE_CLIENT_ID)
+  // queda solo para pasar los adjuntos viejos a la unidad.
+  function driveOAuthDisponible(){ return !!window.GOOGLE_DRIVE_CLIENT_ID; }
 
   function ensureGisLoaded(){
     return new Promise(function(resolve, reject){
@@ -2951,50 +3027,50 @@
       }, Promise.resolve(root));
     });
   }
-  function uploadAdjunto(file, nombreProveedor, carpetas){
-    if(!driveReady()) return Promise.reject(new Error('Google Drive no está configurado (falta GOOGLE_DRIVE_CLIENT_ID en config.js)'));
-    return (carpetas ? driveEnsurePath(carpetas) : driveEnsureProveedorFolder(nombreProveedor)).then(function(folderId){
-      return file.arrayBuffer().then(function(buf){
-        var bytes = new Uint8Array(buf);
-        var binary = '';
-        for(var i=0;i<bytes.length;i++) binary += String.fromCharCode(bytes[i]);
-        var base64Data = btoa(binary);
-        var boundary = 'hdr_adjunto_' + Date.now().toString(36);
-        var metadata = { name: file.name, parents: [folderId] };
-        var body = '--'+boundary+'\r\n'
-          + 'Content-Type: application/json; charset=UTF-8\r\n\r\n'
-          + JSON.stringify(metadata) + '\r\n'
-          + '--'+boundary+'\r\n'
-          + 'Content-Type: '+(file.type||'application/octet-stream')+'\r\n'
-          + 'Content-Transfer-Encoding: base64\r\n\r\n'
-          + base64Data + '\r\n'
-          + '--'+boundary+'--';
-        return driveApiFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,size,mimeType&'+DRIVE_EXTRA_PARAMS, {
-          method: 'POST',
-          headers: {'Content-Type': 'multipart/related; boundary="'+boundary+'"'},
-          body: body
-        });
-      });
+  // ---------- Unidad compartida por la función del servidor ----------
+  function adjuntosFuncion(cuerpo, multipart){
+    var tokenP = state.sb && state.sb.auth ? state.sb.auth.getSession().then(function(r){ return r && r.data && r.data.session && r.data.session.access_token; }, function(){ return null; }) : Promise.resolve(null);
+    return tokenP.then(function(token){
+      var h = {apikey: window.SUPABASE_ANON_KEY, Authorization: 'Bearer '+(token || window.SUPABASE_ANON_KEY)};
+      if(!multipart) h['Content-Type'] = 'application/json';
+      return fetch(window.SUPABASE_URL.replace(/\/+$/,'')+'/functions/v1/adjuntos-drive', {method:'POST', headers:h, body: multipart ? cuerpo : JSON.stringify(cuerpo)});
     }).then(function(r){
-      if(!r.ok) return r.json().catch(function(){ return null; }).then(function(errBody){
-        throw new Error((errBody && errBody.error && errBody.error.message) || ('HTTP '+r.status));
-      });
-      return r.json();
-    }).then(function(data){
-      if(!data || !data.id) throw new Error('Drive no devolvió el archivo subido');
-      return {
-        id: data.id,
-        url: data.webViewLink || ('https://drive.google.com/file/d/'+data.id+'/view'),
-        name: data.name || file.name,
-        contentType: data.mimeType || file.type || '',
-        sizeBytes: Number(data.size) || file.size || 0
-      };
+      if(r.ok) return r;
+      return r.json().catch(function(){ return null; }).then(function(e){ throw new Error((e && e.error) || ('No se pudo usar Google Drive ('+r.status+')')); });
     });
   }
-
-  function deleteAdjunto(fileId){
-    if(!driveReady() || !fileId) return;
-    driveApiFetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?supportsAllDrives=true', { method: 'DELETE' }).catch(function(){});
+  // modulo: 'administracion' | 'calidad' | … ; carpetas: subcarpetas dentro del módulo
+  function uploadAdjunto(file, nombreProveedor, carpetas, modulo){
+    if(!driveReady()) return Promise.reject(new Error('Sin conexión con la base.'));
+    var mod = modulo || 'administracion';
+    var sub = carpetas || ['Facturas', (nombreProveedor||'').trim() || 'Sin proveedor'];
+    var fd = new FormData();
+    fd.append('accion', 'subir'); fd.append('modulo', mod); fd.append('carpetas', JSON.stringify(sub));
+    fd.append('archivo', file, file.name);
+    return adjuntosFuncion(fd, true).then(function(r){ return r.json(); }).then(function(d){
+      var a = d && d.archivo;
+      if(!a || !a.id) throw new Error('Drive no devolvió el archivo subido');
+      return {id:a.id, url:'', name:a.name || file.name, contentType:a.contentType || file.type || '', sizeBytes:a.sizeBytes || file.size || 0, unidad:true, modulo:mod};
+    });
+  }
+  // Los adjuntos de la unidad van a la papelera de la unidad (30 días). Los
+  // viejos (en el Drive de cada usuario) solo se desvinculan.
+  function deleteAdjunto(fileId, modulo, esUnidad){
+    if(!fileId || esUnidad===false) return;
+    adjuntosFuncion({accion:'quitar', modulo:modulo||'administracion', id:fileId}).catch(function(){});
+  }
+  // Abre un adjunto: los de la unidad pasan por el servidor (nadie tiene
+  // enlaces de Drive); los viejos, con su enlace de Drive de siempre.
+  function abrirAdjunto(a, moduloDef){
+    if(!a) return;
+    if(!a.unidad){ if(a.url) window.open(a.url, '_blank', 'noopener'); return; }
+    var w = window.open('', '_blank');
+    if(w) try{ w.document.title = a.name || 'Archivo'; w.document.body.innerHTML = '<p style="font-family:sans-serif;color:#555">Abriendo '+esc(a.name||'el archivo')+'…</p>'; }catch(e){}
+    adjuntosFuncion({accion:'abrir', modulo:a.modulo || moduloDef || 'administracion', id:a.id}).then(function(r){ return r.blob(); }).then(function(b){
+      var u = URL.createObjectURL(b);
+      if(w) w.location.href = u; else window.location.href = u;
+      setTimeout(function(){ URL.revokeObjectURL(u); }, 5*60*1000);
+    }).catch(function(e){ if(w) w.close(); showToast('No se pudo abrir el archivo: '+e.message, 6000); });
   }
 
   // Sube los adjuntos que todavía están pendientes (recién elegidos, sin subir
@@ -3002,10 +3078,11 @@
   // con los ya subidos sin tocar y los pendientes reemplazados por su
   // resultado de Drive. Se llama recién al Guardar, cuando ya sabemos el
   // nombre del proveedor (necesario para elegir la carpeta).
-  function subirAdjuntosPendientes(arr, nombreProveedor){
+  // carpetas: subcarpetas en Administración (['Facturas', proveedor] o ['Proveedores', proveedor])
+  function subirAdjuntosPendientes(arr, nombreProveedor, carpetas){
     return Promise.all((arr||[]).map(function(a){
       if(!a.pending) return a;
-      return uploadAdjunto(a.file, nombreProveedor);
+      return uploadAdjunto(a.file, nombreProveedor, carpetas, 'administracion');
     }));
   }
 
@@ -3027,8 +3104,9 @@
         row.appendChild(span);
       } else {
         var link = document.createElement('a');
-        link.href = a.url; link.target = '_blank'; link.rel = 'noopener';
+        link.href = a.unidad ? '#' : a.url; link.target = '_blank'; link.rel = 'noopener';
         link.textContent = a.name || 'archivo';
+        if(a.unidad) link.addEventListener('click', function(ev){ ev.preventDefault(); abrirAdjunto(a, 'administracion'); });
         row.appendChild(link);
       }
       var size = document.createElement('span');
@@ -3040,7 +3118,7 @@
       del.addEventListener('click', function(){
         var current = getArr();
         var removed = current.splice(idx,1)[0];
-        if(removed && !removed.pending && removed.id) deleteAdjunto(removed.id);
+        if(removed && !removed.pending && removed.id) deleteAdjunto(removed.id, removed.modulo || 'administracion', !!removed.unidad);
         renderAttachList(containerId, getArr);
       });
       row.appendChild(del);
@@ -3055,7 +3133,7 @@
       var files = Array.prototype.slice.call(inp.files||[]);
       inp.value = '';
       if(!files.length) return;
-      if(!driveReady()){ showToast('Los adjuntos no están configurados (falta GOOGLE_DRIVE_CLIENT_ID en config.js).'); return; }
+      if(!driveReady()){ showToast('Sin conexión con la base: no se pueden cargar adjuntos.'); return; }
       files.forEach(function(file){
         getArr().push({ pending:true, file:file, name:file.name, contentType:file.type||'', sizeBytes:file.size||0 });
       });
@@ -4025,7 +4103,7 @@
     var saveBtn = this;
     var tienePendientes = state.editingProveedorArchivos.some(function(a){ return a.pending; });
     if(tienePendientes){ saveBtn.disabled = true; showToast('Subiendo adjuntos a Google Drive...'); }
-    subirAdjuntosPendientes(state.editingProveedorArchivos, nombre).then(function(archivosFinales){
+    subirAdjuntosPendientes(state.editingProveedorArchivos, nombre, ['Proveedores', nombre]).then(function(archivosFinales){
       var p = Object.assign({}, baseData, { archivos: archivosFinales });
       if(isNew) state.proveedores.push(p);
       else { var idx = state.proveedores.findIndex(function(x){ return x.id===id; }); if(idx>=0) state.proveedores[idx]=p; }
@@ -4040,7 +4118,7 @@
   document.getElementById('pm-delete').addEventListener('click', function(){
     var id = state.editingProveedorId;
     if(!id) return;
-    state.editingProveedorArchivos.forEach(function(a){ if(!a.pending && a.id) deleteAdjunto(a.id); });
+    state.editingProveedorArchivos.forEach(function(a){ if(!a.pending && a.id) deleteAdjunto(a.id, a.modulo || 'administracion', !!a.unidad); });
     state.proveedores = state.proveedores.filter(function(x){ return x.id!==id; });
     if(state.sb) state.sb.from('proveedores').delete().eq('id', id).then(function(res){
       if(res.error) showToast('No se pudo eliminar: '+res.error.message);
@@ -5980,7 +6058,7 @@
     var saveBtn = this;
     var tienePendientes = state.editingFacturaArchivos.some(function(a){ return a.pending; });
     if(tienePendientes){ saveBtn.disabled = true; showToast('Subiendo adjuntos a Google Drive...'); }
-    subirAdjuntosPendientes(state.editingFacturaArchivos, nombreProveedor).then(function(archivosFinales){
+    subirAdjuntosPendientes(state.editingFacturaArchivos, nombreProveedor, ['Facturas', nombreProveedor]).then(function(archivosFinales){
       var f = Object.assign({}, baseData, { archivos: archivosFinales });
       if(isNew) state.facturas.push(f);
       else { var idx = state.facturas.findIndex(function(x){ return x.id===id; }); if(idx>=0) state.facturas[idx]=f; }
@@ -6326,11 +6404,21 @@
     var cuentasOpts = state.cuentas.slice().sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); });
     state.editingFormas.forEach(function(f, i){
       var modo = formaModo(f);
+      // La cuenta sale del concepto (⚙ → Tesorería → Conceptos de caja): solo
+      // se elige a mano si el concepto no tiene una cuenta configurada.
+      var mdF = medioById(f.medioId);
+      var cuentaFija = !!(mdF && mdF.cuentaId && cuentaById(mdF.cuentaId));
+      if(cuentaFija && !f.cuentaId) f.cuentaId = mdF.cuentaId;
+      var cuentaHtml = !f.medioId
+        ? '<span class="f-cuenta-fija vacia">Elegí el concepto</span>'
+        : cuentaFija
+          ? '<span class="f-cuenta-fija" title="La cuenta sale del concepto. Se cambia en ⚙ → Tesorería → Conceptos de caja.">'+esc(cuentaNombre(f.cuentaId))+'</span>'
+          : '<select class="f-cuenta" title="Este concepto no tiene una cuenta configurada en ⚙ → Tesorería → Conceptos de caja"><option value="">Elegir cuenta</option>'+cuentasOpts.map(function(c){ return '<option value="'+esc(c.id)+'"'+(c.id===f.cuentaId?' selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+'</select>';
       var d = document.createElement('div');
       d.className = 'forma';
       d.innerHTML = '<div class="forma-fila">'
         +'<select class="f-medio"><option value="">Concepto (TR1, CHE, ECS…)</option>'+mediosOrdenados(f.medioId).map(function(m){ return '<option value="'+esc(m.id)+'"'+(m.id===f.medioId?' selected':'')+'>'+esc(m.codigo+' — '+m.nombre)+'</option>'; }).join('')+'</select>'
-        +'<select class="f-cuenta"><option value="">Cuenta</option>'+cuentasOpts.map(function(c){ return '<option value="'+esc(c.id)+'"'+(c.id===f.cuentaId?' selected':'')+'>'+esc(c.nombre)+'</option>'; }).join('')+'</select>'
+        +cuentaHtml
         +'<input class="f-importe" type="text" inputmode="decimal" placeholder="Importe"'+(modo==='cartera'?' readonly title="Es la suma de los cheques elegidos"':'')+' value="'+(f.importe?fmtMontoMiles(f.importe):'')+'">'
         +(state.editingFormas.length>1 ? '<button type="button" class="quitar" title="Quitar esta forma de pago">✕</button>' : '<span></span>')
         +'</div>';
@@ -6350,12 +6438,12 @@
       d.querySelector('.f-medio').addEventListener('change', function(){
         f.medioId = this.value;
         var md = medioById(f.medioId);
-        if(md && md.cuentaId && cuentaById(md.cuentaId)) f.cuentaId = md.cuentaId;
+        f.cuentaId = (md && md.cuentaId && cuentaById(md.cuentaId)) ? md.cuentaId : '';
         if(formaModo(f)!=='cartera') f.chequeIds = [];
         if(formaModo(f)==='cartera') f.importe = 0;
         renderPomFormas();
       });
-      d.querySelector('.f-cuenta').addEventListener('change', function(){ f.cuentaId = this.value; });
+      if(d.querySelector('.f-cuenta')) d.querySelector('.f-cuenta').addEventListener('change', function(){ f.cuentaId = this.value; });
       d.querySelector('.f-importe').addEventListener('input', function(){ var n = parseMontoInput(this.value); f.importe = isNaN(n) ? 0 : r2(n); f.importeManual = true; actualizarEstadoFormas(); });
       if(d.querySelector('.quitar')) d.querySelector('.quitar').addEventListener('click', function(){ state.editingFormas.splice(i,1); renderPomFormas(); });
       if(d.querySelector('.f-chqnum')) d.querySelector('.f-chqnum').addEventListener('input', function(){ f.chequeNumero = this.value.trim(); });
@@ -6481,7 +6569,7 @@
       for(var fi=0; fi<formas.length; fi++){
         var f = formas[fi], n = fi+1, modoF = formaModo(f);
         if(!f.medioId){ showToast('Forma de pago '+n+': elegí el concepto (TR1, CHE, ECS…).'); return; }
-        if(!f.cuentaId){ showToast('Forma de pago '+n+': elegí la cuenta.'); return; }
+        if(!f.cuentaId){ showToast('Forma de pago '+n+': ese concepto no tiene cuenta. Elegila, o configurala en ⚙ → Tesorería → Conceptos de caja.', 6000); return; }
         if(modoF==='cartera' && !(f.chequeIds||[]).length){ showToast('Forma de pago '+n+': elegí los cheques de la cartera.'); return; }
         if(modoF==='datos' && !f.chequeNumero){ showToast('Forma de pago '+n+': ingresá el número de cheque / echeq.'); return; }
         if(!(f.importe>0)){ showToast('Forma de pago '+n+': ingresá el importe.'); return; }
@@ -7756,7 +7844,10 @@
     fmtMoney: fmtMoney, AREAS: AREAS,
     imprimirDocumento: imprimirDocumento, impKV: impKV, impTabla: impTabla, impTotales: impTotales, impFecha: impFecha,
     // Google Drive (adjuntos): carpetas = ["Calidad", "Reclamos 2026", …] dentro de la carpeta raíz
-    driveListo: driveReady, driveSubir: function(file, carpetas){ return uploadAdjunto(file, null, carpetas); }, driveBorrar: deleteAdjunto, fmtBytes: fmtBytes
+    // Adjuntos en la unidad compartida: carpetas = ["Calidad", "Reclamos 2026", …] (la primera es el módulo)
+    driveListo: driveReady,
+    driveSubir: function(file, carpetas){ var mod = /^calidad$/i.test((carpetas||[])[0]||'') ? 'calidad' : 'administracion'; return uploadAdjunto(file, null, (carpetas||[]).slice(1), mod); },
+    driveBorrar: function(id, modulo, esUnidad){ deleteAdjunto(id, modulo, esUnidad); }, driveAbrir: abrirAdjunto, fmtBytes: fmtBytes
   };
 
   // ---------- 1) Viajes y envíos que se repiten ----------

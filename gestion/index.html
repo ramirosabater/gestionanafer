@@ -283,6 +283,8 @@
   .forma{border:1px dashed var(--border); border-radius:8px; padding:8px; margin-bottom:8px;}
   .forma-fila{display:grid; grid-template-columns:1.3fr 1.1fr .9fr auto; gap:6px; align-items:center;}
   .forma-fila select, .forma-fila input{width:100%; min-width:0;}
+  .forma-fila .f-cuenta-fija{font-size:12.5px; color:var(--ink-2); padding:0 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .forma-fila .f-cuenta-fija.vacia{color:var(--muted); font-style:italic;}
   .forma-fila .quitar{border:none; background:none; color:var(--muted); font-size:16px; cursor:pointer; padding:4px 6px;}
   .forma-chq{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px;}
   .forma-cartera{margin-top:6px; max-height:170px; overflow:auto; border:1px solid var(--border); border-radius:6px; padding:4px 6px;}
@@ -2400,13 +2402,14 @@
     </div>
 
     <div class="cheque-fields" id="movm-cheque-fields" hidden>
+      <!-- En el orden en que vienen impresos en el cheque, para cargarlos con Tab -->
       <div class="crew-fields">
         <div class="field"><label for="movm-chq-banco">Banco</label><input type="text" id="movm-chq-banco" maxlength="40"></div>
-        <div class="field"><label for="movm-chq-numero">N° cheque</label><input type="text" id="movm-chq-numero" maxlength="20"></div>
+        <div class="field"><label for="movm-chq-sucursal">Sucursal</label><input type="text" id="movm-chq-sucursal" maxlength="20"></div>
       </div>
       <div class="crew-fields">
-        <div class="field"><label for="movm-chq-sucursal">Sucursal</label><input type="text" id="movm-chq-sucursal" maxlength="20"></div>
         <div class="field"><label for="movm-chq-localidad">Localidad</label><input type="text" id="movm-chq-localidad" maxlength="40"></div>
+        <div class="field"><label for="movm-chq-numero">N° cheque</label><input type="text" id="movm-chq-numero" maxlength="20"></div>
       </div>
       <div class="crew-fields">
         <div class="field"><label for="movm-chq-cuenta">N° cuenta</label><input type="text" id="movm-chq-cuenta" maxlength="30"></div>
@@ -2682,6 +2685,12 @@
               <select id="nu-perfil"></select>
               <button class="btn" id="nu-add">+ Agregar usuario</button>
             </div>
+          </div>
+          <div class="usuarios-box" id="adj-mig-box">
+            <h4>Archivos en Google Drive</h4>
+            <div class="sub" style="margin-bottom:10px;">Todos los adjuntos (facturas, proveedores, fotos de Calidad, legajos) se guardan en la unidad compartida <b>Gestión Anafer</b>, con una carpeta por módulo. Cada uno los abre desde la app según su perfil.</div>
+            <div class="sub" id="adj-mig-msg"></div>
+            <button class="btn" id="adj-mig-btn" hidden>Pasar los adjuntos viejos a la unidad compartida</button>
           </div>
         </div>
         </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { sbGet, sbUpsert, sbDelete, sbSignedUrl, registrarAuditoria } from "./supabase-admin.js";
+import { sbGet, sbUpsert, sbDelete, legajoAbrir, legajosMigrar, esDrive, registrarAuditoria } from "./supabase-admin.js";
 import { Banda, Panel, Kpi, C } from "./charts.jsx";
 import FichaEmpleado, { TIPOS_DOC } from "./FichaEmpleado.jsx";
 import { analizarVencimientos, licenciasSinCertificado, sinAcentos } from "./vencimientos.js";
@@ -82,9 +82,28 @@ export default function Vencimientos() {
     if (!nuevas.length) return alert("Ya están cargados los sugeridos.");
     if (confirm(`Se van a agregar:\n\n${nuevas.map((f) => `• ${f.sector || "Todos los sectores"}: ${f.tipo}`).join("\n")}`)) agregar(nuevas);
   };
+  // Archivos que todavía están en el almacenamiento de Supabase: se pasan a la unidad compartida de Drive
+  const [migrando, setMigrando] = useState(null);
+  const enSupabase = docs.filter((d) => d.path && !esDrive(d.path)).length;
+  const migrar = async () => {
+    if (!confirm(`Se van a pasar ${enSupabase} archivo(s) del almacenamiento de Supabase a la unidad compartida de Google Drive (una carpeta por empleado). ¿Seguimos?`)) return;
+    let total = 0, fallas = [];
+    try {
+      for (let vuelta = 0; vuelta < 200; vuelta++) {
+        setMigrando({ pasados: total, quedan: null });
+        const r = await legajosMigrar();
+        total += r.pasados || 0; fallas = r.fallas || [];
+        setMigrando({ pasados: total, quedan: r.quedan });
+        if (!r.quedan || !r.pasados) break;
+      }
+      registrarAuditoria("Pasó documentos de legajo a Google Drive", `${total} archivo(s)` + (fallas.length ? ` · ${fallas.length} con error` : ""));
+      setMigrando({ pasados: total, quedan: 0, fallas, fin: true });
+      await cargar();
+    } catch (e) { setMigrando({ pasados: total, error: e.message }); }
+  };
   const verCert = async (path) => {
     const w = window.open("", "_blank");
-    try { const u = await sbSignedUrl("legajos", path); if (w) w.location = u; } catch { if (w) w.close(); alert("No se pudo abrir."); }
+    try { await legajoAbrir(path, w); } catch { if (w) w.close(); alert("No se pudo abrir."); }
   };
 
   if (cargando) return <p className="text-[#5c6b78] text-center py-16">Cargando…</p>;
@@ -103,6 +122,18 @@ export default function Vencimientos() {
       </Banda>
 
       {sinTabla && <p className="text-sm bg-[#fff7e0] border border-[#f2d27a] text-[#7a5b00] rounded-xl px-4 py-2.5">Falta correr el SQL <b>vencimientos-y-licencias.sql</b> en Supabase para poder cargar los documentos obligatorios por sector.</p>}
+
+      {(enSupabase > 0 || migrando) && (
+        <div className="text-sm bg-[#eef3ff] border border-[#c9d6f5] text-[#223c7e] rounded-xl px-4 py-2.5 flex items-center gap-3 flex-wrap" data-migrar>
+          <span className="flex-1 min-w-[240px]">
+            {migrando?.error ? <>No se pudo terminar: {migrando.error}. Pasaron {migrando.pasados}.</>
+              : migrando?.fin ? <>✓ Listo: {migrando.pasados} archivo(s) pasados a Google Drive.{migrando.fallas?.length ? ` ${migrando.fallas.length} no se pudieron pasar: ${migrando.fallas.join(" · ")}` : ""}</>
+              : migrando ? <>Pasando a Google Drive… {migrando.pasados} listos{migrando.quedan != null ? `, quedan ${migrando.quedan}` : ""}.</>
+              : <>Hay <b>{enSupabase}</b> documento(s) de legajo en el almacenamiento anterior de Supabase. Los nuevos ya van a la unidad compartida de Google Drive.</>}
+          </span>
+          {!migrando && <button onClick={migrar} className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-[#223c7e]">Pasar a Google Drive</button>}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi label="Vencidos" valor={res.vencidos.length} color={C.rojo} icono="⛔" onClick={() => setVer("vencimientos")} activo={ver === "vencimientos"} />

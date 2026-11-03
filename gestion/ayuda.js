@@ -66,6 +66,7 @@
         { t: "<b>Neto gravado</b>: si lo dejás vacío se calcula solo (total ÷ 1,21 para Responsables Inscriptos; el total para el resto). Es la base de la retención de Ganancias." },
         { t: "Si el proveedor tiene tildado <b>📦 Carga artículos</b>, aparece el bloque de artículos: elegís cada artículo, la cantidad y el precio sin IVA (te propongo el último pagado). Si no existe, lo creás ahí mismo. Va aparte de la imputación." },
         { t: "También podés <b>📄 Leer desde archivo</b> el PDF o la foto: completa los datos y vos los revisás antes de guardar." },
+        { t: "Los <b>archivos adjuntos</b> se guardan en la unidad compartida <b>Gestión Anafer</b> de Google Drive, en Administración › Facturas › proveedor. Se abren desde acá, según tu perfil; si quitás uno, queda 30 días en la papelera de la unidad." },
       ] },
       { titulo: "Débitos internos y combustible", pasos: [
         { t: "Lo que se paga <b>sin factura y sin impuestos</b> se carga como <b>débito interno</b>: en <b>+ Nueva factura</b> elegí arriba “Débito interno”.", ir: ["#tab-pagos", '#subtabs-pagos .stabbtn[data-sub="facturas"]'], foco: "#new-factura-btn" },
@@ -79,7 +80,7 @@
         { t: "Arriba ves los saldos de cada cuenta y los cheques en cartera; lo ya comprometido en órdenes pendientes se resta. Podés cambiar el <b>monto a destinar</b>.", foco: "#sug-fondos" },
         { t: "Propone primero los proveedores ★ prioritarios y después las facturas más viejas. Tildá o destildá lo que quieras.", foco: "#sug-tbody" },
         { t: "<b>Crear órdenes de pago</b> arma una orden pendiente por proveedor.", foco: "#sug-crear" },
-        { t: "En <b>Órdenes de pago</b> abrís cada una, elegís <b>Pagada</b> y cargás cómo se paga: concepto (TR1, CHE, ECS…), cuenta e importe.", ir: '#subtabs-pagos .stabbtn[data-sub="ordenes"]', foco: "#pagos-table" },
+        { t: "En <b>Órdenes de pago</b> abrís cada una, elegís <b>Pagada</b> y cargás cómo se paga: el concepto (TR1, CHE, ECS…) y el importe. La cuenta sale sola del concepto (se configura en ⚙ → Tesorería → Conceptos de caja); solo te la pido si el concepto no tiene una.", ir: '#subtabs-pagos .stabbtn[data-sub="ordenes"]', foco: "#pagos-table" },
         { t: "Se puede pagar <b>mixto</b>: con <b>+ Agregar forma de pago</b> sumás, por ejemplo, cheques de cartera y una transferencia por la diferencia. Entre todas tienen que dar el neto a pagar." },
         { t: "Al marcarla Pagada se calcula sola la <b>retención de Ganancias</b>: ves el detalle y el <b>neto a pagar</b>. En Tesorería sale el neto y queda el certificado para imprimir." },
         { t: "Si una factura u orden estaba mal, no se borra: se <b>anula</b> con un motivo. Queda tachada con quién y cuándo, las facturas de esa orden vuelven a quedar con lo que les falta pagar y el número no se reutiliza." },
@@ -226,6 +227,8 @@
         { t: "En <b>Personal → Vencimientos</b> están los documentos vencidos o por vencer, los obligatorios que faltan y las licencias sin certificado.", foco: { texto: "Personal" } },
         { t: "En <b>⚙ Obligatorios por sector</b> definís qué pide cada sector (licencia de conducir y psicofísico para Logística, carnet de manipulador para Producción, ART para todos) y con cuántos días de aviso." },
         { t: "El vencimiento se carga en la ficha del empleado al subir el documento. Cuando algo vence, te aviso al entrar al panel." },
+        { t: "Los documentos y los certificados se guardan en la unidad compartida <b>Gestión Anafer</b> de Google Drive, en RR.HH. › Legajos, con una carpeta por empleado (“123 - Pérez, Juan”). Desde el panel se abren sin enlaces públicos; si se borra uno, queda 30 días en la papelera de la unidad." },
+        { t: "Si en Vencimientos aparece el aviso de documentos en el <b>almacenamiento anterior de Supabase</b>, tocá <b>Pasar a Google Drive</b> y los muevo todos a sus carpetas." },
       ] },
     ],
   };

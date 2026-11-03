@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
-import { sbGet, sbPatch, sbPost, sbDelete, sbUpload, sbSignedUrl, sbStorageDelete,
-  registrarAuditoria, getAdminEmail } from "./supabase-admin.js";
+import { sbGet, sbPatch, legajoSubir, legajoAbrir, legajoBorrar, registrarAuditoria } from "./supabase-admin.js";
 
-const BUCKET = "legajos";
 export const TIPOS_DOC = [
   "DNI frente", "DNI dorso", "Constancia de CUIL", "Alta temprana (AFIP)",
   "Contrato", "Apto médico / preocupacional", "Certificado de domicilio",
@@ -109,18 +107,9 @@ export default function FichaEmpleado({ empleado, onCerrar, onGuardado, tabInici
     setSubiendo(true); setDocsError(null);
     for (const file of files) {
       if (file.size > 10 * 1048576) { setDocsError(`"${file.name}" pesa más de 10 MB.`); continue; }
-      const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
-      const slug = tipo.normalize("NFD").replace(/[^\w]+/g, "-").replace(/-+$/,"").toLowerCase();
-      const path = `${empleado.legajo}/${Date.now()}-${slug}.${ext}`;
       try {
-        await sbUpload(BUCKET, path, file);
-        try {
-          await sbPost("empleado_documentos", {
-            legajo: empleado.legajo, tipo, nombre_archivo: file.name, path,
-            mime: file.type || null, tamano: file.size, vencimiento: venc || null,
-            subido_por: getAdminEmail() || null,
-          });
-        } catch (e) { await sbStorageDelete(BUCKET, path).catch(() => {}); throw e; }
+        // Va a la unidad compartida de Google Drive (carpeta del empleado) y queda registrado en la base
+        await legajoSubir(empleado.legajo, tipo, file, venc || null);
         registrarAuditoria(`Subió documento al empleado ${empleado.legajo}`, `${tipo}: ${file.name}`);
       } catch (e) {
         setDocsError(`No se pudo subir "${file.name}". ${e.message || ""}`);
@@ -134,16 +123,14 @@ export default function FichaEmpleado({ empleado, onCerrar, onGuardado, tabInici
   const abrir = async (d) => {
     const w = window.open("", "_blank"); // se abre ya para que el navegador no lo bloquee
     try {
-      const url = await sbSignedUrl(BUCKET, d.path);
-      if (w) w.location.href = url; else window.location.href = url;
+      await legajoAbrir(d.path, w);
     } catch { if (w) w.close(); alert("No se pudo abrir el archivo."); }
   };
 
   const borrar = async (d) => {
     if (!confirm(`¿Borrar "${d.tipo} – ${d.nombre_archivo}"? No se puede deshacer.`)) return;
     try {
-      await sbStorageDelete(BUCKET, d.path);
-      await sbDelete(`empleado_documentos?id=eq.${d.id}`);
+      await legajoBorrar(d.id);   // en Drive queda 30 días en la papelera de la unidad
       registrarAuditoria(`Borró documento del empleado ${empleado.legajo}`, `${d.tipo}: ${d.nombre_archivo}`);
       setDocs((l) => l.filter((x) => x.id !== d.id));
     } catch { alert("No se pudo borrar el documento."); }

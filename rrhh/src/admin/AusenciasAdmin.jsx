@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { sbGet, sbPatch, sbSignedUrl, registrarAuditoria } from "./supabase-admin.js";
+import { sbGet, sbPatch, legajoAbrir, registrarAuditoria } from "./supabase-admin.js";
 
 const TIPOS = { dia_libre: "Día libre", ausencia: "Ausencia", vacaciones: "Vacaciones", enfermedad: "Enfermedad", licencia: "Licencia especial", otro: "Otro" };
 const CON_CERTIFICADO = ["enfermedad", "licencia"];
 const verCertificado = async (path) => {
   const w = window.open("", "_blank");
-  try { const url = await sbSignedUrl("legajos", path); if (w) w.location = url; else window.location = url; }
+  try { await legajoAbrir(path, w); }
   catch { if (w) w.close(); alert("No se pudo abrir el certificado."); }
 };
 const fechaCorta = (f) => (f ? new Date(f + "T00:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit" }) : "");

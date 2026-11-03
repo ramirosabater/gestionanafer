@@ -277,14 +277,19 @@
       var esImg = /^image\//.test(f.contentType || '');
       var cont = f.pending
         ? (f.preview ? '<img src="' + f.preview + '" alt="">' : '📎') + '<span>' + esc(f.name) + ' <span class="fm-hint">(se sube al guardar)</span></span>'
-        : (esImg ? '📷 ' : '📎 ') + '<a href="' + esc(f.url) + '" target="_blank" rel="noopener" title="Abrir en Google Drive">' + esc(f.name || 'archivo') + '</a>';
+        : (esImg ? '📷 ' : '📎 ') + (f.unidad
+          ? '<a href="#" data-abrir="' + i + '" title="Abrir">' + esc(f.name || 'archivo') + '</a>'
+          : '<a href="' + esc(f.url) + '" target="_blank" rel="noopener" title="Abrir en Google Drive">' + esc(f.name || 'archivo') + '</a>');
       return '<div class="rq-foto">' + cont + (S.fotosEditables ? '<button type="button" data-i="' + i + '" title="Quitar">✕</button>' : '') + '</div>';
     }).join('');
+    box.querySelectorAll('a[data-abrir]').forEach(function (a) {
+      a.addEventListener('click', function (ev) { ev.preventDefault(); if (G.driveAbrir) G.driveAbrir(S.fotos[Number(a.dataset.abrir)], 'calidad'); });
+    });
     box.querySelectorAll('button[data-i]').forEach(function (b) {
       b.addEventListener('click', function () {
         var f = S.fotos.splice(Number(b.dataset.i), 1)[0];
         if (f && f.preview) URL.revokeObjectURL(f.preview);
-        if (f && !f.pending && f.id) S.fotosBorrar.push(f.id);
+        if (f && !f.pending && f.id) S.fotosBorrar.push(f);
         renderFotos();
       });
     });
@@ -302,7 +307,7 @@
   $('rq-foto-input').addEventListener('change', function () {
     var files = Array.prototype.slice.call(this.files || []); this.value = '';
     if (!files.length) return;
-    if (!G.driveListo || !G.driveListo()) { toast('Las fotos se guardan en Google Drive y no está configurado (falta GOOGLE_DRIVE_CLIENT_ID en config.js).', 6000); return; }
+    if (!G.driveListo || !G.driveListo()) { toast('Sin conexión con la base: no se pueden cargar fotos.', 6000); return; }
     Promise.all(files.map(achicar)).then(function (fs) {
       fs.forEach(function (f) { S.fotos.push({ pending: true, file: f, name: f.name, contentType: f.type || '', sizeBytes: f.size || 0, preview: /^image\//.test(f.type) ? URL.createObjectURL(f) : '' }); });
       renderFotos();
@@ -312,7 +317,7 @@
     var carpetas = ['Calidad', 'Reclamos ' + r.anio, 'Reclamo Nº ' + r.numero];
     return Promise.all((S.fotos || []).map(function (f) {
       if (!f.pending) return f;
-      return G.driveSubir(f.file, carpetas).then(function (up) { return { id: up.id, url: up.url, name: up.name, contentType: up.contentType, sizeBytes: up.sizeBytes, subido_por: G.usuario(), subido_en: new Date().toISOString() }; });
+      return G.driveSubir(f.file, carpetas).then(function (up) { return { id: up.id, url: up.url || '', name: up.name, contentType: up.contentType, sizeBytes: up.sizeBytes, unidad: !!up.unidad, modulo: up.modulo || 'calidad', subido_por: G.usuario(), subido_en: new Date().toISOString() }; });
     }));
   }
   $('rq-venc-ilegible').addEventListener('change', function () { $('rq-venc').disabled = this.checked; if (this.checked) $('rq-venc').value = ''; });
@@ -355,7 +360,7 @@
     }).then(function (ok) {
       btn.disabled = false; btn.textContent = 'Guardar';
       if (!ok) return;
-      if (G.driveBorrar) borrar.forEach(function (id) { G.driveBorrar(id); });
+      if (G.driveBorrar) borrar.forEach(function (f) { G.driveBorrar(f.id, f.modulo || 'calidad', !!f.unidad); });
       cerrarReclamo();
       if (F.anio !== anio) F.anio = anio;
       armarFiltrosReclamos(); renderReclamos();
@@ -383,7 +388,7 @@
     descargarCSV('reclamos-PT-' + F.anio + '.csv', ['Nº', 'Mes', 'Fecha', 'Producto', 'Lote', 'Hora', 'Vto', 'Desvío', 'Reclamo de cliente', 'Desvío real', 'Observaciones', 'Envase', 'Lote de envase', 'Tapa', 'Cantidad', 'Destino de envase', 'Estado', 'Controló', 'Origen', 'Cliente', 'Cargado por', 'Comentarios (recepción)', 'Controlado por', 'Fotos'],
       l.slice().reverse().map(function (r) {
         return [r.numero, r.fecha ? MESES[Number(r.fecha.slice(5, 7)) - 1] : '', fmtFecha(r.fecha), r.producto, r.lote, r.hora, r.vencimiento_ilegible ? 'BORROSO' : fmtFecha(r.vencimiento), r.desvio, r.reclamo_cliente,
-          r.desvio_real, r.observaciones, r.envase, r.lote_envase, r.tapa, r.cantidad, r.destino_envase, anulado(r) ? 'ANULADO' : r.estado, r.controlo, r.origen || '', r.cliente || '', r.creado_por || '', r.comentarios || '', r.control_por || '', (r.adjuntos || []).map(function (a) { return a.url; }).join(' ')];
+          r.desvio_real, r.observaciones, r.envase, r.lote_envase, r.tapa, r.cantidad, r.destino_envase, anulado(r) ? 'ANULADO' : r.estado, r.controlo, r.origen || '', r.cliente || '', r.creado_por || '', r.comentarios || '', r.control_por || '', (r.adjuntos || []).map(function (a) { return a.url || a.name; }).join(' ')];
       }));
   });
 
