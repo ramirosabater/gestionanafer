@@ -58,6 +58,21 @@
       ] },
     ],
     administracion: [
+      { titulo: "Pedir una compra (solicitud)", pasos: [
+        { t: "Lo que necesita cada sector se pide en <b>Solicitudes</b> (reemplaza la planilla RG-0708). Cada jefe de sector entra con su usuario.", ir: ["#tab-solicitudes", '#subtabs-solicitudes .stabbtn[data-sub="solicitudes"]'], foco: "#sc-nueva" },
+        { t: "Con <b>+ Nueva solicitud</b> elegís el sector, para cuándo se necesita (y si es 🔥 urgente) y cargás cada ítem: qué es, cuánto y la unidad. Si el insumo está en la base de artículos, te lo propongo al escribir." },
+        { t: "El <b>estado</b> se actualiza solo: Pendiente → Cotizando → Comprada (ya tiene orden de compra) → Recibida parcial → Entregada. Si se pasa de la fecha en que se necesitaba, aparece <b>⏰ demorada</b> con los días de atraso.", foco: "#sc-f-estado" },
+        { t: "Con <b>Las mías</b> ves solo lo que pediste vos. Mientras Compras no generó la orden, podés corregir o anular tu solicitud.", foco: "#sc-f-mias" },
+      ] },
+      { titulo: "Comprar y recibir (Compras)", pasos: [
+        { t: "Compras abre cada solicitud desde <b>Solicitudes</b>: la pasa a <b>Cotizando</b>, elige el <b>proveedor</b> de cada ítem y, si lo sabe, el precio.", ir: ["#tab-solicitudes", '#subtabs-solicitudes .stabbtn[data-sub="solicitudes"]'], foco: "#sc-table" },
+        { t: "<b>🧾 Generar orden de compra</b> arma una orden por proveedor con esos ítems y la <b>entrega prevista</b>. La orden queda en Compras → Órdenes de compra, con los ítems y la solicitud de origen." },
+        { t: "Cuando llega la mercadería, en <b>Recepciones</b> (o desde la orden, <b>📦 Registrar recepción</b>) elegís la orden, el remito y cuánto llegó de cada ítem. Si llegó una parte, queda <b>parcial</b> y se espera el resto; si no va a llegar lo que falta, tildá “dar la orden por completa”.", ir: '#subtabs-solicitudes .stabbtn[data-sub="recepciones"]', foco: "#rc-nueva" },
+        { t: "Si vino dañado, equivocado o de más, tildá <b>⚠ Vino con diferencias</b> y contalo en Observaciones. Podés adjuntar la foto del remito (va a Drive, Administración › Remitos)." },
+        { t: "Cuando llega todo, la orden de compra pasa sola a <b>Recibida</b>. La factura se asocia a la orden como siempre (Pagos → Facturas, campo Orden de compra)." },
+        { t: "En <b>Seguimiento</b> está el tablero: abiertas, demoradas, días de la solicitud a la entrega, cumplimiento por proveedor, <b>recibido sin factura</b> y <b>facturado sin recepción</b>.", ir: '#subtabs-solicitudes .stabbtn[data-sub="seguimiento"]', foco: "#sg-kpis" },
+        { t: "<b>⬇ RG-0708</b> descarga las solicitudes de la lista en el formato de la planilla (se abre con Excel), con la factura asociada y el monto.", ir: '#subtabs-solicitudes .stabbtn[data-sub="solicitudes"]', foco: "#sc-exportar" },
+      ] },
       { titulo: "Cargar una factura de proveedor", pasos: [
         { t: "Las facturas se cargan en <b>Pagos → Facturas</b>.", ir: ["#tab-pagos", '#subtabs-pagos .stabbtn[data-sub="facturas"]'], foco: "#new-factura-btn" },
         { t: "Con <b>+ Nueva factura</b> buscás el proveedor por nombre. Si tiene una imputación habitual, el centro de costo y el concepto se completan solos." },

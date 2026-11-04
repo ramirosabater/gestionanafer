@@ -195,6 +195,7 @@
     {id:'company',    label:'Empresas'},
     {id:'occasional', label:'Eventuales'},
     {id:'compras',    label:'Compras'},
+    {id:'solicitudes', label:'Solicitudes de compra'},
     {id:'pagos',      label:'Pagos'},
     {id:'tesoreria',  label:'Tesorería'},
     {id:'day',        label:'Día'},
@@ -215,8 +216,8 @@
      desc:'FlotaPesada, sucursales, empresas, eventuales, vista del día y dashboard de viajes.',
      tabs:['grid','branches','company','occasional','day','dashboard']},
     {id:'administracion', label:'Administración', icon:'🧾', color:'#16a34a', dash:'gastos',
-     desc:'Proveedores, compras, facturas, órdenes de pago, tesorería y dashboard de gastos.',
-     tabs:['compras','pagos','tesoreria','dashboard']},
+     desc:'Proveedores, solicitudes de compra y recepciones, compras, facturas, órdenes de pago, tesorería y dashboard de gastos.',
+     tabs:['solicitudes','compras','pagos','tesoreria','dashboard']},
     {id:'calidad', label:'Calidad', icon:'🔬', color:'#7c3aed',
      desc:'Reclamos de producto terminado (RG-0802), no conformidades y planes de acción (RG-0801) e indicadores.',
      tabs:['reclamos','ncpac','calidash']},
@@ -264,10 +265,13 @@
   function isLoggedIn(){ return !!currentRole(); }
   // Pestañas que se agregaron después de crear los perfiles: si el perfil no
   // dice nada, la ve (y edita) quien administra accesos; el resto, no.
-  var PERMISOS_NUEVOS = ['comercial','rrhh','reclamos','ncpac','calidash','tableros'];
+  var PERMISOS_NUEVOS = ['comercial','rrhh','reclamos','ncpac','calidash','tableros','solicitudes'];
   function tabPermiso(tabId){
     var r = currentRole();
     if(!r) return 'oculta';
+    // Solicitudes de compra (noviembre 2026): si el perfil no dice nada, usa
+    // el permiso de Compras (los jefes de sector la tienen sola, en "Editar").
+    if(tabId==='solicitudes' && !(r.permisos && r.permisos.solicitudes) && !r.manageAccess) return tabPermiso('compras');
     // Perfiles creados antes de que existiera el permiso "comercial": los
     // que administran accesos lo ven, el resto no (se ajusta en ⚙ → Acceso).
     if(PERMISOS_NUEVOS.indexOf(tabId)!==-1 && !(r.permisos && r.permisos[tabId])) return r.manageAccess ? 'editar' : 'oculta';
@@ -799,6 +803,9 @@
     document.getElementById('view-company').hidden = (v!=='company');
     document.getElementById('view-occasional').hidden = (v!=='occasional');
     document.getElementById('view-compras').hidden = (v!=='compras');
+    document.getElementById('view-solicitudes').hidden = (v!=='solicitudes');
+    document.getElementById('tab-solicitudes').classList.toggle('active', v==='solicitudes');
+    if(v==='solicitudes' && window.SegCompras) window.SegCompras.mostrar();
     document.getElementById('view-pagos').hidden = (v!=='pagos');
     document.getElementById('view-tesoreria').hidden = (v!=='tesoreria');
     document.getElementById('tab-grid').classList.toggle('active', v==='grid');
@@ -838,6 +845,7 @@
   document.getElementById('tab-company').addEventListener('click', function(){ setView('company'); });
   document.getElementById('tab-occasional').addEventListener('click', function(){ setView('occasional'); });
   document.getElementById('tab-compras').addEventListener('click', function(){ setView('compras'); });
+  document.getElementById('tab-solicitudes').addEventListener('click', function(){ setView('solicitudes'); });
   document.getElementById('tab-pagos').addEventListener('click', function(){ setView('pagos'); });
   document.getElementById('tab-tesoreria').addEventListener('click', function(){ setView('tesoreria'); });
   var VISTAS_CALIDAD = ['reclamos','ncpac','calidash','tableros'];
@@ -3907,7 +3915,8 @@
         +'<td class="num">'+esc(o.fecha||'—')+'</td>'
         +'<td class="day-note">'+esc(o.descripcion||'—')+'</td>'
         +'<td class="num">$'+montoStr+'</td>'
-        +'<td><span class="oc-badge '+esc(o.estado||'pendiente')+'">'+ocEstadoLabel(o.estado)+'</span></td>';
+        +'<td><span class="oc-badge '+esc(o.estado||'pendiente')+'">'+ocEstadoLabel(o.estado)+'</span>'
+          +(window.SegCompras && !esAnulado(o) ? window.SegCompras.ocHint(o) : '')+'</td>';
       var pg = ocPagos(o);
       tr.innerHTML += (esAnulado(o) || o.estado==='anulada') ? '<td>—</td>'
         : '<td><span class="oc-badge '+pg.estado+'">'+ocPagoLabel(pg.estado)+'</span>'
@@ -4134,7 +4143,7 @@
       id:o.id, numero:o.numero, proveedor_id:o.proveedorId||'', fecha:o.fecha||'',
       descripcion:o.descripcion||'', monto:o.monto||0, estado:o.estado||'pendiente',
       notas:o.notas||'', who:o.who||''
-    }, camposAnulacion(o))).then(function(res){
+    }, camposAnulacion(o), state.colOCItems ? {items:o.items||[], entrega_prevista:o.entregaPrevista||null} : {})).then(function(res){
       if(res.error) showToast('No se pudo guardar la orden de compra: '+res.error.message);
     });
   }
@@ -4151,11 +4160,13 @@
     document.getElementById('ocm-descripcion').value = o ? (o.descripcion||'') : '';
     document.getElementById('ocm-estado').value = o ? (o.estado||'pendiente') : 'pendiente';
     document.getElementById('ocm-notas').value = o ? (o.notas||'') : '';
+    document.getElementById('ocm-entrega').value = o ? (o.entregaPrevista||'') : '';
     document.getElementById('ocm-delete').style.display = o ? '' : 'none';
     document.getElementById('ocm-imprimir').style.display = o ? '' : 'none';
     var vigente = o && !esAnulado(o) && o.estado!=='anulada';
     document.getElementById('ocm-anticipo').style.display = vigente && canEdit('pagos') ? '' : 'none';
     renderOCPagos(vigente ? o : null);
+    if(window.SegCompras) window.SegCompras.renderEnOC(o, vigente);
     marcarModalAnulado('ocm-save', 'ocm-delete', o, 'a');
     document.getElementById('oc-overlay').classList.add('show');
   }
@@ -4214,7 +4225,9 @@
       monto: monto,
       estado: document.getElementById('ocm-estado').value || 'pendiente',
       notas: document.getElementById('ocm-notas').value.trim(),
-      who: whoName()
+      who: whoName(),
+      items: existing ? (existing.items||[]) : [],
+      entregaPrevista: document.getElementById('ocm-entrega').value || ''
     };
     if(isNew) state.ordenesCompra.push(o);
     else { var idx = state.ordenesCompra.findIndex(function(x){ return x.id===id; }); if(idx>=0) state.ordenesCompra[idx]=o; }
@@ -4258,7 +4271,8 @@
     return leerAnulacion(row, {
       id:row.id, numero:row.numero||0, proveedorId:row.proveedor_id||'', fecha:row.fecha||'',
       descripcion:row.descripcion||'', monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0,
-      estado:row.estado||'pendiente', notas:row.notas||'', who:row.who||''
+      estado:row.estado||'pendiente', notas:row.notas||'', who:row.who||'',
+      items: Array.isArray(row.items) ? row.items : [], entregaPrevista: row.entrega_prevista||''
     });
   }
   function mapCentroCostoRow(row){
@@ -4690,6 +4704,8 @@
     state.sb.from('facturas').select('tipo_comprobante,km,litros').limit(1).then(function(res){ if(!res.error) state.colDI = true; });
     // ¿Pagos parciales y anticipos (pagos-parciales-y-anticipos.sql)?
     state.sb.from('ordenes_pago').select('aplicaciones,anticipos_usados,tipo').limit(1).then(function(res){ if(!res.error) state.colAnticipos = true; });
+    // ¿Seguimiento de compras (seguimiento-compras.sql)? La OC guarda sus ítems y la entrega prevista.
+    state.sb.from('ordenes_compra').select('items,entrega_prevista').limit(1).then(function(res){ if(!res.error) state.colOCItems = true; });
     // ¿Existen las columnas de anulación (anulacion-comprobantes.sql)?
     state.sb.from('movimientos').select('anulado_en').limit(1).then(function(res){ if(!res.error) state.colAnulacion = true; });
     state.sb.from('gan_regimenes').select('*').then(function(res){
@@ -5175,13 +5191,13 @@
     mostrarSubtab(view, subtabActual(view));
   }
   // El submenú de cada pestaña vive en la segunda fila del menú (estilo RR.HH.).
-  ['compras','pagos','tesoreria','tableros'].forEach(function(v){
+  ['solicitudes','compras','pagos','tesoreria','tableros'].forEach(function(v){
     var bar = document.getElementById('subtabs-'+v);
     if(bar){ bar.hidden = true; document.getElementById('menu-sub').appendChild(bar); }
   });
   function actualizarMenuSub(v){
     var algun = false;
-    ['compras','pagos','tesoreria','tableros'].forEach(function(x){
+    ['solicitudes','compras','pagos','tesoreria','tableros'].forEach(function(x){
       var bar = document.getElementById('subtabs-'+x);
       if(!bar) return;
       bar.hidden = (x!==v) || !bar.children.length;
@@ -5189,7 +5205,7 @@
     });
     document.getElementById('menu-sub').hidden = !algun;
   }
-  ['compras','pagos','tesoreria'].forEach(armarSubtabs);
+  ['solicitudes','compras','pagos','tesoreria'].forEach(armarSubtabs);
   // Contadores al lado de cada submenú (lo pendiente de cada cosa).
   function actualizarSubtabs(){
     function cnt(view, sub, n){
@@ -7838,7 +7854,16 @@
     sugerir: sifSugerir, conMemoria: conMemoria, cerrarSugerenciaSi: sifCerrarSi, marcarFiltros: marcarFiltros,
     // Para los Dashboards: lo que Gestión ya tiene cargado y cómo leerlo
     datos: function(){ return { facturas: state.facturas, ordenesPago: state.ordenesPago, proveedores: state.proveedores, cuentas: state.cuentas,
-      movimientos: state.movimientos, cheques: state.cheques, routes: state.routes, trucks: state.trucks, branches: state.branches, facturasCargadas: !!state.facturasCargadas }; },
+      movimientos: state.movimientos, cheques: state.cheques, routes: state.routes, trucks: state.trucks, branches: state.branches, facturasCargadas: !!state.facturasCargadas,
+      ordenesCompra: state.ordenesCompra, articulos: state.articulos||[] }; },
+    // Seguimiento de compras (compras-seguimiento.js): órdenes de compra
+    ocNumeroLabel: ocNumeroLabel, ocEstadoLabel: ocEstadoLabel, nextOCNumero: nextOCNumero, colOCItems: function(){ return !!state.colOCItems; },
+    guardarOC: function(o){
+      var idx = state.ordenesCompra.findIndex(function(x){ return x.id===o.id; });
+      if(idx>=0) state.ordenesCompra[idx] = o; else state.ordenesCompra.push(o);
+      writeOC(o); renderCompras();
+    },
+    abrirOC: function(id){ openOCModal(id); }, cerrarOC: closeOCModal, quien: quienAnula, mostrarSubtab: mostrarSubtab, actualizarSubtabs: function(){ actualizarSubtabs(); }, renderCompras: function(){ renderCompras(); },
     esAnulado: esAnulado, facturaSaldo: function(f){ return facturaSaldo(f); }, opMontoSinAnticipos: opMontoSinAnticipos, facturaLineas: facturaLineas, ccRaiz: ccRaiz, ccNombre: ccNombre, ccRuta: ccRuta, proveedorNombre: proveedorNombre,
     labelForRoute: labelForRoute, branchLabel: branchLabel, cuentaSaldoActual: cuentaSaldoActual, cuentaSaldoProyectado: cuentaSaldoProyectado,
     fmtMoney: fmtMoney, AREAS: AREAS,
@@ -8340,6 +8365,7 @@
       document.getElementById('toolbar-'+v).hidden = true;
     });
     (VISTAS_CALIDAD||[]).forEach(function(v){ document.getElementById('view-'+v).hidden = true; });
+    document.getElementById('view-solicitudes').hidden = true;
     document.getElementById('menu-sub').hidden = true;
     refreshTabVisibility();
     renderHome();

@@ -339,6 +339,56 @@
   .oc-badge.parcial{background:color-mix(in srgb, var(--chart-driver) 22%, var(--surface)); color:var(--chart-driver); border:1px dashed color-mix(in srgb, var(--chart-driver) 55%, transparent);}
   .oc-badge.sin_pagar{background:var(--surface-2); color:var(--muted);}
   .oc-badge.anticipo{background:color-mix(in srgb, var(--chart-driver) 14%, var(--surface)); color:var(--chart-driver);}
+  /* Seguimiento de compras: solicitudes, recepciones y tablero (noviembre 2026) */
+  .oc-badge.cotizando{background:color-mix(in srgb, #7c3aed 14%, var(--surface)); color:#7c3aed;}
+  .oc-badge.en_compra, .oc-badge.comprada{background:color-mix(in srgb, var(--accent) 16%, var(--surface)); color:var(--accent);}
+  .oc-badge.entregada{background:color-mix(in srgb, var(--chart-route) 16%, var(--surface)); color:var(--chart-route);}
+  .oc-badge.rechazada{background:var(--surface-2); color:var(--muted);}
+  .oc-badge.demorada{background:color-mix(in srgb, var(--danger) 12%, var(--surface)); color:var(--danger); margin-left:4px;}
+  .oc-badge.urgente{background:color-mix(in srgb, #ea580c 14%, var(--surface)); color:#ea580c; margin-left:4px; font-size:10.5px; padding:1px 7px;}
+  .oc-badge.difs{background:color-mix(in srgb, var(--danger) 12%, var(--surface)); color:var(--danger);}
+  .oc-badge.ok{background:color-mix(in srgb, var(--chart-route) 16%, var(--surface)); color:var(--chart-route);}
+  .sol-add[hidden]{display:none;}
+  .field label.sc-check, .fbar-f .sc-check{text-transform:none; letter-spacing:0;}
+  .sc-check{display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:500; color:var(--ink-2); height:38px; cursor:pointer; text-transform:none; letter-spacing:0;}
+  .sol-urg{margin-top:20px;}
+  .sc-items-cell{font-size:12.5px; line-height:1.35;}
+  .sc-items-cell .mas{color:var(--muted);}
+  .sc-sub{display:block; font-size:11.5px; color:var(--muted); font-weight:400;}
+  .sol-items-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:10px;}
+  .sol-items{width:100%; border-collapse:collapse; font-size:12.5px;}
+  .sol-items th{background:var(--surface-2); text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); padding:7px 8px; white-space:nowrap;}
+  .sol-items th.n, .sol-items td.n{text-align:right;}
+  .sol-items td{padding:4px 6px; border-top:1px solid var(--border); vertical-align:middle;}
+  .sol-items input, .sol-items select{width:100%; min-width:0; padding:4px 8px; font-size:12.5px; height:34px; line-height:1.2;}
+  .sol-items select{padding-right:22px;}
+  .sol-items td.n{width:96px;} .sol-items td.pr, .sol-items td:has(> input.pr){width:110px;} .sol-items td:has(> select.u){width:116px;}
+  .sol-items .d{min-width:200px;} .sol-items .pv{min-width:160px;}
+  .sol-items .quitar{border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:16px; padding:0 6px;}
+  .sol-items .quitar:hover{color:var(--danger);}
+  .sol-items .rec{white-space:nowrap; font-size:12px;}
+  .sol-items .oc-link{color:var(--accent); cursor:pointer; text-decoration:underline; white-space:nowrap;}
+  .sol-items tr.cancelado td{opacity:.5; text-decoration:line-through;}
+  #sol-modal:not(.con-compras) .sol-c{display:none;}
+  .sol-add{margin-top:8px;}
+  .sol-compras{border:1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); background:color-mix(in srgb, var(--accent) 4%, var(--surface)); border-radius:12px; padding:10px 14px 2px; margin:6px 0 10px;}
+  .sol-compras[hidden], .sol-estado[hidden]{display:none;}
+  .sol-compras-h{font-weight:700; font-size:12.5px; margin-bottom:6px; color:var(--accent);}
+  .sol-estado{display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; font-size:12.5px; padding:8px 12px; border-radius:10px; background:var(--surface-2); margin-bottom:10px;}
+  .rec-resumen{font-size:12.5px; color:var(--ink-2); margin:4px 0 6px;}
+  .sg-kpis{grid-template-columns:repeat(4,1fr);}
+  .sg-kpis .kpi-tile::before{background:var(--area-color, #16a34a);}
+  .sg-kpis .kpi-tile.alerta::before{background:var(--danger);}
+  .sg-kpis .kpi-sub{font-size:11.5px; color:var(--muted); margin-top:4px;}
+  .sg-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .sg-card{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 14px; min-width:0;}
+  .sg-card.sg-full{grid-column:1 / -1;}
+  .sg-card h4{margin:0 0 2px; font-size:14px;}
+  .sg-card > p{margin:0 0 8px; font-size:12px; color:var(--muted);}
+  .sg-card .day-table{font-size:12.5px;}
+  .sg-vacio{font-size:12.5px; color:var(--muted); padding:6px 0;}
+  .sg-bar{display:inline-block; height:7px; border-radius:4px; background:var(--area-color, #16a34a); vertical-align:middle; margin-right:6px; opacity:.75;}
+  @media (max-width:760px){ .sg-grid{grid-template-columns:minmax(0,1fr);} .sg-kpis{grid-template-columns:repeat(2,1fr);} }
   .oc-pagos{font-size:12.5px; border:1px solid var(--border); border-radius:10px; padding:8px 12px; margin:4px 0 12px; background:var(--surface-2);}
   .oc-pagos .fila{display:flex; justify-content:space-between; gap:10px; padding:2px 0;}
   .oc-pagos .tot{border-top:1px solid var(--border); margin-top:4px; padding-top:4px; font-weight:600;}
@@ -1017,6 +1067,7 @@
     <button class="viewtab" id="tab-branches"><span class="vt-ico" aria-hidden="true">🏪</span>Sucursales</button>
     <button class="viewtab" id="tab-company"><span class="vt-ico" aria-hidden="true">🏢</span>Empresas</button>
     <button class="viewtab" id="tab-occasional"><span class="vt-ico" aria-hidden="true">📦</span>Eventuales</button>
+    <button class="viewtab" id="tab-solicitudes"><span class="vt-ico" aria-hidden="true">📝</span>Solicitudes</button>
     <button class="viewtab" id="tab-compras"><span class="vt-ico" aria-hidden="true">🛒</span>Compras</button>
     <button class="viewtab" id="tab-pagos"><span class="vt-ico" aria-hidden="true">💳</span>Pagos</button>
     <button class="viewtab" id="tab-tesoreria"><span class="vt-ico" aria-hidden="true">🏦</span>Tesorería</button>
@@ -1349,6 +1400,84 @@
       <div class="item">Hacé clic en un proveedor o una orden de compra para editarlo</div>
       <div class="item">Centros de costo y Conceptos se administran desde ⚙ → Compras</div>
     </div>
+  </div>
+
+  <div id="view-solicitudes" hidden>
+    <div class="settings-tabs subtabs" id="subtabs-solicitudes"></div>
+
+    <section class="subsec" data-sub="solicitudes" data-label="Solicitudes">
+    <div class="compras-section-head">
+      <h3>Solicitudes de compra <span class="prov-count" id="sc-count"></span></h3>
+      <div class="cal-acciones">
+        <button class="btn" id="sc-exportar" title="Descargar en el formato de la planilla RG-0708 (se abre con Excel)">⬇ RG-0708</button>
+        <button class="btn primary" id="sc-nueva">+ Nueva solicitud</button>
+      </div>
+    </div>
+    <div class="fbar">
+      <label class="fbar-f fbar-buscar"><span>Buscar</span><input type="search" id="sc-buscar" class="prov-search" placeholder="N°, insumo, proveedor..." autocomplete="off"></label>
+      <label class="fbar-f"><span>Estado</span><select id="sc-f-estado" class="scope-select">
+        <option value="abiertas">Abiertas</option>
+        <option value="demoradas">⏰ Demoradas</option>
+        <option value="pendiente">Pendiente</option>
+        <option value="cotizando">Cotizando</option>
+        <option value="en_compra">En compra</option>
+        <option value="comprada">Comprada (en camino)</option>
+        <option value="parcial">Recibida parcial</option>
+        <option value="entregada">Entregada</option>
+        <option value="rechazada">Rechazada</option>
+        <option value="anulada">Anulada</option>
+        <option value="">Todas</option>
+      </select></label>
+      <label class="fbar-f"><span>Sector</span><select id="sc-f-sector" class="scope-select"></select></label>
+      <label class="fbar-f sc-mias"><span>Solo</span><span class="sc-check"><input type="checkbox" id="sc-f-mias"> Las mías</span></label>
+    </div>
+    <div class="day-wrap">
+      <table class="day-table" id="sc-table">
+        <thead><tr><th>N°</th><th>Fecha</th><th>Sector</th><th>Pedido</th><th>Para</th><th>Proveedor / OC</th><th>Estado</th></tr></thead>
+        <tbody id="sc-body"></tbody>
+      </table>
+    </div>
+    <div class="fm-hint sc-nota" id="sc-sin-tablas" hidden>⚠ Falta correr <b>base-de-datos/seguimiento-compras.sql</b> en Supabase para guardar solicitudes y recepciones.</div>
+    </section>
+
+    <section class="subsec" data-sub="recepciones" data-label="Recepciones">
+    <div class="compras-section-head">
+      <h3>Recepciones <span class="prov-count" id="rc-count"></span></h3>
+      <div class="cal-acciones">
+        <button class="btn primary" id="rc-nueva">📦 Registrar recepción</button>
+      </div>
+    </div>
+    <div class="fm-hint" style="margin:-4px 0 10px;">Cada vez que llega mercadería de una orden de compra: qué llegó, con qué remito y si vino conforme. La orden queda <b>Recibida</b> sola cuando llega todo.</div>
+    <div class="day-wrap">
+      <table class="day-table" id="rc-table">
+        <thead><tr><th>N°</th><th>Fecha</th><th>Proveedor</th><th>OC</th><th>Remito</th><th>Qué llegó</th><th>Resultado</th><th>Factura</th></tr></thead>
+        <tbody id="rc-body"></tbody>
+      </table>
+    </div>
+    </section>
+
+    <section class="subsec" data-sub="seguimiento" data-label="Seguimiento">
+    <div class="compras-section-head">
+      <h3>Seguimiento de compras</h3>
+      <div class="cal-acciones">
+        <select id="sg-periodo" class="scope-select" aria-label="Período">
+          <option value="30">Últimos 30 días</option>
+          <option value="90" selected>Últimos 90 días</option>
+          <option value="365">Último año</option>
+          <option value="0">Todo</option>
+        </select>
+      </div>
+    </div>
+    <div class="kpi-grid sg-kpis" id="sg-kpis"></div>
+    <div class="sg-grid">
+      <section class="sg-card sg-full"><h4>⏰ Demoradas <span class="prov-count" id="sg-dem-n"></span></h4><p>Abiertas y pasadas de la fecha en que se necesitaban (o de la entrega prevista de la orden).</p><div id="sg-demoradas"></div></section>
+      <section class="sg-card"><h4>Por sector</h4><p>Solicitudes del período y tiempo de la solicitud a la entrega.</p><div id="sg-sectores"></div></section>
+      <section class="sg-card"><h4>Por proveedor</h4><p>Órdenes de compra del período: cuánto tardan en entregar y si cumplen.</p><div id="sg-proveedores"></div></section>
+      <section class="sg-card"><h4>📦 Recibido sin factura</h4><p>Órdenes con mercadería recibida y todavía sin factura asociada.</p><div id="sg-sin-factura"></div></section>
+      <section class="sg-card"><h4>🧾 Facturado sin recepción</h4><p>Facturas asociadas a una orden de compra que no tiene recepción registrada.</p><div id="sg-sin-recepcion"></div></section>
+      <section class="sg-card sg-full"><h4>⚠ Recepciones con diferencias</h4><p>Lo que llegó distinto de lo pedido (de más, dañado o equivocado).</p><div id="sg-diferencias"></div></section>
+    </div>
+    </section>
   </div>
 
   <div id="view-pagos" hidden>
@@ -2106,15 +2235,17 @@
         <div class="combo-menu" id="ocm-proveedor-menu" hidden></div>
       </div>
     </div>
-    <div class="crew-fields">
+    <div class="crew-fields crew-fields-3">
       <div class="field"><label for="ocm-fecha">Fecha</label><input type="date" id="ocm-fecha"></div>
       <div class="field"><label for="ocm-monto">Monto</label><input type="text" id="ocm-monto" inputmode="decimal" placeholder="0,00"></div>
+      <div class="field"><label for="ocm-entrega">Entrega prevista</label><input type="date" id="ocm-entrega"></div>
     </div>
     <div class="field">
       <label for="ocm-descripcion">Descripción</label>
       <textarea id="ocm-descripcion" placeholder="Qué se compra..."></textarea>
     </div>
     <div class="oc-pagos" id="ocm-pagos" hidden></div>
+    <div class="oc-pagos" id="ocm-recepciones" hidden></div>
     <div class="field">
       <label for="ocm-estado">Estado</label>
       <select id="ocm-estado">
@@ -2133,6 +2264,7 @@
         <button class="btn" id="ocm-delete" style="display:none; color:var(--danger);">Anular</button>
         <button class="btn" id="ocm-imprimir" style="display:none;">🖨 Imprimir</button>
         <button class="btn edit-action" id="ocm-anticipo" style="display:none;" title="Pagar una parte (o todo) antes de que llegue la factura">💸 Pago anticipado</button>
+        <button class="btn" id="ocm-recibir" style="display:none;" title="Registrar lo que llegó de esta orden (total o parcial)">📦 Registrar recepción</button>
       </div>
       <button class="btn primary" id="ocm-save">Guardar</button>
     </div>
@@ -2727,6 +2859,105 @@
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="config.js"></script>
+<div class="overlay" id="sol-overlay">
+  <div class="modal wide modal-lg" id="sol-modal">
+    <h3 id="sol-title">Nueva solicitud de compra</h3>
+    <div class="sub" id="sol-sub">Lo que necesita el sector. Compras la toma, elige el proveedor y genera la orden de compra.</div>
+    <div class="modal-scroll-body">
+    <div class="sol-estado" id="sol-estado" hidden></div>
+    <div class="crew-fields crew-fields-3">
+      <div class="field"><label for="sol-sector">Sector</label><select id="sol-sector"></select></div>
+      <div class="field"><label for="sol-para">Se necesita para</label><input type="date" id="sol-para"></div>
+      <div class="field"><label class="sc-check sol-urg"><input type="checkbox" id="sol-urgente"> 🔥 Urgente</label></div>
+    </div>
+    <div class="field">
+      <label>Qué se necesita</label>
+      <div class="sol-items-wrap"><table class="sol-items" id="sol-items">
+        <thead><tr><th>Insumo / descripción</th><th class="n">Cantidad</th><th>Unidad</th><th class="sol-c">Proveedor</th><th class="sol-c n">Precio unit.</th><th class="sol-c">Orden de compra</th><th>Recibido</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <button type="button" class="btn sol-add" id="sol-add">+ Agregar ítem</button>
+      <datalist id="sol-art-list"></datalist>
+      <datalist id="sol-prov-list"></datalist>
+    </div>
+    <div class="field">
+      <label for="sol-motivo">Para qué / observaciones</label>
+      <textarea id="sol-motivo" placeholder="Ej.: repuesto para la sopladora 2, se rompió el..."></textarea>
+    </div>
+    <div class="sol-compras" id="sol-compras" hidden>
+      <div class="sol-compras-h">🛒 Compras</div>
+      <div class="crew-fields crew-fields-3">
+        <div class="field"><label for="sol-estado-sel">Estado</label><select id="sol-estado-sel">
+          <option value="pendiente">Pendiente</option>
+          <option value="cotizando">Cotizando</option>
+          <option value="rechazada">Rechazada (no se compra)</option>
+        </select></div>
+        <div class="field"><label for="sol-entrega">Entrega prevista</label><input type="date" id="sol-entrega"></div>
+        <div class="field"><label>&nbsp;</label><button type="button" class="btn primary" id="sol-generar-oc" title="Una orden por proveedor con los ítems que tienen proveedor y todavía no tienen orden">🧾 Generar orden de compra</button></div>
+      </div>
+      <div class="field">
+        <label for="sol-notas-compras">Notas de Compras</label>
+        <textarea id="sol-notas-compras" placeholder="Cotizaciones pedidas, plazos, lo que contestó el proveedor..."></textarea>
+      </div>
+    </div>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="sol-cancel">Cerrar</button>
+        <button class="btn" id="sol-anular" style="display:none; color:var(--danger);">Anular</button>
+        <button class="btn" id="sol-imprimir" style="display:none;">🖨 Imprimir</button>
+      </div>
+      <button class="btn primary" id="sol-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="rec-overlay">
+  <div class="modal wide modal-lg" id="rec-modal">
+    <h3 id="rec-title">Registrar recepción</h3>
+    <div class="sub" id="rec-sub">Lo que llegó de la orden de compra</div>
+    <div class="modal-scroll-body">
+    <div class="crew-fields">
+      <div class="field"><label for="rec-oc">Orden de compra</label><select id="rec-oc"></select></div>
+      <div class="field"><label for="rec-fecha">Fecha en que llegó</label><input type="date" id="rec-fecha"></div>
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label for="rec-remito">N° de remito</label><input type="text" id="rec-remito" placeholder="0001-00001234" autocomplete="off"></div>
+      <div class="field"><label for="rec-recibio">Recibió</label><input type="text" id="rec-recibio" autocomplete="off"></div>
+    </div>
+    <div class="field">
+      <label>Qué llegó</label>
+      <div class="sol-items-wrap"><table class="sol-items" id="rec-items">
+        <thead><tr><th>Ítem</th><th class="n">Pedido</th><th class="n">Ya recibido</th><th class="n">Llegó ahora</th><th>Nota</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <button type="button" class="btn sol-add" id="rec-add" hidden>+ Agregar ítem</button>
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label class="sc-check"><input type="checkbox" id="rec-difs"> ⚠ Vino con diferencias (dañado, equivocado, de más)</label></div>
+      <div class="field"><label class="sc-check"><input type="checkbox" id="rec-cierra"> No llega lo que falta: dar la orden por completa</label></div>
+    </div>
+    <div class="field">
+      <label for="rec-obs">Observaciones</label>
+      <textarea id="rec-obs" placeholder="Estado de la mercadería, faltantes, lo que se habló con el proveedor..."></textarea>
+    </div>
+    <div class="field">
+      <label for="rec-archivo">Foto o PDF del remito (opcional)</label>
+      <input type="file" id="rec-archivo" accept="image/*,application/pdf">
+      <div class="fm-hint" id="rec-archivos"></div>
+    </div>
+    <div class="rec-resumen" id="rec-resumen"></div>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="rec-cancel">Cerrar</button>
+        <button class="btn" id="rec-anular" style="display:none; color:var(--danger);">Anular</button>
+      </div>
+      <button class="btn primary" id="rec-save">Guardar recepción</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="anular-overlay">
   <div class="modal" style="max-width:440px;">
     <h3 id="anul-title">Anular comprobante</h3>
@@ -2863,6 +3094,7 @@
 
 <script src="app.js"></script>
 <script src="calidad.js"></script>
+<script src="compras-seguimiento.js"></script>
 <script src="tableros.js"></script>
 <script src="ayuda.js" defer></script>
 </body>
