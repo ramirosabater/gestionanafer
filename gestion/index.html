@@ -476,6 +476,73 @@
   .area-card p{margin:0; font-size:12.5px; color:var(--ink-2); line-height:1.45;}
   .area-card .go{margin-top:14px; font-size:12.5px; font-weight:700; color:var(--ac);}
   .area-card[disabled]{opacity:.55; cursor:default; transform:none;}
+  /* ⚙ → Acceso (noviembre 2026): usuarios, perfiles y excepciones */
+  #usr-overlay{z-index:60;}
+  .acc-tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; padding:4px; background:var(--menu-sub-bg); border:1px solid var(--menu-line); border-radius:12px; width:max-content; max-width:100%;}
+  .acc-tabs button{border:none; background:transparent; font:inherit; font-size:13px; font-weight:600; color:var(--menu-ink2); padding:7px 14px; border-radius:9px; cursor:pointer;}
+  .acc-tabs button.on{background:var(--surface); color:var(--menu-navy); box-shadow:0 1px 3px rgba(31,45,56,.12);}
+  .acc-n{font-weight:500; color:var(--muted); margin-left:2px;}
+  #stab-auth section[hidden], .acc-aviso[hidden], .acc-clave[hidden], #usr-pass-box[hidden], #usr-activo-box[hidden]{display:none;}
+  .acc-intro{font-size:13px; color:var(--ink-2); margin:0 0 12px; line-height:1.45;}
+  .acc-barra{display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap;}
+  .acc-barra .prov-search{flex:1 1 240px; width:auto;}
+  .acc-aviso{font-size:12.5px; padding:9px 12px; border-radius:10px; margin-bottom:10px; background:color-mix(in srgb, #d48f00 12%, var(--surface)); border:1px solid color-mix(in srgb, #d48f00 35%, transparent); line-height:1.6;}
+  .acc-aviso.suave{background:var(--surface-2); border-color:var(--border);}
+  .acc-link{border:none; background:transparent; color:var(--accent); font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; padding:0 4px; text-decoration:underline;}
+  .acc-tabla-wrap{border:1px solid var(--border); border-radius:12px; overflow:auto;}
+  .acc-tabla{width:100%; border-collapse:collapse; font-size:13px;}
+  .acc-tabla th{text-align:left; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); background:var(--surface-2); padding:9px 12px; white-space:nowrap;}
+  .acc-tabla td{padding:9px 12px; border-top:1px solid var(--border); vertical-align:middle;}
+  .acc-tabla tbody tr{cursor:pointer;}
+  .acc-tabla tbody tr:hover td{background:color-mix(in srgb, var(--accent) 5%, transparent);}
+  .acc-tabla tr.inactivo td{opacity:.55;}
+  .acc-vacio{color:var(--muted); font-size:13px; padding:14px; text-align:center; cursor:default;}
+  .acc-persona{display:flex; align-items:center; gap:10px; min-width:200px;}
+  .acc-persona b{display:block; font-weight:600;}
+  .acc-persona small{display:block; color:var(--muted); font-size:11.5px;}
+  .acc-av{flex:0 0 32px; width:32px; height:32px; border-radius:50%; display:grid; place-items:center; font-size:12px; font-weight:700; color:#fff; background:var(--area-color, #223c7e);}
+  .acc-pill{display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; background:color-mix(in srgb, var(--accent) 12%, var(--surface)); color:var(--accent); white-space:nowrap;}
+  .acc-pill.admin{background:color-mix(in srgb, #7c3aed 14%, var(--surface)); color:#7c3aed;}
+  .acc-pill.mal{background:color-mix(in srgb, var(--danger) 12%, var(--surface)); color:var(--danger);}
+  .acc-chip{display:inline-block; padding:2px 8px; border-radius:6px; font-size:11.5px; background:var(--surface-2); border:1px solid var(--border); margin:1px 0; white-space:nowrap;}
+  .acc-chip.n-editar{border-color:color-mix(in srgb, var(--chart-route) 45%, transparent); color:var(--chart-route);}
+  .acc-chip.n-ver{border-color:color-mix(in srgb, var(--accent) 45%, transparent); color:var(--accent);}
+  .acc-chip.n-oculta{color:var(--muted); text-decoration:line-through;}
+  .acc-tenue{color:var(--muted); font-size:12px;}
+  .acc-estado{font-size:12px; font-weight:600;}
+  .acc-estado::before{content:''; display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; background:var(--chart-route);}
+  .acc-estado.off{color:var(--muted);} .acc-estado.off::before{background:var(--muted);}
+  .acc-perfiles{display:grid; grid-template-columns:240px 1fr; gap:16px; align-items:start;}
+  .acc-pf-lista{display:flex; flex-direction:column; gap:6px;}
+  .acc-pf{display:block; width:100%; text-align:left; border:1px solid var(--border); background:var(--surface); border-radius:10px; padding:9px 12px; cursor:pointer; font:inherit; color:var(--ink); margin-bottom:6px;}
+  .acc-pf b{display:block; font-size:13px;} .acc-pf small{color:var(--muted); font-size:11.5px;}
+  .acc-pf.on{border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);}
+  .acc-pf-nuevo{width:100%;}
+  .acc-pf-editor{border:1px solid var(--border); border-radius:12px; padding:14px 16px; background:var(--surface); min-width:0;}
+  .acc-pf-top{display:grid; grid-template-columns:1fr auto; gap:12px; align-items:end; margin-bottom:6px;}
+  .acc-check{display:flex; align-items:center; gap:7px; font-size:13px; font-weight:500; color:var(--ink-2); cursor:pointer; text-transform:none; letter-spacing:0;}
+  .field label.acc-check{text-transform:none; letter-spacing:0; font-size:13px;}
+  .acc-pf-top .acc-check{margin-bottom:12px;}
+  .acc-pf-usu{font-size:12.5px; margin:12px 0 4px;}
+  .acc-pf-acc{display:flex; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border);}
+  .acc-area{display:flex; align-items:center; gap:8px; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin:14px 0 4px;}
+  .acc-area span{width:8px; height:8px; border-radius:2px;}
+  .acc-perm{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 10px; border-radius:9px;}
+  .acc-perm:nth-child(even){background:color-mix(in srgb, var(--surface-2) 55%, transparent);}
+  .acc-perm.ex{background:color-mix(in srgb, #d48f00 13%, var(--surface)); box-shadow:inset 3px 0 0 #d48f00;}
+  .acc-perm-l{font-size:13px;} .acc-perm-l small{display:block; font-size:11px; color:#a86f00;}
+  .acc-seg{display:inline-flex; border:1px solid var(--border); border-radius:9px; overflow:hidden; flex:0 0 auto; background:var(--surface);}
+  .acc-seg button{border:none; background:transparent; font:inherit; font-size:12px; font-weight:600; padding:5px 12px; cursor:pointer; color:var(--muted); border-left:1px solid var(--border);}
+  .acc-seg button:first-child{border-left:none;}
+  .acc-seg button.base:not(.on){color:var(--ink-2); text-decoration:underline dotted;}
+  .acc-seg button.on.n-oculta{background:var(--surface-2); color:var(--ink);}
+  .acc-seg button.on.n-ver{background:color-mix(in srgb, var(--accent) 16%, var(--surface)); color:var(--accent);}
+  .acc-seg button.on.n-editar{background:color-mix(in srgb, var(--chart-route) 18%, var(--surface)); color:var(--chart-route);}
+  .acc-nota{font-size:12.5px; color:var(--ink-2); background:var(--surface-2); border-radius:10px; padding:8px 12px; margin:4px 0 6px;}
+  .acc-h4{margin:14px 0 6px; font-size:14px;}
+  .acc-pass{display:flex; gap:6px;} .acc-pass input{flex:1; min-width:0;}
+  .acc-clave{display:flex; gap:8px; margin:4px 0 10px;} .acc-clave input{flex:1;}
+  @media (max-width:760px){ .acc-perfiles{grid-template-columns:minmax(0,1fr);} .acc-pf-top{grid-template-columns:1fr;} .acc-perm{flex-wrap:wrap;} }
   .usuarios-box{margin-top:22px; padding-top:14px; border-top:1px solid var(--border);}
   .usuarios-box h4{margin:0 0 4px; font-size:14px;}
   .usuario-row{display:grid; grid-template-columns:1fr 170px auto; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px;}
@@ -2696,7 +2763,7 @@
           <button class="stabbtn" id="stabbtn-calidad-listas">Listas de calidad</button>
         </div>
         <div class="settings-tabs settings-subtabs" id="settings-subtabs-acceso" hidden>
-          <button class="stabbtn" id="stabbtn-auth">Perfiles y permisos</button>
+          <button class="stabbtn" id="stabbtn-auth">Usuarios y permisos</button>
         </div>
 
         <div class="settings-body">
@@ -2802,28 +2869,44 @@
           <div id="cal-listas" class="cal-listas"></div>
         </div>
         <div id="stab-auth" hidden>
-          <div class="sub" style="margin-bottom:14px;">Cada perfil tiene sus propios permisos por pestaña; a cada persona se le asigna un perfil en Usuarios (más abajo). "Ver" deja mirar esa pestaña sin poder crear, editar ni borrar nada ahí; "Editar" da acceso completo. Los cambios se guardan recién al tocar "Guardar perfiles".</div>
-          <div id="roles-list"></div>
-          <div class="addrow"><button class="btn" id="add-role-btn">+ Nuevo perfil</button></div>
-          <div class="modal-actions"><div></div><button class="btn primary" id="auth-save-btn">Guardar perfiles</button></div>
-          <div class="usuarios-box">
-            <h4>Usuarios</h4>
-            <div class="sub" style="margin-bottom:10px;">Cada persona entra con su email y su contraseña, y ve lo que le permite su perfil. "Solo Comercial" es para quien solo usa el tablero comercial.</div>
-            <div id="usuarios-msg" class="sub"></div>
-            <div id="usuarios-list"></div>
-            <div class="usuario-add" id="usuario-add">
-              <input type="text" id="nu-email" placeholder="email" autocapitalize="off" spellcheck="false">
-              <input type="text" id="nu-password" placeholder="contraseña inicial (mín. 6)">
-              <select id="nu-perfil"></select>
-              <button class="btn" id="nu-add">+ Agregar usuario</button>
-            </div>
+          <div class="acc-tabs" id="acc-tabs" role="tablist">
+            <button type="button" data-acc="usuarios" class="on">👤 Usuarios <span class="acc-n" id="acc-n-usuarios"></span></button>
+            <button type="button" data-acc="perfiles">🔑 Perfiles</button>
+            <button type="button" data-acc="drive">📁 Archivos en Drive</button>
           </div>
+
+          <section data-accsec="usuarios">
+            <div class="acc-intro">Cada persona entra con su <b>email y contraseña</b> y ve lo que le permite su <b>perfil</b>. Si a alguien le hace falta algo distinto, le agregás una <b>excepción</b> solo a esa persona.</div>
+            <div class="acc-barra">
+              <input type="search" id="acc-buscar" class="prov-search" placeholder="Buscar por nombre, email o perfil..." autocomplete="off">
+              <button type="button" class="btn primary" id="acc-nuevo">+ Nuevo usuario</button>
+            </div>
+            <div class="acc-aviso" id="acc-sin-anotar" hidden></div>
+            <div class="acc-aviso suave" id="acc-sin-funcion" hidden>ⓘ Para crear las cuentas y cambiar contraseñas desde acá falta publicar la función <b>usuarios-admin</b> en Supabase (ver base-de-datos/USUARIOS.md). Mientras tanto, la cuenta se crea en Supabase y acá se le asigna el perfil.</div>
+            <div class="sub" id="acc-msg"></div>
+            <div class="acc-tabla-wrap"><table class="acc-tabla">
+              <thead><tr><th>Persona</th><th>Perfil</th><th>Excepciones</th><th>Último ingreso</th><th>Estado</th></tr></thead>
+              <tbody id="acc-usuarios"></tbody>
+            </table></div>
+          </section>
+
+          <section data-accsec="perfiles" hidden>
+            <div class="acc-intro">Un perfil es un <b>conjunto de permisos</b> que comparten varias personas (Compras, Jefe de sector, RR.HH.…). <b>Oculta</b>: no la ve. <b>Ver</b>: mira sin cambiar nada. <b>Editar</b>: acceso completo.</div>
+            <div class="acc-perfiles">
+              <aside class="acc-pf-lista"><div id="acc-perfiles-lista"></div><button type="button" class="btn acc-pf-nuevo" id="acc-nuevo-perfil">+ Nuevo perfil</button></aside>
+              <div class="acc-pf-editor" id="acc-perfil-editor"></div>
+            </div>
+          </section>
+
+          <section data-accsec="drive" hidden>
           <div class="usuarios-box" id="adj-mig-box">
             <h4>Archivos en Google Drive</h4>
             <div class="sub" style="margin-bottom:10px;">Todos los adjuntos (facturas, proveedores, fotos de Calidad, legajos) se guardan en la unidad compartida <b>Gestión Anafer</b>, con una carpeta por módulo. Cada uno los abre desde la app según su perfil.</div>
             <div class="sub" id="adj-mig-msg"></div>
             <button class="btn" id="adj-mig-btn" hidden>Pasar los adjuntos viejos a la unidad compartida</button>
           </div>
+          </section>
+
         </div>
         </div>
       </div>
@@ -2954,6 +3037,41 @@
         <button class="btn" id="rec-anular" style="display:none; color:var(--danger);">Anular</button>
       </div>
       <button class="btn primary" id="rec-save">Guardar recepción</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="usr-overlay">
+  <div class="modal wide modal-lg" id="usr-modal">
+    <h3 id="usr-title">Nuevo usuario</h3>
+    <div class="sub" id="usr-sub"></div>
+    <div class="modal-scroll-body">
+    <div class="crew-fields">
+      <div class="field"><label for="usr-email">Email</label><input type="email" id="usr-email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="nombre@anafer.com.ar"></div>
+      <div class="field"><label for="usr-nombre">Nombre</label><input type="text" id="usr-nombre" autocomplete="off" placeholder="Nombre y apellido"></div>
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label for="usr-perfil">Perfil</label><select id="usr-perfil"></select></div>
+      <div class="field" id="usr-pass-box"><label for="usr-pass">Contraseña inicial</label>
+        <div class="acc-pass"><input type="text" id="usr-pass" autocomplete="new-password" placeholder="mínimo 8 caracteres"><button type="button" class="btn" id="usr-generar">Generar</button></div>
+        <div class="fm-hint">Pasásela a la persona; después la puede cambiar.</div></div>
+      <div class="field" id="usr-activo-box"><label>Estado</label><label class="acc-check"><input type="checkbox" id="usr-activo"> Activo (si lo destildás, no puede entrar)</label></div>
+    </div>
+    <div class="acc-aviso suave" id="usr-sin-funcion" hidden>ⓘ La función <b>usuarios-admin</b> no está publicada: se anota el usuario y la cuenta la tenés que crear en Supabase → Authentication → Users → Add user ("Auto Confirm User" tildado).</div>
+    <div class="acc-clave" id="usr-clave-box" hidden>
+      <input type="text" id="usr-clave-nueva" autocomplete="new-password" placeholder="Contraseña nueva (mínimo 8)">
+      <button type="button" class="btn primary" id="usr-clave-ok">Cambiar contraseña</button>
+    </div>
+    <h4 class="acc-h4">Qué puede usar</h4>
+    <div class="acc-nota" id="usr-permisos-nota"></div>
+    <div id="usr-permisos"></div>
+    </div>
+    <div class="modal-actions">
+      <div class="left">
+        <button class="btn" id="usr-cancel">Cerrar</button>
+        <button class="btn" id="usr-cambiar-clave" style="display:none;">🔒 Cambiar contraseña</button>
+      </div>
+      <button class="btn primary" id="usr-save">Guardar</button>
     </div>
   </div>
 </div>

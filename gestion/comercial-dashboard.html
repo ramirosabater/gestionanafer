@@ -304,8 +304,10 @@ function onSession(session){
         const cfg=await sb.from('app_config').select('roles').eq('id','auth');
         const roles=((cfg.data||[])[0]||{}).roles||[];
         const r=roles.find(x=>x.id===row.perfil);
-        permiso = !r ? 'oculta' : ((r.permisos&&r.permisos.comercial) || (r.manageAccess?'editar':'oculta'));
+        permiso = !r ? 'oculta' : r.manageAccess ? 'editar' : ((row.permisos_extra&&row.permisos_extra.comercial) || (r.permisos&&r.permisos.comercial) || 'oculta');
       }catch(e){ permiso='oculta'; }
+    } else if(row && row.permisos_extra && row.permisos_extra.comercial){
+      permiso=row.permisos_extra.comercial;   // excepción de la persona (⚙ → Acceso → Usuarios)
     }
     if(row && row.activo!==false && permiso==='oculta'){
       const done2=function(){

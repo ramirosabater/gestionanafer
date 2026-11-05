@@ -30,6 +30,8 @@
         { t: "Acá elegís el área: Logística, Administración, Calidad, Comercial o Recursos Humanos. Solo ves las que tu perfil tiene habilitadas.", foco: "#home-grid" },
         { t: "Desde cualquier área, <b>⌂ Inicio</b> te trae de vuelta a esta pantalla.", foco: "#home-btn" },
         { t: "El <b>⚙</b> abre la configuración: listas, perfiles y usuarios (si tu perfil lo permite).", foco: "#settings-btn" },
+        { t: "Para dar de alta a alguien: <b>⚙ → Acceso → Usuarios y permisos → + Nuevo usuario</b>. Ponés email, nombre, perfil y una contraseña inicial (o <b>Generar</b>), y ya puede entrar. No hace falta entrar a Supabase." },
+        { t: "Si a una persona le hace falta algo distinto de su perfil (por ejemplo, que además vea Tesorería), abrila en Usuarios y tocá el nivel que necesita: queda como <b>excepción</b> solo para ella, resaltada. Los <b>Perfiles</b> se arman en la otra pestaña, para todos los que comparten el mismo puesto." },
         { t: "Mientras trabajás, a veces aparezco solo con una <b>sugerencia</b>: un viaje que se repite, una factura que no llegó o que parece repetida, cómo le pagás siempre a un proveedor. Me acuerdo de lo que me contestás: si me decís <b>No me lo preguntes más</b>, no insisto." },
         { t: "En la pantalla de ingreso hay dos accesos para empleados, con su legajo y PIN: <b>Fichá acá</b> y <b>Reclamos y acciones de mejora</b> (para los que Calidad habilitó)." },
         { t: "Y <b>Salir</b> cierra tu sesión y te lleva a la pantalla de ingreso, estés donde estés (también en Comercial y en el panel de RR.HH.). ¡Cuando entres a un área, tocame de nuevo y te muestro sus circuitos!", foco: "#logout-btn" },

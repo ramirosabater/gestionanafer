@@ -66,12 +66,15 @@ export async function permisoRRHH() {
     if (!r.ok) return "editar";
     const filas = await r.json();
     const fila = filas[0];
-    if (!fila || fila.activo === false || !fila.perfil) return "oculta";
+    if (!fila || fila.activo === false) return "oculta";
+    const extra = (fila.permisos_extra && fila.permisos_extra.rrhh) || null; // excepción de la persona
+    if (!fila.perfil) return extra || "oculta";
     const c = await sbFetch("app_config?select=roles&id=eq.auth");
     const roles = ((await c.json())[0] || {}).roles || [];
     const rol = roles.find((x) => x.id === fila.perfil);
     if (!rol) return "oculta";
-    return (rol.permisos && rol.permisos.rrhh) || (rol.manageAccess ? "editar" : "oculta");
+    if (rol.manageAccess) return "editar";
+    return extra || (rol.permisos && rol.permisos.rrhh) || "oculta";
   } catch { return "editar"; }
 }
 

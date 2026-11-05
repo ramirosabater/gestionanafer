@@ -269,6 +269,9 @@
   function tabPermiso(tabId){
     var r = currentRole();
     if(!r) return 'oculta';
+    // Excepciones de la persona (⚙ → Acceso → Usuarios): mandan sobre el perfil
+    var ex = state.permisosExtra || {};
+    if(!r.manageAccess && ex[tabId]) return ex[tabId];
     // Solicitudes de compra (noviembre 2026): si el perfil no dice nada, usa
     // el permiso de Compras (los jefes de sector la tienen sola, en "Editar").
     if(tabId==='solicitudes' && !(r.permisos && r.permisos.solicitudes) && !r.manageAccess) return tabPermiso('compras');
@@ -2573,93 +2576,405 @@
     if(canManageAccess()) renderAccesoSettings();
   }
 
-  function buildRoleCard(role){
-    var card = document.createElement('div');
-    card.className = 'role-card';
-    card.dataset.roleId = role.id;
-
-    var top = document.createElement('div');
-    top.className = 'role-card-top';
-    var nombreInp = document.createElement('input');
-    nombreInp.type = 'text'; nombreInp.className = 'role-nombre'; nombreInp.maxLength = 40;
-    nombreInp.placeholder = 'Nombre del perfil'; nombreInp.value = role.nombre || '';
-    var pwInp = document.createElement('input');
-    pwInp.type = 'text'; pwInp.className = 'role-password'; pwInp.maxLength = 60;
-    pwInp.placeholder = 'Contraseña (ingreso anterior, opcional)'; pwInp.value = role.password || '';
-    pwInp.title = 'Solo para el ingreso anterior por contraseña de perfil. Con el ingreso por email no hace falta.';
-    pwInp.style.display = 'none'; pwInp.value = '';   // ingreso por contraseña de perfil eliminado
-    top.appendChild(nombreInp); top.appendChild(pwInp);
-    card.appendChild(top);
-
-    var manageRow = document.createElement('label');
-    manageRow.className = 'role-manage-row';
-    var manageChk = document.createElement('input');
-    manageChk.type = 'checkbox'; manageChk.className = 'role-manage-access';
-    manageChk.checked = !!role.manageAccess;
-    manageRow.appendChild(manageChk);
-    manageRow.appendChild(document.createTextNode('Puede administrar perfiles y contraseñas (⚙ Acceso)'));
-    card.appendChild(manageRow);
-
-    var grid = document.createElement('div');
-    grid.className = 'role-permisos-grid';
-    var tabArea = {};
+  // ---------- ⚙ → Acceso: usuarios, perfiles y excepciones ----------
+  // Cada persona tiene un PERFIL (Compras, Jefe de sector…) y, si le hace
+  // falta algo distinto, EXCEPCIONES solo para ella (usuarios.permisos_extra,
+  // ver base-de-datos/permisos-por-usuario.sql). Las cuentas (email +
+  // contraseña) se crean con la función del servidor "usuarios-admin"; si
+  // todavía no está publicada, se anota el usuario y se avisa que la cuenta
+  // hay que crearla en Supabase.
+  var NIVELES_ACC = [{v:'oculta', t:'Oculta'}, {v:'ver', t:'Ver'}, {v:'editar', t:'Editar'}];
+  var acc = {seccion:'usuarios', usuarios:[], cuentas:null, funcion:null, perfilSel:null, perfilEdit:null, usrEdit:null, q:''};
+  function permisoGrupos(){
+    var tabArea = {}, grupos = [];
     AREAS.forEach(function(a){ a.tabs.forEach(function(t){ if(!tabArea[t]) tabArea[t] = a; }); });
-    var ordenTabs = [];
-    AREAS.forEach(function(a){ a.tabs.forEach(function(t){ if(ordenTabs.indexOf(t)===-1 && tabArea[t]===a) ordenTabs.push(t); }); });
-    var areaPrev = null;
-    ordenTabs.map(function(id){ return TAB_DEFS.find(function(t){ return t.id===id; }); }).filter(Boolean).forEach(function(t){
-      if(tabArea[t.id]!==areaPrev){
-        areaPrev = tabArea[t.id];
-        var h = document.createElement('div');
-        h.className = 'role-area-head';
-        h.textContent = areaPrev.label+(t.id==='dashboard' ? '' : '');
-        grid.appendChild(h);
-      }
-      var lbl = document.createElement('div');
-      lbl.className = 'role-permiso-row';
-      lbl.textContent = t.id==='dashboard' ? 'Dashboard (Viajes en Logística, Gastos en Administración)' : t.label;
-      var sel = document.createElement('select');
-      sel.className = 'role-permiso-select';
-      sel.dataset.tab = t.id;
-      sel.innerHTML = '<option value="oculta">Oculta</option><option value="ver">Ver</option><option value="editar">Editar</option>';
-      sel.value = (role.permisos && role.permisos[t.id]) || ((t.id==='comercial' || t.id==='rrhh') && role.manageAccess ? 'editar' : 'oculta');
-      grid.appendChild(lbl); grid.appendChild(sel);
+    AREAS.forEach(function(a){
+      var tabs = a.tabs.filter(function(t){ return tabArea[t]===a; }).map(function(id){ return TAB_DEFS.find(function(t){ return t.id===id; }); }).filter(Boolean);
+      if(tabs.length) grupos.push({area:a, tabs:tabs.map(function(t){
+        return {id:t.id, label: t.id==='dashboard' ? 'Dashboard (Viajes y Gastos)' : t.label}; })});
     });
-    card.appendChild(grid);
-
-    var delBtn = document.createElement('button');
-    delBtn.className = 'btn ghost role-card-del';
-    delBtn.textContent = 'Eliminar perfil';
-    delBtn.addEventListener('click', function(){ card.remove(); });
-    card.appendChild(delBtn);
-
-    return card;
+    return grupos;
+  }
+  function tabLabelCorto(id){
+    var t = TAB_DEFS.find(function(x){ return x.id===id; });
+    return id==='dashboard' ? 'Dashboard' : (t ? t.label : id);
+  }
+  // Lo que da el perfil (sin excepciones), con las mismas reglas que tabPermiso
+  function nivelPerfil(role, tabId, extras){
+    if(!role) return tabId==='comercial' ? 'editar' : 'oculta';
+    if(role.manageAccess) return 'editar';
+    var p = role.permisos && role.permisos[tabId];
+    if(p) return p;
+    if(tabId==='solicitudes') return (extras && extras.compras) || nivelPerfil(role, 'compras');
+    return 'oculta';
+  }
+  function roleById(id){ return (state.auth.roles||[]).find(function(r){ return r.id===id; }) || null; }
+  function iniciales(u){
+    var n = (u.nombre || u.email || '?').replace(/@.*/, '').split(/[\s._-]+/).filter(Boolean);
+    return ((n[0]||'?')[0] + (n[1] ? n[1][0] : '')).toUpperCase();
+  }
+  function fechaRel(iso){
+    if(!iso) return '';
+    var d = new Date(iso); if(isNaN(d)) return '';
+    var dias = Math.floor((Date.now()-d.getTime())/86400000);
+    if(dias<=0) return 'hoy';
+    if(dias===1) return 'ayer';
+    if(dias<30) return 'hace '+dias+' días';
+    return d.toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit', year:'2-digit'});
+  }
+  function segmentado(nivel, base, onChange){
+    var box = document.createElement('div');
+    box.className = 'acc-seg';
+    NIVELES_ACC.forEach(function(n){
+      var b = document.createElement('button');
+      b.type = 'button'; b.dataset.v = n.v; b.textContent = n.t;
+      b.className = 'n-'+n.v+(n.v===nivel ? ' on' : '')+(base && n.v===base ? ' base' : '');
+      if(base) b.title = n.v===base ? 'Lo que da el perfil' : '';
+      b.addEventListener('click', function(){ onChange(n.v); });
+      box.appendChild(b);
+    });
+    return box;
+  }
+  function usuariosAdmin(body){
+    return state.sb.functions.invoke('usuarios-admin', {body: body}).then(function(r){
+      if(r.error){
+        var st = r.error.context && r.error.context.status;
+        if(st===404 || /not found|failed to send|fetch/i.test(r.error.message||'')){ acc.funcion = false; return {sinFuncion:true}; }
+        return (r.error.context && r.error.context.json ? r.error.context.json().catch(function(){ return {}; }) : Promise.resolve({})).then(function(j){
+          throw new Error((j && j.error) || r.error.message || 'error');
+        });
+      }
+      acc.funcion = true;
+      if(r.data && r.data.error) throw new Error(r.data.error);
+      return r.data || {};
+    });
   }
 
   function renderAccesoSettings(){
-    var list = document.getElementById('roles-list');
-    if(!list) return;
-    list.innerHTML = '';
-    (state.auth.roles||[]).forEach(function(role){
-      list.appendChild(buildRoleCard(role));
-    });
-    renderUsuarios();
+    if(!document.getElementById('acc-usuarios')) return;
+    document.querySelectorAll('#acc-tabs button').forEach(function(b){ b.classList.toggle('on', b.dataset.acc===acc.seccion); });
+    document.querySelectorAll('#stab-auth [data-accsec]').forEach(function(s){ s.hidden = s.dataset.accsec!==acc.seccion; });
+    cargarUsuariosAcc();
+    renderPerfilesAcc();
     renderAdjMig();
   }
+  document.querySelectorAll('#acc-tabs button').forEach(function(b){
+    b.addEventListener('click', function(){ acc.seccion = b.dataset.acc; renderAccesoSettings(); });
+  });
 
-  // ---------- Usuarios (ingreso con email) ----------
-  // La tabla usuarios dice quién puede entrar (activo) y con qué perfil. Las
-  // cuentas (email + contraseña) son de Supabase Auth; acá se crean con
-  // signUp desde un cliente aparte, para no cerrar la sesión de quien la crea.
-  function perfilOptionsHtml(sel){
-    var roles = state.auth.roles||[];
-    // Perfil asignado que ya no está en la lista (borrado o nunca guardado):
-    // se muestra marcado en vez de aparentar "Solo Comercial".
-    var huerfano = sel && !roles.some(function(r){ return r.id===sel; })
-      ? '<option value="'+esc(sel)+'" selected>⚠ Perfil inexistente — elegí otro</option>' : '';
-    return huerfano+'<option value="">Solo Comercial</option>'+roles.map(function(r){
-      return '<option value="'+esc(r.id)+'"'+(r.id===sel?' selected':'')+'>'+esc(r.nombre||r.id)+'</option>'; }).join('');
+  // --- Usuarios ---
+  function cargarUsuariosAcc(){
+    var msg = document.getElementById('acc-msg');
+    if(!(state.sb && state.sessionEmail)){ msg.textContent = 'Para administrar usuarios tenés que haber ingresado con tu email.'; return; }
+    msg.textContent = acc.usuarios.length ? '' : 'Cargando usuarios…';
+    state.sb.from('usuarios').select('*').order('email').then(function(res){
+      if(res.error){ msg.textContent = 'No se pudieron leer los usuarios: '+res.error.message; return; }
+      msg.textContent = '';
+      acc.usuarios = (res.data||[]).map(function(u){ return Object.assign({}, u, {email:String(u.email||'').toLowerCase(), permisos_extra: u.permisos_extra && typeof u.permisos_extra==='object' ? u.permisos_extra : {}}); });
+      renderUsuariosAcc();
+      renderPerfilesAcc();
+    });
+    if(acc.cuentas===null){
+      acc.cuentas = 'cargando';
+      usuariosAdmin({accion:'listar'}).then(function(r){
+        acc.cuentas = r.sinFuncion ? false : (r.cuentas||[]);
+        renderUsuariosAcc();
+      }).catch(function(){ acc.cuentas = false; renderUsuariosAcc(); });
+    }
   }
+  function cuentaDe(email){ return Array.isArray(acc.cuentas) ? acc.cuentas.find(function(c){ return c.email===email; }) || null : undefined; }
+  function renderUsuariosAcc(){
+    var body = document.getElementById('acc-usuarios');
+    var q = acc.q.trim().toLowerCase();
+    var lista = acc.usuarios.filter(function(u){
+      if(!q) return true;
+      var r = roleById(u.perfil);
+      return [u.email, u.nombre, r && r.nombre].join(' ').toLowerCase().indexOf(q)!==-1;
+    });
+    document.getElementById('acc-n-usuarios').textContent = acc.usuarios.length ? acc.usuarios.length : '';
+    body.innerHTML = '';
+    if(!lista.length){ body.innerHTML = '<tr><td colspan="5" class="acc-vacio">'+(acc.usuarios.length ? 'Nadie coincide con la búsqueda.' : 'Todavía no hay usuarios.')+'</td></tr>'; }
+    lista.forEach(function(u){
+      var r = roleById(u.perfil), ex = u.permisos_extra || {};
+      var exKeys = Object.keys(ex).filter(function(k){ return ex[k] && ex[k]!==nivelPerfil(r, k, ex); });
+      var c = cuentaDe(u.email);
+      var tr = document.createElement('tr');
+      tr.className = u.activo===false ? 'inactivo' : '';
+      tr.innerHTML = '<td><div class="acc-persona"><span class="acc-av">'+esc(iniciales(u))+'</span><div><b>'+esc(u.nombre || u.email.split('@')[0])+'</b><small>'+esc(u.email)+'</small></div></div></td>'
+        +'<td>'+(u.perfil && !r ? '<span class="acc-pill mal">⚠ Perfil borrado</span>' : '<span class="acc-pill'+(r && r.manageAccess ? ' admin' : '')+'">'+esc(r ? r.nombre : 'Solo Comercial')+'</span>')+'</td>'
+        +'<td>'+(exKeys.length ? exKeys.map(function(k){ return '<span class="acc-chip n-'+esc(ex[k])+'">'+esc(tabLabelCorto(k))+': '+esc(ex[k]==='oculta'?'no':ex[k])+'</span>'; }).join(' ') : '<span class="acc-tenue">—</span>')+'</td>'
+        +'<td>'+(c===undefined ? '<span class="acc-tenue">—</span>' : c ? (c.ultimo_ingreso ? esc(fechaRel(c.ultimo_ingreso)) : '<span class="acc-tenue">nunca entró</span>') : '<span class="acc-pill mal">sin cuenta</span>')+'</td>'
+        +'<td><span class="acc-estado '+(u.activo===false?'off':'on')+'">'+(u.activo===false?'Inactivo':'Activo')+'</span></td>';
+      tr.addEventListener('click', function(){ abrirUsuarioAcc(u.email); });
+      body.appendChild(tr);
+    });
+    // Cuentas de Supabase que no están anotadas en Gestión
+    var box = document.getElementById('acc-sin-anotar');
+    var sueltas = Array.isArray(acc.cuentas) ? acc.cuentas.filter(function(c){ return c.email && !acc.usuarios.some(function(u){ return u.email===c.email; }); }) : [];
+    box.hidden = !sueltas.length;
+    box.innerHTML = sueltas.length ? '<b>'+sueltas.length+' cuenta'+(sueltas.length>1?'s':'')+' de Supabase sin anotar en Gestión</b> (no pueden entrar hasta que les asignes un perfil): '
+      + sueltas.map(function(c){ return '<button type="button" class="acc-link" data-email="'+esc(c.email)+'">'+esc(c.email)+' → anotar</button>'; }).join(' ') : '';
+    box.querySelectorAll('[data-email]').forEach(function(b){ b.addEventListener('click', function(){ abrirUsuarioAcc(null, b.dataset.email); }); });
+    var aviso = document.getElementById('acc-sin-funcion');
+    aviso.hidden = acc.cuentas!==false;
+  }
+  document.getElementById('acc-buscar').addEventListener('input', function(){ acc.q = this.value; renderUsuariosAcc(); });
+  document.getElementById('acc-nuevo').addEventListener('click', function(){ abrirUsuarioAcc(null); });
+
+  function abrirUsuarioAcc(email, emailExistente){
+    var u = email ? acc.usuarios.find(function(x){ return x.email===email; }) : null;
+    var nuevo = !u;
+    var cuentaYa = !!emailExistente || (nuevo ? false : true);
+    acc.usrEdit = u ? JSON.parse(JSON.stringify(u)) : {email: emailExistente || '', nombre:'', perfil: ((state.auth.roles||[]).find(function(r){ return !r.manageAccess; }) || {}).id || null, activo:true, permisos_extra:{}, __nuevo:true, __cuentaYa: !!emailExistente};
+    var e = acc.usrEdit;
+    document.getElementById('usr-title').textContent = nuevo ? (emailExistente ? 'Anotar usuario' : 'Nuevo usuario') : (e.nombre || e.email);
+    document.getElementById('usr-sub').textContent = nuevo
+      ? (emailExistente ? 'La cuenta ya existe en Supabase: elegí su perfil y entra con la contraseña que ya tiene.' : 'Se crea la cuenta y la persona entra con este email y la contraseña inicial.')
+      : e.email;
+    var em = document.getElementById('usr-email');
+    em.value = e.email; em.readOnly = !nuevo || !!emailExistente;
+    document.getElementById('usr-nombre').value = e.nombre || '';
+    var sel = document.getElementById('usr-perfil');
+    sel.innerHTML = (state.auth.roles||[]).map(function(r){ return '<option value="'+esc(r.id)+'">'+esc(r.nombre||r.id)+(r.manageAccess?' (administra accesos)':'')+'</option>'; }).join('')
+      + '<option value="">Sin perfil (solo Comercial)</option>'
+      + (e.perfil && !roleById(e.perfil) ? '<option value="'+esc(e.perfil)+'">⚠ Perfil borrado — elegí otro</option>' : '');
+    sel.value = e.perfil || '';
+    document.getElementById('usr-pass-box').hidden = !(nuevo && !cuentaYa);
+    document.getElementById('usr-pass').value = '';
+    document.getElementById('usr-activo-box').hidden = nuevo;
+    document.getElementById('usr-activo').checked = e.activo!==false;
+    document.getElementById('usr-clave-box').hidden = true;
+    document.getElementById('usr-cambiar-clave').style.display = !nuevo && acc.funcion!==false ? '' : 'none';
+    document.getElementById('usr-sin-funcion').hidden = !(nuevo && !cuentaYa && acc.funcion===false);
+    renderPermisosUsuario();
+    document.getElementById('usr-overlay').classList.add('show');
+    setTimeout(function(){ try{ (nuevo && !emailExistente ? em : document.getElementById('usr-nombre')).focus(); }catch(x){} }, 30);
+  }
+  function renderPermisosUsuario(){
+    var e = acc.usrEdit, box = document.getElementById('usr-permisos');
+    var r = roleById(e.perfil);
+    box.innerHTML = '';
+    var nota = document.getElementById('usr-permisos-nota');
+    if(r && r.manageAccess){
+      nota.innerHTML = 'El perfil <b>'+esc(r.nombre)+'</b> administra accesos: ve y edita todo. No lleva excepciones.';
+      return;
+    }
+    var n = Object.keys(e.permisos_extra||{}).length;
+    if(state.colPermisosExtra===false){ nota.innerHTML = '⚠ Para dar excepciones a una persona falta correr <b>base-de-datos/permisos-por-usuario.sql</b> en Supabase. Por ahora ve lo que da su perfil.'; return; }
+    nota.innerHTML = 'Sale del perfil <b>'+esc(r ? r.nombre : 'Solo Comercial')+'</b>. Tocá un nivel distinto para hacer una <b>excepción solo para esta persona</b> (queda resaltada).'
+      + (n ? ' <button type="button" class="acc-link" id="usr-sin-ex">Quitar las '+n+' excepciones</button>' : '');
+    var sx = document.getElementById('usr-sin-ex');
+    if(sx) sx.addEventListener('click', function(){ e.permisos_extra = {}; renderPermisosUsuario(); });
+    permisoGrupos().forEach(function(g){
+      var h = document.createElement('div'); h.className = 'acc-area'; h.innerHTML = '<span style="background:'+esc(g.area.color)+'"></span>'+esc(g.area.label);
+      box.appendChild(h);
+      g.tabs.forEach(function(t){
+        var base = nivelPerfil(r, t.id, e.permisos_extra);
+        var ex = e.permisos_extra[t.id];
+        var nivel = ex || base;
+        var row = document.createElement('div');
+        row.className = 'acc-perm'+(ex ? ' ex' : '');
+        row.dataset.tab = t.id;
+        var lab = document.createElement('div'); lab.className = 'acc-perm-l';
+        lab.innerHTML = esc(t.label)+(ex ? '<small>solo para esta persona · el perfil dice '+esc(base)+'</small>' : '');
+        row.appendChild(lab);
+        row.appendChild(segmentado(nivel, base, function(v){
+          if(v===base) delete e.permisos_extra[t.id]; else e.permisos_extra[t.id] = v;
+          renderPermisosUsuario();
+        }));
+        box.appendChild(row);
+      });
+    });
+  }
+  document.getElementById('usr-perfil').addEventListener('change', function(){
+    var e = acc.usrEdit; e.perfil = this.value || null;
+    // Las excepciones que ahora coinciden con el perfil nuevo dejan de serlo
+    var r = roleById(e.perfil);
+    Object.keys(e.permisos_extra).forEach(function(k){ if(e.permisos_extra[k]===nivelPerfil(r, k, {})) delete e.permisos_extra[k]; });
+    renderPermisosUsuario();
+  });
+  document.getElementById('usr-generar').addEventListener('click', function(){
+    var abc = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789', s = '';
+    var rnd = new Uint32Array(10); (window.crypto||{getRandomValues:function(a){ for(var i=0;i<a.length;i++) a[i]=Math.floor(Math.random()*1e9); return a; }}).getRandomValues(rnd);
+    for(var i=0;i<10;i++) s += abc[rnd[i]%abc.length];
+    var inp = document.getElementById('usr-pass'); inp.value = s; inp.type = 'text'; inp.select();
+  });
+  document.getElementById('usr-cancel').addEventListener('click', function(){ document.getElementById('usr-overlay').classList.remove('show'); acc.usrEdit = null; });
+  document.getElementById('usr-cambiar-clave').addEventListener('click', function(){
+    var b = document.getElementById('usr-clave-box'); b.hidden = !b.hidden;
+    if(!b.hidden) document.getElementById('usr-clave-nueva').focus();
+  });
+  document.getElementById('usr-clave-ok').addEventListener('click', function(){
+    var pw = document.getElementById('usr-clave-nueva').value;
+    if(pw.length<8){ showToast('La contraseña tiene que tener al menos 8 caracteres.'); return; }
+    var btn = this; btn.disabled = true;
+    usuariosAdmin({accion:'clave', email: acc.usrEdit.email, password: pw}).then(function(r){
+      if(r.sinFuncion){ showToast('Para cambiar contraseñas desde acá falta publicar la función usuarios-admin en Supabase.', 7000); return; }
+      document.getElementById('usr-clave-nueva').value = '';
+      document.getElementById('usr-clave-box').hidden = true;
+      showToast('Contraseña cambiada. Pasásela a la persona.');
+    }).catch(function(e){ showToast('No se pudo cambiar: '+e.message, 7000); })
+      .then(function(){ btn.disabled = false; });
+  });
+  document.getElementById('usr-save').addEventListener('click', function(){
+    var e = acc.usrEdit;
+    var email = document.getElementById('usr-email').value.trim().toLowerCase();
+    var nombre = document.getElementById('usr-nombre').value.trim();
+    var perfil = document.getElementById('usr-perfil').value || null;
+    var activo = document.getElementById('usr-activo').checked;
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ showToast('Ingresá un email válido.'); return; }
+    if(perfil && !roleById(perfil)){ showToast('Elegí un perfil que exista.'); return; }
+    var r = roleById(perfil);
+    var extra = r && r.manageAccess ? {} : e.permisos_extra;
+    var btn = this;
+    function listo(texto){
+      document.getElementById('usr-overlay').classList.remove('show');
+      acc.usrEdit = null; acc.cuentas = null;
+      cargarUsuariosAcc();
+      showToast(texto, 8000);
+    }
+    if(e.__nuevo){
+      if(acc.usuarios.some(function(u){ return u.email===email; })){ showToast('Ese email ya está en la lista de usuarios.'); return; }
+      var pw = document.getElementById('usr-pass').value;
+      var crearCuenta = !e.__cuentaYa;
+      if(crearCuenta && pw.length<8){ showToast('Poné una contraseña inicial de al menos 8 caracteres (o tocá "Generar").'); return; }
+      btn.disabled = true;
+      var anotar = function(){
+        return state.sb.from('usuarios').upsert(Object.assign({email:email, activo:true, perfil:perfil, nombre:nombre||null}, state.colPermisosExtra!==false ? {permisos_extra:extra} : {}), {onConflict:'email'}).then(function(res){ if(res.error) throw res.error; });
+      };
+      var p = crearCuenta
+        ? usuariosAdmin({accion:'crear', email:email, password:pw, nombre:nombre, perfil:perfil, permisos_extra:extra}).then(function(res){
+            if(res.sinFuncion) return anotar().then(function(){ return 'Usuario anotado. Falta crearle la cuenta: en Supabase → Authentication → Users → Add user, con este email y "Auto Confirm User" tildado (o publicá la función usuarios-admin para hacerlo desde acá).'; });
+            return res.ya_existia ? 'Usuario anotado. Ya tenía cuenta: entra con su contraseña de siempre.' : 'Usuario creado. Ya puede entrar con '+email+' y la contraseña inicial.';
+          })
+        : anotar().then(function(){ return 'Usuario anotado. Entra con la contraseña que ya tiene.'; });
+      p.then(listo).catch(function(er){ showToast('No se pudo guardar: '+((er && er.message)||'error'), 8000); }).then(function(){ btn.disabled = false; });
+      return;
+    }
+    if(email===state.sessionEmail && (!activo || perfil!==e.perfil) && !confirmarCambioPropio(perfil, activo)) return;
+    btn.disabled = true;
+    state.sb.from('usuarios').update(Object.assign({perfil:perfil, activo:activo, nombre:nombre||null}, state.colPermisosExtra!==false ? {permisos_extra:extra} : {})).eq('email', email).then(function(res){
+      btn.disabled = false;
+      if(res.error){ showToast('No se pudo guardar: '+res.error.message, 8000); return; }
+      if(email===state.sessionEmail){ state.permisosExtra = extra; refreshTabVisibility(); }
+      listo('Usuario guardado.');
+    });
+  });
+
+  // --- Perfiles ---
+  function usuariosConPerfil(id){ return acc.usuarios.filter(function(u){ return u.perfil===id; }); }
+  function renderPerfilesAcc(){
+    var lista = document.getElementById('acc-perfiles-lista');
+    if(!lista) return;
+    var roles = state.auth.roles||[];
+    if(!acc.perfilEdit || (!acc.perfilEdit.__nuevo && !roleById(acc.perfilEdit.id))){
+      var r0 = roleById(acc.perfilSel) || roles[0];
+      acc.perfilEdit = r0 ? JSON.parse(JSON.stringify(r0)) : null;
+      acc.perfilSel = r0 ? r0.id : null;
+    }
+    lista.innerHTML = '';
+    roles.concat(acc.perfilEdit && acc.perfilEdit.__nuevo ? [acc.perfilEdit] : []).forEach(function(r){
+      var n = usuariosConPerfil(r.id).length;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'acc-pf'+(acc.perfilEdit && r.id===acc.perfilEdit.id ? ' on' : '');
+      b.innerHTML = '<b>'+esc(r.nombre || 'Perfil nuevo')+'</b><small>'+(r.manageAccess ? '🔑 administra accesos · ' : '')+(r.__nuevo ? 'sin guardar' : n+' usuario'+(n===1?'':'s'))+'</small>';
+      b.addEventListener('click', function(){ acc.perfilSel = r.id; acc.perfilEdit = JSON.parse(JSON.stringify(r)); renderPerfilesAcc(); });
+      lista.appendChild(b);
+    });
+    renderPerfilEditor();
+  }
+  function renderPerfilEditor(){
+    var p = acc.perfilEdit, ed = document.getElementById('acc-perfil-editor');
+    if(!p){ ed.innerHTML = '<div class="acc-vacio">Creá el primer perfil.</div>'; return; }
+    var usu = usuariosConPerfil(p.id);
+    ed.innerHTML = '<div class="acc-pf-top"><div class="field"><label for="pf-nombre">Nombre del perfil</label><input type="text" id="pf-nombre" maxlength="40" placeholder="Ej.: Compras, Jefe de sector"></div>'
+      + '<label class="acc-check"><input type="checkbox" id="pf-admin"> 🔑 Administra accesos (usuarios y perfiles): ve y edita todo</label></div>'
+      + '<div id="pf-permisos"></div>'
+      + '<div class="acc-pf-usu"><b>Lo usan:</b> '+(usu.length ? usu.map(function(u){ return '<span class="acc-chip">'+esc(u.nombre || u.email)+'</span>'; }).join(' ') : '<span class="acc-tenue">nadie todavía</span>')+'</div>'
+      + '<div class="acc-pf-acc"><button type="button" class="btn" id="pf-borrar" style="color:var(--danger)">Eliminar</button><button type="button" class="btn" id="pf-duplicar">Duplicar</button><span style="flex:1"></span><button type="button" class="btn primary" id="pf-guardar">Guardar perfil</button></div>';
+    var nom = document.getElementById('pf-nombre'), adm = document.getElementById('pf-admin');
+    nom.value = p.nombre || ''; adm.checked = !!p.manageAccess;
+    nom.addEventListener('input', function(){ p.nombre = this.value; });
+    adm.addEventListener('change', function(){ p.manageAccess = this.checked; renderPermisosPerfil(); });
+    document.getElementById('pf-borrar').style.display = p.__nuevo ? 'none' : '';
+    document.getElementById('pf-duplicar').style.display = p.__nuevo ? 'none' : '';
+    document.getElementById('pf-borrar').addEventListener('click', borrarPerfil);
+    document.getElementById('pf-duplicar').addEventListener('click', function(){
+      acc.perfilEdit = {id:'perfil_'+Date.now().toString(36), nombre:(p.nombre||'')+' (copia)', manageAccess:false, permisos:JSON.parse(JSON.stringify(p.permisos||{})), __nuevo:true};
+      renderPerfilesAcc();
+    });
+    document.getElementById('pf-guardar').addEventListener('click', guardarPerfil);
+    renderPermisosPerfil();
+  }
+  function renderPermisosPerfil(){
+    var p = acc.perfilEdit, box = document.getElementById('pf-permisos');
+    box.innerHTML = '';
+    if(p.manageAccess){ box.innerHTML = '<div class="acc-nota">Este perfil ve y edita todo, y puede administrar usuarios y perfiles.</div>'; return; }
+    p.permisos = p.permisos || {};
+    permisoGrupos().forEach(function(g){
+      var h = document.createElement('div'); h.className = 'acc-area'; h.innerHTML = '<span style="background:'+esc(g.area.color)+'"></span>'+esc(g.area.label);
+      box.appendChild(h);
+      g.tabs.forEach(function(t){
+        var nivel = nivelPerfil(p, t.id, {});
+        var row = document.createElement('div'); row.className = 'acc-perm'; row.dataset.tab = t.id;
+        var lab = document.createElement('div'); lab.className = 'acc-perm-l';
+        lab.innerHTML = esc(t.label)+(t.id==='solicitudes' && !p.permisos.solicitudes ? '<small>igual que Compras mientras no lo cambies</small>' : '');
+        row.appendChild(lab);
+        row.appendChild(segmentado(nivel, null, function(v){ p.permisos[t.id] = v; renderPermisosPerfil(); }));
+        box.appendChild(row);
+      });
+    });
+  }
+  function codigoPerfil(nombre, usados){
+    var base = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'perfil';
+    var cand = base, n = 2;
+    while(usados.indexOf(cand)!==-1 || cand==='__comercial__'){ cand = base+'_'+(n++); }
+    return cand;
+  }
+  function guardarPerfil(){
+    var p = acc.perfilEdit;
+    var nombre = (p.nombre||'').trim();
+    if(!nombre){ showToast('Ponele un nombre al perfil.'); return; }
+    var roles = (state.auth.roles||[]).map(function(r){ return JSON.parse(JSON.stringify(r)); });
+    if(roles.some(function(r){ return r.id!==p.id && (r.nombre||'').trim().toLowerCase()===nombre.toLowerCase(); })){ showToast('Ya hay un perfil con ese nombre.'); return; }
+    var limpio = {id:p.id, nombre:nombre, password:'', manageAccess:!!p.manageAccess, permisos:Object.assign({}, p.permisos||{})};
+    TAB_DEFS.forEach(function(t){ if(!limpio.permisos[t.id] && t.id!=='solicitudes') limpio.permisos[t.id] = nivelPerfil(limpio, t.id, {}); });
+    if(p.__nuevo){ limpio.id = codigoPerfil(nombre, roles.map(function(r){ return r.id; })); roles.push(limpio); }
+    else { var i = roles.findIndex(function(r){ return r.id===p.id; }); roles[i] = limpio; }
+    if(!roles.some(function(r){ return r.manageAccess; })){ showToast('Al menos un perfil tiene que administrar accesos.'); return; }
+    var mio = acc.usuarios.find(function(u){ return u.email===state.sessionEmail; });
+    if(mio && mio.perfil===limpio.id && !limpio.manageAccess){ showToast('No podés sacarle "Administra accesos" a tu propio perfil. Pedíselo a otro administrador.'); return; }
+    var btn = document.getElementById('pf-guardar'); btn.disabled = true;
+    writeAuthRoles(roles).then(function(ok){
+      btn.disabled = false;
+      if(!ok) return;
+      state.auth.roles = roles;
+      acc.perfilSel = limpio.id; acc.perfilEdit = null;
+      refreshTabVisibility(); refreshSettingsTabsVisibility();
+      renderPerfilesAcc(); renderUsuariosAcc();
+      showToast('Perfil "'+nombre+'" guardado.');
+    });
+  }
+  function borrarPerfil(){
+    var p = acc.perfilEdit;
+    var usu = usuariosConPerfil(p.id);
+    if(usu.length){ showToast('No se puede eliminar: lo usa'+(usu.length>1?'n '+usu.length+' usuarios':' '+(usu[0].nombre||usu[0].email))+'. Cambiales el perfil primero.', 7000); return; }
+    var roles = (state.auth.roles||[]).filter(function(r){ return r.id!==p.id; });
+    if(!roles.some(function(r){ return r.manageAccess; })){ showToast('Al menos un perfil tiene que administrar accesos.'); return; }
+    if(!window.confirm('¿Eliminar el perfil "'+(p.nombre||'')+'"?')) return;
+    writeAuthRoles(roles).then(function(ok){
+      if(!ok) return;
+      state.auth.roles = roles; acc.perfilEdit = null; acc.perfilSel = null;
+      renderPerfilesAcc(); showToast('Perfil eliminado.');
+    });
+  }
+  document.getElementById('acc-nuevo-perfil').addEventListener('click', function(){
+    acc.perfilEdit = {id:'perfil_'+Date.now().toString(36), nombre:'', manageAccess:false, permisos:defaultPermisos('oculta'), __nuevo:true};
+    renderPerfilesAcc();
+    setTimeout(function(){ var n = document.getElementById('pf-nombre'); if(n) n.focus(); }, 30);
+  });
+
   // ---------- Pasar los adjuntos viejos a la unidad compartida ----------
   // Los adjuntos que se subieron antes quedaron en el Drive de quien los subió
   // (o en la carpeta configurada). Se bajan con la cuenta de Google del
@@ -2728,45 +3043,6 @@
     }).catch(function(e){ state.adjMigrando = false; btn.disabled = false; msg.textContent = 'Se cortó: '+e.message; });
   });
 
-  function renderUsuarios(){
-    var box = document.getElementById('usuarios-list');
-    var msg = document.getElementById('usuarios-msg');
-    if(!box) return;
-    document.getElementById('nu-perfil').innerHTML = perfilOptionsHtml('');
-    var puede = !!(state.sb && state.sessionEmail);
-    document.getElementById('usuario-add').hidden = !puede;
-    if(!puede){
-      box.innerHTML = '';
-      msg.textContent = 'Para administrar usuarios tenés que haber ingresado con tu email (no con la contraseña de perfil).';
-      return;
-    }
-    msg.textContent = 'Cargando usuarios…';
-    state.sb.from('usuarios').select('*').order('email').then(function(res){
-      if(res.error){ msg.textContent = 'No se pudieron leer los usuarios: '+res.error.message+' (¿corriste el schema.sql nuevo?)'; return; }
-      msg.textContent = '';
-      box.innerHTML = '';
-      (res.data||[]).forEach(function(u){
-        var row = document.createElement('div');
-        row.className = 'usuario-row';
-        row.innerHTML = '<div class="em" title="'+esc(u.email)+'">'+esc(u.email)+'</div>'+
-          '<select>'+perfilOptionsHtml(u.perfil||'')+'</select>'+
-          '<label><input type="checkbox"'+(u.activo!==false?' checked':'')+'> Activo</label>';
-        var sel = row.querySelector('select'), chk = row.querySelector('input');
-        function guardar(){
-          if(u.email===state.sessionEmail && (!chk.checked || sel.value!==u.perfil) && !confirmarCambioPropio(sel.value, chk.checked)){ sel.value = u.perfil||''; chk.checked = u.activo!==false; return; }
-          state.sb.from('usuarios').update({perfil: sel.value || null, activo: chk.checked}).eq('email', u.email).then(function(r){
-            if(r.error){ showToast('No se pudo guardar: '+r.error.message); return; }
-            u.perfil = sel.value || null; u.activo = chk.checked;
-            showToast('Usuario actualizado.');
-          });
-        }
-        sel.addEventListener('change', guardar);
-        chk.addEventListener('change', guardar);
-        box.appendChild(row);
-      });
-      if(!(res.data||[]).length) box.innerHTML = '<div class="sub">Todavía no hay usuarios.</div>';
-    });
-  }
   // Evita que el administrador se saque a sí mismo el acceso sin querer.
   function confirmarCambioPropio(perfil, activo){
     var r = (state.auth.roles||[]).find(function(x){ return x.id===perfil; });
@@ -2774,32 +3050,6 @@
     showToast('No podés quitarte a vos mismo el acceso de administrador. Pedíselo a otro administrador.');
     return false;
   }
-  document.getElementById('nu-add').addEventListener('click', function(){
-    var email = document.getElementById('nu-email').value.trim().toLowerCase();
-    var pw = document.getElementById('nu-password').value;
-    var perfil = document.getElementById('nu-perfil').value || null;
-    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ showToast('Ingresá un email válido.'); return; }
-    if(pw.length<6){ showToast('La contraseña inicial tiene que tener al menos 6 caracteres.'); return; }
-    var btn = this; btn.disabled = true;
-    var aux = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY, {auth:{persistSession:false, autoRefreshToken:false, detectSessionInUrl:false, storageKey:'alta-usuario'}});
-    // Si Supabase tiene cerrado el registro (signup_disabled, lo recomendable),
-    // igual se anota el usuario con su perfil y la cuenta se crea a mano en
-    // Supabase → Authentication → Users → Add user.
-    var sinRegistro = false;
-    aux.auth.signUp({email:email, password:pw}).then(function(r){
-      if(r.error && /signup.*(disabled|not allowed)|signups not allowed/i.test((r.error.code||'')+' '+r.error.message)) sinRegistro = true;
-      else if(r.error && !/already|registered|exist/i.test(r.error.message)) throw r.error;
-      return state.sb.from('usuarios').upsert({email:email, activo:true, perfil:perfil}, {onConflict:'email'});
-    }).then(function(r){
-      if(r && r.error) throw r.error;
-      document.getElementById('nu-email').value = ''; document.getElementById('nu-password').value = '';
-      if(sinRegistro) showToast('Usuario anotado con su perfil. Falta crearle la cuenta: en Supabase → Authentication → Users → Add user → Create new user, con este email, la contraseña y "Auto Confirm User" tildado.', 12000);
-      else showToast('Usuario agregado. Si ya tenía cuenta, entra con su contraseña de siempre; si Supabase pide confirmar el email, le llega un mail.');
-      renderUsuarios();
-    }).catch(function(e){ showToast('No se pudo agregar: '+((e&&e.message)||'error')); })
-    .finally(function(){ btn.disabled = false; });
-  });
-
   function personRow(p, writeFn, showScope){
     var row = document.createElement('div');
     row.className = 'setting-row';
@@ -7617,53 +7867,6 @@
     document.getElementById('settings-overlay').classList.remove('show');
   });
 
-  document.getElementById('add-role-btn').addEventListener('click', function(){
-    var list = document.getElementById('roles-list');
-    var card = buildRoleCard({id:'perfil_'+Date.now().toString(36), nombre:'', password:'', manageAccess:false, permisos:defaultPermisos('oculta')});
-    card.dataset.nuevo = '1';   // al guardar, el código sale del nombre (ej. "RR.HH." → rrhh)
-    list.appendChild(card);
-  });
-
-  document.getElementById('auth-save-btn').addEventListener('click', function(){
-    var cards = document.querySelectorAll('#roles-list .role-card');
-    if(cards.length===0){ showToast('Tiene que haber al menos un perfil.'); return; }
-    var roles = [];
-    var pwSeen = {};
-    var anyManage = false;
-    for(var i=0;i<cards.length;i++){
-      var card = cards[i];
-      var nombre = card.querySelector('.role-nombre').value.trim();
-      var password = card.querySelector('.role-password').value.trim();
-      if(!nombre){ showToast('Completá el nombre de todos los perfiles.'); return; }
-      if(password && pwSeen[password]){ showToast('Las contraseñas de los perfiles tienen que ser todas distintas.'); return; }
-      if(password) pwSeen[password] = true;
-      var manageAccess = card.querySelector('.role-manage-access').checked;
-      if(manageAccess) anyManage = true;
-      var permisos = {};
-      card.querySelectorAll('.role-permiso-select').forEach(function(sel){ permisos[sel.dataset.tab] = sel.value; });
-      if(card.dataset.nuevo){
-        var base = nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'perfil';
-        var cand = base, n = 2;
-        var usados = Array.prototype.map.call(cards, function(c){ return c.dataset.nuevo ? null : c.dataset.roleId; }).concat(roles.map(function(x){ return x.id; }));
-        while(usados.indexOf(cand)!==-1 || cand==='__comercial__'){ cand = base+'_'+(n++); }
-        card.dataset.roleId = cand;
-      }
-      roles.push({id: card.dataset.roleId, nombre: nombre, password: password, manageAccess: manageAccess, permisos: permisos});
-    }
-    if(!anyManage){ showToast('Al menos un perfil tiene que poder administrar el acceso.'); return; }
-    var btn = this; btn.disabled = true;
-    writeAuthRoles(roles).then(function(ok){
-      btn.disabled = false;
-      if(!ok) return;
-      document.querySelectorAll('#roles-list .role-card').forEach(function(c){ delete c.dataset.nuevo; });
-      state.auth.roles = roles;
-      refreshTabVisibility();
-      refreshSettingsTabsVisibility();
-      renderUsuarios();
-      showToast('Perfiles guardados.');
-    });
-  });
-
   document.getElementById('add-route-btn').addEventListener('click', function(){
     var inp = document.getElementById('new-route-input');
     var v = inp.value.trim();
@@ -8469,6 +8672,9 @@
       }
       state.sessionEmail = email;
       state.roleId = row.perfil || '__comercial__';
+      state.permisosExtra = (row.permisos_extra && typeof row.permisos_extra==='object') ? row.permisos_extra : {};
+      if(Object.prototype.hasOwnProperty.call(row, 'permisos_extra')) state.colPermisosExtra = true;
+      else state.sb.from('usuarios').select('permisos_extra').limit(1).then(function(r){ state.colPermisosExtra = !r.error; }, function(){ state.colPermisosExtra = false; });
       try{ localStorage.removeItem('hdr_role'); }catch(e){}
       document.getElementById('login-password').value = '';
       document.getElementById('login-error').style.display = 'none';

@@ -73,6 +73,7 @@ test("proveedor: sus archivos van a Administraci√≥n / Proveedores / nombre; en ‚
 
   await page.click("#settings-btn");
   await page.click("#scatbtn-acceso");
+  await page.click('#acc-tabs button[data-acc="drive"]');
   await expect(page.locator("#adj-mig-msg")).toContainText("Hay 1 adjunto(s) subidos antes");
   await expect(page.locator("#adj-mig-btn")).toBeVisible();
   expect(errores).toEqual([]);

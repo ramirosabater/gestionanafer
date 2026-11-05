@@ -65,7 +65,9 @@
         // Edge Functions: la respuesta la pone la prueba en DB.__funciones[nombre]
         functions: { invoke: function (nombre, op) {
           S.escrituras.push(["__funciones", nombre, (op || {}).body]);
-          var r = (DB.__funciones || {})[nombre];
+          // (una prueba puede poner funciones en window.__FN para responder según lo que llega)
+          var r = (window.__FN && window.__FN[nombre]) || (DB.__funciones || {})[nombre];
+          if (typeof r === "function") r = r((op || {}).body || {}, DB);
           if (r) return Promise.resolve(JSON.parse(JSON.stringify(r)));
           return Promise.resolve({ data: null, error: { message: "Function not found", context: { status: 404, json: function () { return Promise.resolve({ error: "not found" }); } } } });
         } },
