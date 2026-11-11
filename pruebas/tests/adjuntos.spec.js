@@ -45,12 +45,19 @@ test("factura con adjunto: va a Administración / Facturas / proveedor en la uni
   const f = (await escrituras(page, "facturas")).map((x) => x[2]).pop();
   expect(f.archivos).toEqual([{ id: "DRV1abcdefghij", url: "", name: "factura77.pdf", contentType: "application/pdf", sizeBytes: 9, unidad: true, modulo: "administracion" }]);
 
-  // Se abre desde la app (nadie tiene enlace de Drive)
+  // En la lista se ve el 📎 y se busca por número
+  await page.fill("#factura-buscar", "77");
+  await expect(page.locator("#facturas-body tr")).toHaveCount(1);
+  await expect(page.locator("#facturas-body tr .fac-clip")).toHaveCount(1);
+  // Al abrir la factura, el archivo se muestra solo al costado, bajado por el servidor (nadie tiene enlace de Drive)
   await page.locator("#facturas-body tr", { hasText: "B-0001-00000077" }).click();
-  const popup = page.waitForEvent("popup");
-  await page.locator("#fm-archivos-list a", { hasText: "factura77.pdf" }).click();
-  await popup;
+  await expect(page.locator("#fm-vista")).toBeVisible();
+  await expect(page.locator("#fm-vista-cuerpo iframe")).toHaveCount(1);
   await expect.poll(() => llamadas.filter((l) => l.accion === "abrir").length).toBe(1);
+  // El nombre del adjunto también lo muestra al costado
+  await page.click("#fm-vista-cerrar");
+  await page.locator("#fm-archivos-list a", { hasText: "factura77.pdf" }).click();
+  await expect(page.locator("#fm-vista")).toBeVisible();
   expect(llamadas.find((l) => l.accion === "abrir")).toMatchObject({ modulo: "administracion", id: "DRV1abcdefghij" });
   // Quitarlo lo manda a la papelera de la unidad
   await page.locator("#fm-archivos-list .attach-del").click();

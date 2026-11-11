@@ -10,8 +10,8 @@
 //   2. Además exige permiso de edición en Compras o Pagos: usa la misma
 //      función de la base (puede_editar) que aplican las políticas RLS.
 //   3. No es un "proxy libre": el modelo, el prompt y el tamaño están
-//      fijos acá. El navegador solo manda la imagen y los nombres de
-//      proveedores.
+//      fijos acá. El navegador solo manda la imagen (el proveedor no se
+//      lee: lo elige el operador a mano).
 //
 // Secretos (Edge Functions > Secrets):
 //   ANTHROPIC_API_KEY        obligatorio
@@ -93,12 +93,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (imagen.length > MAX_BASE64_CHARS) {
     return json({ error: 'La imagen es demasiado grande (máximo 5 MB).' }, 413);
   }
-  const proveedores = Array.isArray(body.proveedores)
-    ? body.proveedores
-        .filter((n): n is string => typeof n === 'string')
-        .map((n) => n.slice(0, 120))
-        .slice(0, MAX_PROVEEDORES)
-    : [];
+  // (body.proveedores ya no se usa: el proveedor lo elige el operador)
 
   // 3) Clave y modelo: solo del servidor
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
@@ -107,10 +102,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const prompt =
     'Esta imagen es una foto o escaneo de una factura de proveedor. Leé los datos y devolvé SOLO un objeto JSON con esta forma exacta, sin texto adicional:\n' +
-    '{"proveedor_nombre": string o null, "numero": string o null, "fecha": "YYYY-MM-DD" o null, "monto": number o null, "notas": string o null}\n' +
-    'Los proveedores ya cargados en el sistema son: ' + JSON.stringify(proveedores) + '. ' +
-    'Si el nombre del proveedor de la factura coincide (aunque sea parcialmente) con alguno de esa lista, devolvé el nombre EXACTO tal como aparece en la lista. ' +
-    'Si no coincide con ninguno, devolvé el nombre tal como figura impreso en la factura. ' +
+    '{"numero": string o null, "fecha": "YYYY-MM-DD" o null, "monto": number o null, "notas": string o null}\n' +
+    'No hace falta leer el nombre del proveedor: lo elige el operador. ' +
     '"monto" es el monto TOTAL de la factura, como número (sin separador de miles, con punto decimal, sin símbolo de moneda). ' +
     'Si algún dato no se puede leer con confianza, devolvé null en ese campo en vez de inventarlo.';
 

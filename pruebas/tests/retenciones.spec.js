@@ -88,10 +88,10 @@ function datosReales() {
     { escala: "general", desde: 0, hasta: 8000, fijo: 0, pct: 5 }, { escala: "general", desde: 24000, hasta: 32000, fijo: 2080, pct: 15 },
     { escala: "general", desde: 32000, hasta: 48000, fijo: 3280, pct: 19 }, { escala: "general", desde: 96000, hasta: null, fijo: 18640, pct: 31 }];
   d.proveedores = [...d.proveedores,
-    { id: "dire", nombre: "Director Gómez", cuit: "20-77777777-7", condicion_iva: "Responsable inscripto", rubro: "", gan_regimen: 116 },
-    { id: "acc", nombre: "Accionista Ruiz", cuit: "20-88888888-8", condicion_iva: "Responsable inscripto", rubro: "", gan_regimen: 900 },
-    { id: "mfac", nombre: "Emisor M SRL", cuit: "30-99999999-9", condicion_iva: "Responsable inscripto", rubro: "Bienes" },
-    { id: "rural", nombre: "Campo SA", cuit: "30-12121212-1", condicion_iva: "Responsable inscripto", rubro: "", gan_regimen: 32 },
+    { id: "dire", nombre: "Director Gómez", cuit: "20-77777777-7", condicion_iva: "Responsable inscripto", gan_regimen: 116 },
+    { id: "acc", nombre: "Accionista Ruiz", cuit: "20-88888888-8", condicion_iva: "Responsable inscripto", gan_regimen: 900 },
+    { id: "mfac", nombre: "Emisor M SRL", cuit: "30-99999999-9", condicion_iva: "Responsable inscripto", gan_regimen: 78 },
+    { id: "rural", nombre: "Campo SA", cuit: "30-12121212-1", condicion_iva: "Responsable inscripto", gan_regimen: 32 },
   ];
   d.facturas = [...d.facturas,
     { id: "d1", proveedor_id: "dire", numero: "C-0001-00000010", fecha: "2026-10-02", monto: 100000, neto: 100000, estado: "pendiente" },
@@ -148,9 +148,9 @@ test("exento en IVA: la factura no lleva IVA (neto = total) pero se retiene Gana
   const { PROVEEDORES, FACTURAS } = await import("../apoyo/datos-compras.js");
   await abrirGestion(page, baseDePrueba(datosCompras({
     proveedores: [...PROVEEDORES,
-      { id: "exiva", nombre: "Exiva Servicios", cuit: "30-44444444-4", condicion_iva: "Exento en IVA", rubro: "Locación de servicios" },
-      { id: "extot", nombre: "Extot Asociación", cuit: "30-55555555-5", condicion_iva: "Exento", rubro: "Locación de servicios" },
-      { id: "confi", nombre: "Confin Particular", cuit: "20-66666666-6", condicion_iva: "Consumidor final", rubro: "Locación de servicios" }],
+      { id: "exiva", nombre: "Exiva Servicios", cuit: "30-44444444-4", condicion_iva: "Exento en IVA", gan_regimen: 94 },
+      { id: "extot", nombre: "Extot Asociación", cuit: "30-55555555-5", condicion_iva: "Exento", gan_regimen: 94 },
+      { id: "confi", nombre: "Confin Particular", cuit: "20-66666666-6", condicion_iva: "Consumidor final", gan_regimen: 94 }],
     facturas: [...FACTURAS,
       { id: "x1", proveedor_id: "exiva", numero: "C-1", fecha: "2026-10-01", monto: 100000, estado: "pendiente" },
       { id: "x2", proveedor_id: "extot", numero: "C-2", fecha: "2026-10-01", monto: 100000, estado: "pendiente" },

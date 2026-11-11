@@ -89,7 +89,7 @@
         { t: "Lo que se paga <b>sin factura y sin impuestos</b> se carga como <b>débito interno</b>: en <b>+ Nueva factura</b> elegí arriba “Débito interno”.", ir: ["#tab-pagos", '#subtabs-pagos .stabbtn[data-sub="facturas"]'], foco: "#new-factura-btn" },
         { t: "Toma solo un número correlativo (DI-0001, DI-0002…). No lleva IVA ni retención de Ganancias; se imputa a un centro de costo como cualquier gasto y se paga con una <b>orden de pago</b>. Desde el comprobante lo podés <b>🖨 imprimir</b> para que lo firmen." },
         { t: "En Facturas, el filtro <b>Débitos internos</b> te los muestra todos.", foco: "#factura-filter-estado" },
-        { t: "En las facturas de proveedores de <b>Combustibles y lubricantes</b> (por el rubro) aparece el bloque <b>⛽ Combustible</b>: los <b>kilómetros</b> que marca el odómetro y los <b>litros</b>. Son opcionales." },
+        { t: "En las facturas de los proveedores marcados como <b>⛽ Proveedor de combustible</b> (en su ficha) aparece el bloque <b>⛽ Combustible</b>: los <b>kilómetros</b> que marca el odómetro y los <b>litros</b>. Son opcionales." },
         { t: "Si la factura está imputada a un <b>móvil</b>, te muestro los km recorridos desde la carga anterior de ese móvil y el consumo en litros cada 100 km." },
       ] },
       { titulo: "Pagar a proveedores", pasos: [
@@ -111,7 +111,7 @@
         { t: "Un anticipo que ya se usó en un pago no se puede anular: primero hay que anular o corregir ese pago." },
       ] },
       { titulo: "Ganancias según la condición de IVA", pasos: [
-        { t: "La retención de Ganancias sale de la <b>condición de IVA</b> del proveedor (en su ficha) y de su régimen (o su rubro).", ir: ["#tab-compras", '#subtabs-compras .stabbtn[data-sub="proveedores"]'], foco: "#proveedores-search" },
+        { t: "La retención de Ganancias sale de la <b>condición de IVA</b> del proveedor (en su ficha) y del <b>régimen</b> elegido en su ficha (sin régimen, no retiene).", ir: ["#tab-compras", '#subtabs-compras .stabbtn[data-sub="proveedores"]'], foco: "#proveedores-search" },
         { t: "<b>Responsable inscripto</b>: se retiene según el régimen, si supera el mínimo no sujeto. <b>Monotributo</b>: no se retiene." },
         { t: "<b>Exento en IVA</b>: la factura no lleva IVA (se toma el total como neto) pero <b>sí se retiene</b> Ganancias, como a un inscripto. Es el caso de médicos, institutos de enseñanza o alquileres de vivienda." },
         { t: "<b>Exento (IVA y Ganancias)</b> y <b>Consumidor final</b>: no se retiene. Si un caso puntual es distinto, en la ficha está <b>Ganancias: condición</b> para fijarla a mano." },
@@ -124,7 +124,7 @@
       ] },
       { titulo: "Proveedores y órdenes de compra", pasos: [
         { t: "En <b>Compras → Proveedores</b> buscás por nombre, CUIT o código.", ir: ["#tab-compras", '#subtabs-compras .stabbtn[data-sub="proveedores"]'], foco: "#proveedores-search" },
-        { t: "En la ficha del proveedor se define la <b>condición en Ganancias</b> y el <b>régimen</b> (si no, salen del IVA y del rubro), si es <b>★ prioritario</b> y sus imputaciones habituales.", foco: "#new-proveedor-btn" },
+        { t: "En la ficha del proveedor se define la <b>condición en Ganancias</b> y el <b>régimen</b> (sin régimen no se retiene), si es <b>★ prioritario</b>, si es <b>⛽ de combustible</b> y sus imputaciones habituales.", foco: "#new-proveedor-btn" },
         { t: "En <b>Órdenes de compra</b> registrás lo que se pide; después la factura se puede asociar a la orden.", ir: '#subtabs-compras .stabbtn[data-sub="ocs"]', foco: "#new-oc-btn" },
         { t: "La columna <b>Pago</b> dice si la orden está <b>Sin pagar</b>, con <b>Pago parcial</b> o <b>Pagada</b>: suma lo pagado de sus facturas y los anticipos hechos a cuenta de ella. Adentro de la orden ves el detalle y lo que falta.", foco: "#oc-table" },
         { t: "En <b>Artículos</b> está la base de artículos (código, descripción, unidad y categoría), con cuánto se compró y el último precio. Es la base que va a usar Stock.", ir: '#subtabs-compras .stabbtn[data-sub="articulos"]', foco: "#new-articulo-btn" },

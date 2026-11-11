@@ -2,7 +2,16 @@
 // (parcial y total) → tablero. Datos inventados.
 import { test, expect } from "@playwright/test";
 import { baseDePrueba, abrirGestion, escrituras } from "../apoyo/gestion.js";
-import { datosCompras } from "../apoyo/datos-compras.js";
+import { datosCompras, FACTURAS } from "../apoyo/datos-compras.js";
+
+const ARTS = [
+  { id: "a_g", codigo: "00001", descripcion: "Guantes de nitrilo", unidad: "Caja", categoria: "Seguridad", activo: true, proveedores: ["bien"] },
+  { id: "a_c", codigo: "00002", descripcion: "Correa A-42", unidad: "Unidad", categoria: "Repuestos", activo: true, proveedores: [] },
+];
+// Lo último que se le pagó a Ferretería: guantes 1.500 y correa 8.000 (sale el precio de la OC)
+const F_PRECIOS = { id: "fp", proveedor_id: "bien", numero: "B-00", fecha: "2026-09-01", monto: 1, estado: "pagada",
+  articulos: [{ articulo_id: "a_g", cantidad: 1, precio: 1500, importe: 1500 }, { articulo_id: "a_c", cantidad: 1, precio: 8000, importe: 8000 }] };
+const conArticulos = (extra = {}) => ({ ...datosCompras({ articulos: ARTS, facturas: [...FACTURAS, F_PRECIOS] }), ...extra });
 
 const ultima = async (page, tabla) => (await escrituras(page, tabla)).map((x) => x[2]);
 const OCULTO = { grid: "oculta", branches: "oculta", company: "oculta", occasional: "oculta", day: "oculta", dashboard: "oculta",
@@ -18,13 +27,13 @@ const SOL = {
   id: "sol_1", numero: 1, fecha: "2026-10-01", sector: "Mantenimiento", solicitante: "jefe@anafer.test", necesaria_para: "2099-12-31", urgente: false,
   motivo: "Sopladora 2", estado: "pendiente", notas_compras: "", gestiona: "", anulado_en: null,
   items: [
-    { id: "it_a", descripcion: "Guantes de nitrilo", cantidad: 10, unidad: "Caja", proveedor_id: "", precio: 0, oc_id: "" },
-    { id: "it_b", descripcion: "Correa A-42", cantidad: 4, unidad: "Unidad", proveedor_id: "", precio: 0, oc_id: "" },
+    { id: "it_a", articulo_id: "a_g", descripcion: "Guantes de nitrilo", cantidad: 10, unidad: "Caja", proveedor_id: "", precio: 0, oc_id: "" },
+    { id: "it_b", articulo_id: "a_c", descripcion: "Correa A-42", cantidad: 4, unidad: "Unidad", proveedor_id: "", precio: 0, oc_id: "" },
   ],
 };
 
 test("el jefe de sector carga su solicitud con su usuario y solo ve Solicitudes", async ({ page }) => {
-  const errores = await abrirGestion(page, conJefe(baseDePrueba({ ...datosCompras(), solicitudes_compra: [], recepciones: [] })), { email: "jefe@anafer.test" });
+  const errores = await abrirGestion(page, conJefe(baseDePrueba(conArticulos({ solicitudes_compra: [], recepciones: [] }))), { email: "jefe@anafer.test" });
   await expect(page.locator("#tab-solicitudes")).toBeVisible().catch(async () => { await page.getByText("Administración").first().click(); });
   await expect(page.locator("#view-solicitudes")).toBeVisible();
   await expect(page.locator("#tab-compras")).toBeHidden();
@@ -37,13 +46,24 @@ test("el jefe de sector carga su solicitud con su usuario y solo ve Solicitudes"
   await page.fill("#sol-para", "2026-11-20");
   await page.check("#sol-urgente");
   const filas = page.locator("#sol-items tbody tr");
-  await filas.nth(0).locator(".i-desc").fill("Guantes de nitrilo");
-  await filas.nth(0).locator(".i-desc").dispatchEvent("change");
+  // se elige de la base de artículos (no hay campo libre ni precio)
+  await expect(filas.nth(0).locator("input.i-desc")).toHaveCount(0);
+  await expect(page.locator("#sol-items")).not.toContainText("Precio");
+  await filas.nth(0).locator("select.i-desc").selectOption("a_g");
+  await expect(page.locator("#sol-items tbody tr").nth(0).locator(".u-fija")).toHaveText("Caja");
   await filas.nth(0).locator(".i-cant").fill("10");
   await filas.nth(0).locator(".i-cant").dispatchEvent("change");
   await page.click("#sol-add");
-  await filas.nth(1).locator(".i-desc").fill("Correa A-42");
-  await filas.nth(1).locator(".i-desc").dispatchEvent("change");
+  await filas.nth(1).locator("select.i-desc").selectOption("a_c");
+  // algo suelto que no está en la base: "Otro" y se escribe a mano
+  await page.click("#sol-add");
+  await filas.nth(2).locator("select.i-desc").selectOption("__otro");
+  await page.click("#sol-save");
+  await expect(page.locator("#toast")).toContainText("Escribí qué se necesita");
+  await filas.nth(2).locator(".i-texto").fill("Lamparitas LED 9W");
+  await filas.nth(2).locator(".i-texto").dispatchEvent("change");
+  await filas.nth(2).locator(".i-cant").fill("2");
+  await filas.nth(2).locator(".i-cant").dispatchEvent("change");
   await filas.nth(1).locator(".i-cant").fill("4");
   await filas.nth(1).locator(".i-cant").dispatchEvent("change");
   await page.fill("#sol-motivo", "Se cortó la correa de la sopladora 2");
@@ -51,25 +71,23 @@ test("el jefe de sector carga su solicitud con su usuario y solo ve Solicitudes"
   await expect(page.locator("#sol-overlay")).not.toHaveClass(/show/);
   const s = (await ultima(page, "solicitudes_compra")).pop();
   expect([s.numero, s.sector, s.solicitante, s.urgente, s.estado, s.necesaria_para]).toEqual([1, "Mantenimiento", "jefe@anafer.test", true, "pendiente", "2026-11-20"]);
-  expect(s.items.map((i) => [i.descripcion, i.cantidad])).toEqual([["Guantes de nitrilo", 10], ["Correa A-42", 4]]);
+  expect(s.items.map((i) => [i.articulo_id, i.descripcion, i.cantidad, i.unidad])).toEqual([["a_g", "Guantes de nitrilo", 10, "Caja"], ["a_c", "Correa A-42", 4, "Unidad"], ["", "Lamparitas LED 9W", 2, "Unidad"]]);
   await expect(page.locator("#sc-body")).toContainText("SC-0001");
   await expect(page.locator("#sc-body")).toContainText("Pendiente");
   expect(errores).toEqual([]);
 });
 
 test("Compras genera la orden desde la solicitud, recibe en dos veces y queda entregada", async ({ page }) => {
-  const errores = await abrirGestion(page, baseDePrueba({ ...datosCompras(), solicitudes_compra: [SOL], recepciones: [] }), { email: "compras@anafer.test" });
+  const errores = await abrirGestion(page, baseDePrueba(conArticulos({ solicitudes_compra: [SOL], recepciones: [] })), { email: "compras@anafer.test" });
   await page.click("#tab-solicitudes");
   await page.click('#subtabs-solicitudes .stabbtn[data-sub="solicitudes"]');
   await expect(page.locator("#sc-f-mias")).not.toBeChecked();
   await page.locator("#sc-body tr", { hasText: "SC-0001" }).click();
   await expect(page.locator("#sol-compras")).toBeVisible();
   const filas = page.locator("#sol-items tbody tr");
-  for (const [i, precio] of [[0, "1500"], [1, "8000"]]) {
+  for (const i of [0, 1]) {
     await filas.nth(i).locator(".i-prov").fill("Ferretería SA");
     await filas.nth(i).locator(".i-prov").dispatchEvent("change");
-    await filas.nth(i).locator(".i-precio").fill(precio);
-    await filas.nth(i).locator(".i-precio").dispatchEvent("change");
   }
   await page.selectOption("#sol-estado-sel", "cotizando");
   await page.fill("#sol-entrega", "2099-11-15");

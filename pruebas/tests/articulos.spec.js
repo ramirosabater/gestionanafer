@@ -5,9 +5,9 @@ import { baseDePrueba, abrirGestion, escrituras } from "../apoyo/gestion.js";
 import { datosCompras, PROVEEDORES, FACTURAS } from "../apoyo/datos-compras.js";
 
 const ARTICULOS = [
-  { id: "a1", codigo: "00001", descripcion: "Tapa 28 mm azul", unidad: "Unidad", categoria: "Envases", activo: true },
-  { id: "a2", codigo: "00002", descripcion: "Etiqueta soda 1.5L", unidad: "Rollo", categoria: "Envases", activo: true },
-  { id: "a9", codigo: "00009", descripcion: "Artículo viejo", unidad: "Unidad", categoria: "", activo: false },
+  { id: "a1", codigo: "00001", descripcion: "Tapa 28 mm azul", unidad: "Unidad", categoria: "Envases", activo: true, proveedores: ["bien"] },
+  { id: "a2", codigo: "00002", descripcion: "Etiqueta soda 1.5L", unidad: "Rollo", categoria: "Envases", activo: true, proveedores: [] },
+  { id: "a9", codigo: "00009", descripcion: "Artículo viejo", unidad: "Unidad", categoria: "", activo: false, proveedores: [] },
 ];
 function datos() {
   return baseDePrueba(datosCompras({
@@ -37,25 +37,22 @@ test("factura de un proveedor que carga artículos: elige, sugiere el último pr
   await page.click("#fm-save");
   await expect(page.locator("#toast")).toContainText("agregá al menos un artículo");
 
-  // 1ª línea: por código; el precio sale del último pagado (50)
+  // Solo se elige de la lista del proveedor (no hay campo libre): Ferretería vende la tapa
   const l1 = page.locator("#fm-art-lines .art-line").nth(0);
-  await l1.locator(".art").fill("00001");
-  await l1.locator(".art").dispatchEvent("change");
-  await expect(l1.locator(".art")).toHaveValue("00001 · Tapa 28 mm azul");
-  await expect(l1.locator(".precio")).toHaveValue("50");
+  await expect(l1.locator("select.art option")).toHaveText(["Elegí el artículo…", "00001 · Tapa 28 mm azul"]);
+  await expect(page.locator("#fm-art-nota")).toContainText("Artículos de Ferretería SA (1)");
+  await l1.locator("select.art").selectOption("a1");
+  await expect(l1.locator(".precio")).toHaveValue("50");          // el último precio pagado
   await l1.locator(".cant").fill("10");
   await expect(l1.locator(".imp")).toHaveText("$500,00");
-  // 2ª línea: un artículo que no existe → se crea desde la factura
+  // 2ª línea: un artículo que no existe → se crea desde la factura y queda asociado al proveedor
   await page.click("#fm-art-add");
-  const l2 = page.locator("#fm-art-lines .art-line").nth(1);
-  await l2.locator(".art").fill("Cinta de embalar 48mm");
-  await l2.locator(".art").dispatchEvent("change");
-  await expect(page.locator("#fm-art-lines")).toContainText("no está en la base");
-  await page.getByRole("button", { name: "Crearlo como artículo nuevo" }).click();
-  await expect(page.locator("#artm-descripcion")).toHaveValue("Cinta de embalar 48mm");
+  await page.click("#fm-art-nuevo");
+  await expect(page.locator("#artm-provs")).toContainText("Ferretería SA");
+  await page.fill("#artm-descripcion", "Cinta de embalar 48mm");
   await page.fill("#artm-categoria", "Embalaje");
   await page.click("#artm-save");
-  await expect(page.locator("#fm-art-lines .art-line").nth(1).locator(".art")).toHaveValue("00010 · Cinta de embalar 48mm");
+  await expect(page.locator("#fm-art-lines .art-line").nth(1).locator("select.art")).toHaveValue(/art_/);
   await page.locator("#fm-art-lines .art-line").nth(1).locator(".cant").fill("2");
   await page.locator("#fm-art-lines .art-line").nth(1).locator(".precio").fill("300");
   await expect(page.locator("#fm-art-total")).toContainText("Total artículos $1.100,00");
@@ -63,13 +60,33 @@ test("factura de un proveedor que carga artículos: elige, sugiere el último pr
   await page.click("#fm-save");
 
   const nuevo = (await escrituras(page, "articulos")).map((x) => x[2]).pop();
-  expect(nuevo).toMatchObject({ codigo: "00010", descripcion: "Cinta de embalar 48mm", categoria: "Embalaje", unidad: "Unidad", activo: true });
+  expect(nuevo).toMatchObject({ codigo: "00010", descripcion: "Cinta de embalar 48mm", categoria: "Embalaje", unidad: "Unidad", activo: true, proveedores: ["bien"] });
   const f = (await escrituras(page, "facturas")).map((x) => x[2]).find((x) => x.numero === "B-9");
   expect(f.articulos).toEqual([
     { articulo_id: "a1", cantidad: 10, precio: 50, importe: 500 },
     { articulo_id: nuevo.id, cantidad: 2, precio: 300, importe: 600 },
   ]);
   expect(f.centro_costo_id).toBe("cc_logistica_deposito");   // la imputación sigue igual
+  expect(errores).toEqual([]);
+});
+
+test("proveedor sin artículos asociados: elige de toda la base y al guardar quedan asociados", async ({ page }) => {
+  const db = datos();
+  db.proveedores = db.proveedores.map((p) => (p.id === "trans" ? { ...p, lleva_articulos: true } : p));
+  const errores = await abrirGestion(page, db, { email: "compras@anafer.test" });
+  await nuevaFactura(page, "Transporte");
+  await expect(page.locator("#fm-art-nota")).toContainText("todavía no tiene artículos asociados");
+  const l1 = page.locator("#fm-art-lines .art-line").nth(0);
+  await expect(l1.locator("select.art option")).toHaveCount(3);   // los 2 activos de la base
+  await l1.locator("select.art").selectOption("a2");
+  await l1.locator(".cant").fill("3");
+  await l1.locator(".precio").fill("100");
+  await page.fill("#fm-numero", "T-50");
+  await page.fill("#fm-monto", "363");
+  await page.click("#fm-save");
+  await expect(page.locator("#factura-overlay")).not.toHaveClass(/show/);
+  const art = (await escrituras(page, "articulos")).map((x) => x[2]).find((a) => a.id === "a2");
+  expect(art.proveedores).toEqual(["trans"]);
   expect(errores).toEqual([]);
 });
 
@@ -82,10 +99,13 @@ test("proveedor sin el tilde: no aparecen artículos; el tilde se guarda desde l
   await page.click('#subtabs-compras .stabbtn[data-sub="proveedores"]');
   await expect(page.locator("#proveedores-body tr", { hasText: "Ferretería" })).toContainText("📦");
   await page.locator("#proveedores-body tr", { hasText: "Servicios SA" }).click();
+  await expect(page.locator("#pm-rubro")).toHaveCount(0);          // el rubro ya no existe
   await page.check("#pm-lleva-articulos");
+  await page.check("#pm-combustible");
   await page.click("#pm-save");
   const p = (await escrituras(page, "proveedores")).map((x) => x[2]).pop();
-  expect(p).toMatchObject({ id: "serv", lleva_articulos: true });
+  expect(p).toMatchObject({ id: "serv", lleva_articulos: true, combustible: true });
+  expect(p.rubro).toBeUndefined();
 });
 
 test("Compras → Artículos: lista con lo comprado, búsqueda, inactivos y no se borra uno usado", async ({ page }) => {
@@ -102,8 +122,16 @@ test("Compras → Artículos: lista con lo comprado, búsqueda, inactivos y no s
   await page.fill("#articulos-search", "etiq");
   await expect(page.locator("#articulos-body tr")).toHaveCount(1);
   await page.fill("#articulos-search", "");
+  await expect(fila).toContainText("Ferretería SA");
   await fila.click();
   await expect(page.locator("#artm-uso")).toContainText("Está en 1 factura");
+  // sumar un proveedor desde la ficha del artículo
+  await page.fill("#artm-prov-input", "Servic");
+  await page.locator("#artm-prov-menu .combo-item").first().click();
+  await expect(page.locator("#artm-provs .art-prov-chip")).toHaveCount(2);
+  await page.click("#artm-save");
+  expect((await escrituras(page, "articulos")).map((x) => x[2]).pop().proveedores).toEqual(["bien", "serv"]);
+  await fila.click();
   page.once("dialog", (d) => d.accept());
   await page.click("#artm-delete");
   await expect(page.locator("#toast")).toContainText("No se puede eliminar");

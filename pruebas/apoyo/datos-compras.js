@@ -10,12 +10,12 @@ export const ESCALAS = [
   { escala: "119", desde: 142000, hasta: 213000, fijo: 9940, pct: 12 }, { escala: "119", desde: 852000, hasta: null, fijo: 165430, pct: 31 },
 ];
 export const PROVEEDORES = [
-  { id: "serv", nombre: "Servicios SA", cuit: "30-11111111-1", condicion_iva: "Responsable inscripto", rubro: "Locación de servicios" },
-  { id: "medico", nombre: "Dr. Pérez", cuit: "20-22222222-2", condicion_iva: "Responsable inscripto", rubro: "Honorarios" },
-  { id: "mono", nombre: "Mono Juan", cuit: "20-33333333-3", condicion_iva: "Responsable monotributo", rubro: "Locación de servicios" },
-  { id: "noins", nombre: "Sin Inscripción", cuit: "20-44444444-4", condicion_iva: "Responsable inscripto", rubro: "Locación de servicios", gan_condicion: "no_inscripto" },
-  { id: "bien", nombre: "Ferretería SA", cuit: "30-55555555-5", condicion_iva: "Responsable inscripto", rubro: "Bienes" },
-  { id: "trans", nombre: "Transporte SRL", cuit: "30-66666666-6", condicion_iva: "Responsable inscripto", rubro: "Transporte de carga", prioritario: true },
+  { id: "serv", nombre: "Servicios SA", cuit: "30-11111111-1", condicion_iva: "Responsable inscripto", gan_regimen: 94 },
+  { id: "medico", nombre: "Dr. Pérez", cuit: "20-22222222-2", condicion_iva: "Responsable inscripto", gan_regimen: 119 },
+  { id: "mono", nombre: "Mono Juan", cuit: "20-33333333-3", condicion_iva: "Responsable monotributo", gan_regimen: 94 },
+  { id: "noins", nombre: "Sin Inscripción", cuit: "20-44444444-4", condicion_iva: "Responsable inscripto", gan_regimen: 94, gan_condicion: "no_inscripto" },
+  { id: "bien", nombre: "Ferretería SA", cuit: "30-55555555-5", condicion_iva: "Responsable inscripto", gan_regimen: 78 },
+  { id: "trans", nombre: "Transporte SRL", cuit: "30-66666666-6", condicion_iva: "Responsable inscripto", gan_regimen: 95, prioritario: true },
 ];
 export const FACTURAS = [
   { id: "s1", proveedor_id: "serv", numero: "S-1", fecha: "2026-10-01", monto: 121000, estado: "pendiente" },

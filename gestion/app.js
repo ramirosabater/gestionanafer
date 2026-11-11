@@ -324,7 +324,7 @@
   var SETTINGS_TAB_PERMISOS = {
     routes:'grid', trucks:'grid', drivers:'grid', helpers:'grid', cargo:'grid',
     branches:'branches', companies:'company', occasionals:'occasional',
-    'centros-costo':'compras', conceptos:'compras', rubros:'compras',
+    'centros-costo':'compras', conceptos:'compras',
     'medios-caja':'tesoreria', retenciones:'pagos', 'calidad-listas':'reclamos'
   };
   function settingsTabVisible(t){
@@ -340,7 +340,7 @@
   var SETTINGS_CATEGORIES = [
     {id:'flota',       label:'Flota y viajes',            tabs:['routes','trucks','drivers','helpers','cargo']},
     {id:'sucursales',  label:'Sucursales y empresas',     tabs:['branches','companies','occasionals']},
-    {id:'compras',     label:'Compras',                   tabs:['centros-costo','conceptos','rubros']},
+    {id:'compras',     label:'Compras',                   tabs:['centros-costo','conceptos']},
     {id:'tesoreria',   label:'Tesorería',                 tabs:['medios-caja','retenciones']},
     {id:'calidad',     label:'Calidad',                   tabs:['calidad-listas']},
     {id:'acceso',      label:'Acceso',                     tabs:['auth']}
@@ -374,7 +374,7 @@
     });
   }
   function firstVisibleSettingsTab(){
-    var order = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','medios-caja','retenciones','calidad-listas','auth'];
+    var order = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','medios-caja','retenciones','calidad-listas','auth'];
     for(var i=0;i<order.length;i++){ if(settingsTabVisible(order[i])) return order[i]; }
     return 'auth';
   }
@@ -481,14 +481,12 @@
     conceptos: [],
     editingCentroCostoId: null,
     editingConceptoId: null,
-    rubros: [],                 // [{id, nombre}] — lista administrable desde ⚙ → Compras → Rubros
     articulos: [],              // [{id, codigo, descripcion, unidad, categoria, activo, notas}] — Compras → Artículos
     tablaArticulos: false,      // existe la tabla articulos (se corrió articulos.sql)
     colArticulos: false,        // existe facturas.articulos
     colLlevaArticulos: false,   // existe proveedores.lleva_articulos
     editingFacturaArts: null,   // líneas de artículos de la factura en edición
     articulosFiltro: 'activos', articulosBusqueda: '',
-    editingRubroId: null,
     editingFacturaItems: null,  // null = factura con una sola imputación; array = repartida en líneas
     // Facturas y Órdenes de pago: facturas de proveedor (con o sin orden de
     // compra asociada — la mayoría no tiene una) y órdenes de pago que
@@ -2390,7 +2388,7 @@
   }
 
   // ---------- Settings (ABM: rutas, camiones, choferes, ayudantes, etc.) ----------
-  var SETTINGS_ALL_TABS = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','rubros','medios-caja','retenciones','calidad-listas','auth'];
+  var SETTINGS_ALL_TABS = ['routes','trucks','drivers','helpers','cargo','branches','companies','occasionals','centros-costo','conceptos','medios-caja','retenciones','calidad-listas','auth'];
   function switchSettingsTab(tab){
     refreshSettingsTabsVisibility();
     if(!settingsTabVisible(tab)) tab = firstVisibleSettingsTab();
@@ -3357,14 +3355,19 @@
       var row = document.createElement('div');
       row.className = 'attach-item';
       if(a.pending){
-        var span = document.createElement('span');
+        var span = document.createElement(containerId==='fm-archivos-list' ? 'a' : 'span');
         span.textContent = (a.name || 'archivo') + ' (se sube a Drive al guardar)';
+        if(containerId==='fm-archivos-list'){ span.href = '#'; span.title = 'Ver al costado'; span.addEventListener('click', function(ev){ ev.preventDefault(); mostrarVistaFactura(a.file); }); }
         row.appendChild(span);
       } else {
         var link = document.createElement('a');
         link.href = a.unidad ? '#' : a.url; link.target = '_blank'; link.rel = 'noopener';
         link.textContent = a.name || 'archivo';
-        if(a.unidad) link.addEventListener('click', function(ev){ ev.preventDefault(); abrirAdjunto(a, 'administracion'); });
+        if(containerId==='fm-archivos-list'){
+          link.title = 'Ver al costado';
+          link.textContent = '👁 '+(a.name || 'archivo');
+          link.addEventListener('click', function(ev){ ev.preventDefault(); verAdjuntoFactura(a); });
+        } else if(a.unidad) link.addEventListener('click', function(ev){ ev.preventDefault(); abrirAdjunto(a, 'administracion'); });
         row.appendChild(link);
       }
       var size = document.createElement('span');
@@ -3471,18 +3474,7 @@
 
   function applyFacturaReadResult(data){
     if(!data) return;
-    if(data.proveedor_nombre){
-      var nombreLeido = String(data.proveedor_nombre);
-      var match = state.proveedores.find(function(p){ return (p.nombre||'').toLowerCase()===nombreLeido.toLowerCase(); });
-      if(match){
-        setProveedorComboValue('fm-proveedor', match.id);
-        fillFacturaOCSelect(match.id);
-        aplicarImputacionDefault(match.id);
-        renderFacturaImputChips();
-      }else{
-        showToast('Proveedor leído: "'+nombreLeido+'" — no está en la lista, elegilo a mano.');
-      }
-    }
+    // El proveedor no se lee: lo elige el operador a mano (pedido de Administración).
     if(data.numero) document.getElementById('fm-numero').value = data.numero;
     if(data.fecha && /^\d{4}-\d{2}-\d{2}$/.test(data.fecha)) document.getElementById('fm-fecha').value = data.fecha;
     if(data.monto!=null && !isNaN(parseFloat(data.monto))) document.getElementById('fm-monto').value = String(data.monto).replace('.',',');
@@ -3490,18 +3482,86 @@
     updateSplitTotal();
   }
 
+  // Vista previa del archivo al costado del formulario, para controlar la lectura
+  var vistaFacturaUrl = null, vistaFacturaArchivo = null;
+  function mostrarVistaFactura(file){
+    var panel = document.getElementById('fm-vista');
+    if(!panel || !file) return;
+    if(vistaFacturaUrl){ try{ URL.revokeObjectURL(vistaFacturaUrl); }catch(e){} }
+    vistaFacturaArchivo = file;
+    vistaFacturaUrl = URL.createObjectURL(file);
+    var cuerpo = document.getElementById('fm-vista-cuerpo');
+    document.getElementById('fm-vista-nombre').textContent = file.name || 'factura';
+    document.getElementById('fm-vista-nombre').title = file.name || '';
+    if(file.type==='application/pdf'){
+      cuerpo.innerHTML = '<iframe title="Vista previa de la factura" src="'+vistaFacturaUrl+'#toolbar=1&view=FitH"></iframe>';
+    }else if(/^image\//.test(file.type)){
+      cuerpo.innerHTML = '<img alt="Vista previa de la factura" src="'+vistaFacturaUrl+'">';
+      var img = cuerpo.querySelector('img');
+      img.addEventListener('click', function(){ img.classList.toggle('zoom'); });
+    }else{
+      cuerpo.innerHTML = '<div class="fm-vista-nada">No se puede mostrar este tipo de archivo.</div>';
+    }
+    document.getElementById('fm-vista-abrir').href = vistaFacturaUrl;
+    panel.hidden = false;
+    document.getElementById('factura-overlay').classList.add('con-vista');
+    document.getElementById('fm-ver-archivo').hidden = true;
+  }
+  // Un adjunto ya guardado: se baja por la función del servidor (unidad
+  // compartida) y se muestra al costado. Los viejos con enlace se abren aparte.
+  var vistaPedido = 0;
+  function verAdjuntoFactura(a){
+    if(!a) return;
+    if(a.pending && a.file){ mostrarVistaFactura(a.file); return; }
+    if(!a.unidad){ if(a.url) window.open(a.url, '_blank', 'noopener'); return; }
+    var pedido = ++vistaPedido;
+    var panel = document.getElementById('fm-vista');
+    document.getElementById('fm-vista-nombre').textContent = a.name || 'archivo';
+    document.getElementById('fm-vista-cuerpo').innerHTML = '<div class="fm-vista-nada">Abriendo '+esc(a.name || 'el archivo')+'…</div>';
+    document.getElementById('fm-vista-abrir').removeAttribute('href');
+    panel.hidden = false;
+    document.getElementById('factura-overlay').classList.add('con-vista');
+    adjuntosFuncion({accion:'abrir', modulo:a.modulo || 'administracion', id:a.id}).then(function(r){ return r.blob(); }).then(function(b){
+      if(pedido!==vistaPedido || !document.getElementById('factura-overlay').classList.contains('show')) return;
+      var tipo = a.contentType || b.type || '';
+      mostrarVistaFactura(new File([b], a.name || 'archivo', {type: tipo}));
+    }).catch(function(e){
+      if(pedido!==vistaPedido) return;
+      document.getElementById('fm-vista-cuerpo').innerHTML = '<div class="fm-vista-nada">No se pudo abrir el archivo: '+esc(e.message)+'</div>';
+    });
+  }
+  function adjuntosDeFactura(){ return (state.editingFacturaArchivos||[]).filter(function(a){ return a && (a.pending || a.id || a.url); }); }
+  function ocultarVistaFactura(liberar){
+    var panel = document.getElementById('fm-vista');
+    if(!panel) return;
+    panel.hidden = true;
+    document.getElementById('factura-overlay').classList.remove('con-vista');
+    document.getElementById('fm-vista-cuerpo').innerHTML = '';
+    if(liberar){
+      if(vistaFacturaUrl){ try{ URL.revokeObjectURL(vistaFacturaUrl); }catch(e){} }
+      vistaFacturaUrl = null; vistaFacturaArchivo = null;
+    }
+    if(liberar) vistaPedido++;
+    document.getElementById('fm-ver-archivo').hidden = !vistaFacturaArchivo && !adjuntosDeFactura().length;
+  }
+  document.getElementById('fm-vista-cerrar').addEventListener('click', function(){ ocultarVistaFactura(false); });
+  document.getElementById('fm-ver-archivo').addEventListener('click', function(){
+    if(vistaFacturaArchivo) mostrarVistaFactura(vistaFacturaArchivo);
+    else verAdjuntoFactura(adjuntosDeFactura()[0]);
+  });
+
   var LECTURA_TIPOS = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
   async function readFacturaFromFile(file){
     if(!(state.sb && state.sb.functions)){ showToast('La lectura automática necesita conexión con la base.'); return; }
     var label = document.getElementById('fm-read-label');
     try{
       var imageBlob = file;
-      if(file.type === 'application/pdf'){
-        imageBlob = await pdfFirstPageToImageBlob(file);
-      }else if(LECTURA_TIPOS.indexOf(file.type)===-1){
+      if(file.type!=='application/pdf' && LECTURA_TIPOS.indexOf(file.type)===-1){
         showToast(/^image\//.test(file.type) ? 'Ese formato de imagen no se puede leer: usá PDF, JPG o PNG.' : 'Elegí un PDF o una imagen de la factura.');
         return;
       }
+      mostrarVistaFactura(file);   // primero se ve; si la lectura falla, igual queda para cargar a mano
+      if(file.type === 'application/pdf') imageBlob = await pdfFirstPageToImageBlob(file);
       showToast('Leyendo factura...', 15000);
       if(label) label.classList.add('leyendo');
       // el archivo original queda como adjunto pendiente; se sube a Drive
@@ -3512,8 +3572,7 @@
       var base64 = await blobToBase64(imageBlob);
       var res = await state.sb.functions.invoke('leer-factura', { body: {
         imagen: base64,
-        mediaType: imageBlob.type && LECTURA_TIPOS.indexOf(imageBlob.type)!==-1 ? imageBlob.type : 'image/png',
-        proveedores: state.proveedores.map(function(p){ return p.nombre; })
+        mediaType: imageBlob.type && LECTURA_TIPOS.indexOf(imageBlob.type)!==-1 ? imageBlob.type : 'image/png'
       }});
       if(res.error){
         var msg = '', status = 0;
@@ -3525,7 +3584,7 @@
       var data = res.data && res.data.data;
       if(!data){ showToast('No se pudo interpretar la respuesta — completá los datos a mano.'); return; }
       applyFacturaReadResult(data);
-      showToast('Factura leída — revisá los datos antes de guardar.');
+      showToast('Factura leída — compará con la vista previa y elegí el proveedor a mano.', 6000);
     }catch(e){
       showToast('No se pudo leer la factura automáticamente — completá los datos a mano.');
     }finally{
@@ -3918,108 +3977,6 @@
     showToast('Concepto eliminado.');
   });
 
-  // ---------- Rubros (ABM) ----------
-  function rubroById(id){ return state.rubros.find(function(x){ return x.id===id; }) || null; }
-  function generateRubroId(nombre){
-    var base = slug(nombre) || 'rubro';
-    var used = {};
-    state.rubros.forEach(function(r){ used[r.id] = true; });
-    if(!used[base]) return base;
-    var n = 2;
-    while(used[base+'_'+n]) n++;
-    return base+'_'+n;
-  }
-  function proveedoresConRubro(nombre){
-    var k = (nombre||'').trim().toLowerCase();
-    return state.proveedores.filter(function(p){ return (p.rubro||'').trim().toLowerCase()===k; });
-  }
-  function writeRubro(r){
-    if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
-    state.sb.from('rubros').upsert({ id:r.id, nombre:r.nombre||'' }).then(function(res){
-      if(res.error) showToast('No se pudo guardar el rubro: '+res.error.message);
-    });
-  }
-  // Si el rubro elegido para un proveedor todavía no está en la lista, lo
-  // da de alta (caso "Otro (crear nuevo)...").
-  function asegurarRubro(nombre){
-    nombre = (nombre||'').trim();
-    if(!nombre) return;
-    if(state.rubros.some(function(r){ return (r.nombre||'').trim().toLowerCase()===nombre.toLowerCase(); })) return;
-    var r = {id:generateRubroId(nombre), nombre:nombre};
-    state.rubros.push(r);
-    writeRubro(r);
-    renderRubrosList();
-  }
-  function renderRubrosList(){
-    var body = document.getElementById('rubros-body');
-    if(!body) return;
-    body.innerHTML = '';
-    if(state.rubros.length===0){
-      body.innerHTML = '<tr class="day-row empty"><td colspan="2">Todavía no hay rubros cargados.</td></tr>';
-      return;
-    }
-    state.rubros.slice().sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); }).forEach(function(r){
-      var tr = document.createElement('tr');
-      tr.className = 'day-row';
-      tr.innerHTML = '<td class="day-route">'+esc(r.nombre)+'</td><td class="num">'+proveedoresConRubro(r.nombre).length+'</td>';
-      tr.addEventListener('click', function(){ openRubroModal(r.id); });
-      body.appendChild(tr);
-    });
-  }
-  function openRubroModal(id){
-    state.editingRubroId = id || null;
-    var r = id ? rubroById(id) : null;
-    document.getElementById('rbm-title').textContent = r ? 'Editar rubro' : 'Nuevo rubro';
-    document.getElementById('rbm-nombre').value = r ? r.nombre : '';
-    document.getElementById('rbm-delete').style.display = r ? '' : 'none';
-    document.getElementById('rubro-overlay').classList.add('show');
-  }
-  function closeRubroModal(){ document.getElementById('rubro-overlay').classList.remove('show'); }
-  document.getElementById('new-rubro-btn').addEventListener('click', function(){ openRubroModal(null); });
-  document.getElementById('rbm-cancel').addEventListener('click', closeRubroModal);
-  document.getElementById('rbm-save').addEventListener('click', function(){
-    var nombre = document.getElementById('rbm-nombre').value.trim();
-    if(!nombre){ showToast('Ingresá el nombre del rubro.'); return; }
-    var id = state.editingRubroId;
-    var dup = state.rubros.some(function(r){ return r.id!==id && (r.nombre||'').trim().toLowerCase()===nombre.toLowerCase(); });
-    if(dup){ showToast('Ya existe un rubro con ese nombre.'); return; }
-    var isNew = !id;
-    var anterior = isNew ? null : (rubroById(id)||{}).nombre;
-    if(isNew) id = generateRubroId(nombre);
-    var r = {id:id, nombre:nombre};
-    if(isNew) state.rubros.push(r);
-    else { var idx = state.rubros.findIndex(function(x){ return x.id===id; }); if(idx>=0) state.rubros[idx]=r; }
-    writeRubro(r);
-    // Renombrar: se actualiza el rubro en todos los proveedores que lo tenían.
-    if(anterior && anterior!==nombre){
-      var afectados = proveedoresConRubro(anterior);
-      afectados.forEach(function(p){ p.rubro = nombre; });
-      if(afectados.length && state.sb){
-        state.sb.from('proveedores').update({rubro:nombre}).in('id', afectados.map(function(p){ return p.id; })).then(function(res){
-          if(res.error) showToast('No se pudo actualizar el rubro en los proveedores: '+res.error.message);
-        });
-      }
-      if(afectados.length) showToast('Rubro renombrado en '+afectados.length+' proveedor'+(afectados.length===1?'':'es')+'.');
-      else showToast('Rubro guardado.');
-    } else showToast('Rubro guardado.');
-    closeRubroModal();
-    renderRubrosList();
-    renderProveedoresList();
-  });
-  document.getElementById('rbm-delete').addEventListener('click', function(){
-    var id = state.editingRubroId;
-    var r = id ? rubroById(id) : null;
-    if(!r) return;
-    var n = proveedoresConRubro(r.nombre).length;
-    if(n){ showToast('No se puede eliminar: hay '+n+' proveedor'+(n===1?'':'es')+' con este rubro. Cambiales el rubro primero, o renombralo.'); return; }
-    state.rubros = state.rubros.filter(function(x){ return x.id!==id; });
-    if(state.sb) state.sb.from('rubros').delete().eq('id', id).then(function(res){
-      if(res.error) showToast('No se pudo eliminar: '+res.error.message);
-    });
-    closeRubroModal();
-    renderRubrosList();
-    showToast('Rubro eliminado.');
-  });
 
   // ---------- Buscador de proveedor (combo), reemplaza los <select> nativos
   // que se vuelven inusables con muchos proveedores cargados ----------
@@ -4084,7 +4041,6 @@
     renderProveedoresList();
     renderCentrosCostoList();
     renderConceptosList();
-    renderRubrosList();
     renderOCList();
     renderArticulosList();
     actualizarSubtabs();
@@ -4125,7 +4081,7 @@
       tr.innerHTML = '<td class="num">'+esc(p.codigo||'—')+'</td>'
         +'<td class="day-route">'+esc(p.nombre)+(p.llevaArticulos ? ' <span title="Carga artículos en sus facturas">📦</span>' : '')+(p.nombreFantasia ? ' <span style="color:var(--muted); font-weight:400;">· '+esc(p.nombreFantasia)+'</span>' : '')+'</td>'
         +'<td class="num">'+esc(p.cuit||'—')+'</td>'
-        +'<td>'+esc(p.rubro||'—')+'</td>'
+        +'<td>'+esc(p.condicionIva||'—')+(p.combustible ? ' <span title="Combustible: sus facturas piden km y litros">⛽</span>' : '')+'</td>'
         +'<td>'+(def ? esc(imputLabel(def))+extra : '—')+'</td>'
         +'<td class="num">'+esc(p.telefono||'—')+'</td>';
       tr.addEventListener('click', function(){ openProveedorModal(p.id); });
@@ -4181,7 +4137,7 @@
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return; }
     // "prioritario" solo se manda si la columna existe (schema.sql nuevo).
     state.sb.from('proveedores').upsert(Object.assign({
-      id:p.id, nombre:p.nombre, cuit:p.cuit||'', rubro:p.rubro||'', contacto:p.contacto||'',
+      id:p.id, nombre:p.nombre, cuit:p.cuit||'', contacto:p.contacto||'',
       telefono:p.telefono||'', email:p.email||'', direccion:p.direccion||'',
       banco:p.banco||'', cbu:p.cbu||'', notas:p.notas||'', archivos:p.archivos||[],
       codigo:p.codigo||'', nombre_fantasia:p.nombreFantasia||'', localidad:p.localidad||'',
@@ -4189,6 +4145,7 @@
       imputaciones:(p.imputaciones||[]).map(function(im){ return {centro_costo_id:im.centroCostoId, concepto_id:im.conceptoId}; })
     }, state.colPrioritario ? {prioritario: !!p.prioritario} : {},
        state.colLlevaArticulos ? {lleva_articulos: !!p.llevaArticulos} : {},
+       state.colCombustible ? {combustible: !!p.combustible} : {},
        state.schemaV3 ? {gan_condicion: p.ganCondicion||'', gan_regimen: p.ganRegimen||null} : {})).then(function(res){
       if(res.error) showToast('No se pudo guardar el proveedor: '+res.error.message);
     });
@@ -4256,37 +4213,6 @@
     renderProveedorImputList();
   });
 
-  // Rubro: lista para elegir, administrable desde ⚙ → Compras → Rubros
-  // (tabla rubros). El proveedor guarda el nombre. "Otro..." deja escribir
-  // uno nuevo, que se da de alta en la lista al guardar el proveedor.
-  function rubrosDisponibles(){
-    return state.rubros.map(function(r){ return r.nombre; }).filter(Boolean)
-      .sort(function(a,b){ return a.localeCompare(b); });
-  }
-  function fillRubroSelect(valor){
-    var sel = document.getElementById('pm-rubro');
-    sel.innerHTML = '<option value="">— Sin rubro —</option>';
-    var lista = rubrosDisponibles();
-    var match = lista.find(function(r){ return r.toLowerCase()===(valor||'').trim().toLowerCase(); });
-    if(valor && !match){ lista = lista.concat([valor.trim()]); match = valor.trim(); }
-    lista.forEach(function(r){
-      var o = document.createElement('option'); o.value = r; o.textContent = r; sel.appendChild(o);
-    });
-    var otro = document.createElement('option'); otro.value = '__otro__'; otro.textContent = 'Otro (crear nuevo)...'; sel.appendChild(otro);
-    sel.value = match || '';
-    document.getElementById('pm-rubro-otro').value = '';
-    document.getElementById('pm-rubro-otro').hidden = true;
-  }
-  function rubroElegido(){
-    var v = document.getElementById('pm-rubro').value;
-    if(v==='__otro__') return document.getElementById('pm-rubro-otro').value.trim();
-    return v;
-  }
-  document.getElementById('pm-rubro').addEventListener('change', function(){
-    var otro = document.getElementById('pm-rubro-otro');
-    otro.hidden = this.value!=='__otro__';
-    if(!otro.hidden) otro.focus();
-  });
 
   function openProveedorModal(id){
     state.editingProveedorId = id || null;
@@ -4294,7 +4220,6 @@
     document.getElementById('pm-title').textContent = p ? 'Editar proveedor' : 'Nuevo proveedor';
     document.getElementById('pm-nombre').value = p ? p.nombre : '';
     document.getElementById('pm-cuit').value = p ? (p.cuit||'') : '';
-    fillRubroSelect(p ? (p.rubro||'') : '');
     document.getElementById('pm-contacto').value = p ? (p.contacto||'') : '';
     document.getElementById('pm-telefono').value = p ? (p.telefono||'') : '';
     document.getElementById('pm-email').value = p ? (p.email||'') : '';
@@ -4310,8 +4235,9 @@
     setSelectValueLoose('pm-condicion-pago', p ? p.condicionPago : '');
     document.getElementById('pm-prioritario').checked = !!(p && p.prioritario);
     document.getElementById('pm-lleva-articulos').checked = !!(p && p.llevaArticulos);
+    document.getElementById('pm-combustible').checked = !!(p && p.combustible);
     document.getElementById('pm-gan-condicion').value = p ? (p.ganCondicion||'') : '';
-    fillRegimenSelect(document.getElementById('pm-gan-regimen'), p && p.ganRegimen ? String(p.ganRegimen) : '', 'Según rubro');
+    fillRegimenSelect(document.getElementById('pm-gan-regimen'), p && p.ganRegimen ? String(p.ganRegimen) : '', 'Sin régimen (no retiene)');
     actualizarPmGanHint();
     state.editingProveedorImput = p ? (p.imputaciones||[]).map(function(im){ return {centroCostoId:im.centroCostoId, conceptoId:im.conceptoId}; }) : [];
     fillImputAddSelects();
@@ -4336,7 +4262,6 @@
     var baseData = {
       id:id, nombre:nombre,
       cuit: document.getElementById('pm-cuit').value.trim(),
-      rubro: rubroElegido(),
       contacto: document.getElementById('pm-contacto').value.trim(),
       telefono: document.getElementById('pm-telefono').value.trim(),
       email: document.getElementById('pm-email').value.trim(),
@@ -4352,13 +4277,15 @@
       condicionPago: document.getElementById('pm-condicion-pago').value,
       prioritario: document.getElementById('pm-prioritario').checked,
       llevaArticulos: document.getElementById('pm-lleva-articulos').checked,
+      combustible: document.getElementById('pm-combustible').checked,
+      rubroViejo: (state.proveedores.find(function(x){ return x.id===id; })||{}).rubroViejo || '',
       ganCondicion: document.getElementById('pm-gan-condicion').value || '',
       ganRegimen: document.getElementById('pm-gan-regimen').value ? Number(document.getElementById('pm-gan-regimen').value) : null,
       imputaciones: state.editingProveedorImput.slice()
     };
+    if(baseData.combustible && !state.colCombustible) showToast('Para guardar "Proveedor de combustible" falta correr base-de-datos/quitar-rubro-proveedores.sql en Supabase.', 7000);
     if(baseData.llevaArticulos && !state.colLlevaArticulos) showToast('Para guardar "Carga artículos" falta correr base-de-datos/articulos.sql en Supabase.', 7000);
     if(baseData.prioritario && !state.colPrioritario) showToast('Para guardar "pago prioritario" falta correr el schema.sql nuevo en Supabase.', 6000);
-    asegurarRubro(baseData.rubro);
     var saveBtn = this;
     var tienePendientes = state.editingProveedorArchivos.some(function(a){ return a.pending; });
     if(tienePendientes){ saveBtn.disabled = true; showToast('Subiendo adjuntos a Google Drive...'); }
@@ -4503,8 +4430,13 @@
   function mapProveedorRow(row){
     if(row && Object.prototype.hasOwnProperty.call(row, 'prioritario')) state.colPrioritario = true;
     if(row && Object.prototype.hasOwnProperty.call(row, 'lleva_articulos')) state.colLlevaArticulos = true;
+    if(row && Object.prototype.hasOwnProperty.call(row, 'combustible')) state.colCombustible = true;
     return {
-      id:row.id, nombre:row.nombre||row.id, cuit:row.cuit||'', rubro:row.rubro||'',
+      id:row.id, nombre:row.nombre||row.id, cuit:row.cuit||'',
+      // El rubro ya no se usa (quitar-rubro-proveedores.sql lo pasa a régimen y a "combustible");
+      // mientras no se corra, se sigue leyendo para no cambiar las retenciones.
+      rubroViejo: row.rubro||'',
+      combustible: row.combustible===true || (row.combustible==null && /combust|lubric/i.test(row.rubro||'')),
       contacto:row.contacto||'', telefono:row.telefono||'', email:row.email||'',
       direccion:row.direccion||'', banco:row.banco||'', cbu:row.cbu||'', notas:row.notas||'',
       archivos: Array.isArray(row.archivos) ? row.archivos : [],
@@ -4592,11 +4524,6 @@
       state.articulos = (res.data||[]).map(mapArticuloRow);
       renderCompras();
       if(document.getElementById('factura-overlay').classList.contains('show')) renderFacturaArts();
-    });
-    state.sb.from('rubros').select('*').then(function(res){
-      if(res.error){ showToast('Error cargando rubros (¿corriste el schema.sql nuevo?): '+res.error.message); return; }
-      state.rubros = (res.data||[]).map(function(row){ return {id:row.id, nombre:row.nombre||''}; });
-      renderCompras();
     });
   }
 
@@ -4701,12 +4628,11 @@
     state.facturas.forEach(function(f){ var m = esDebitoInterno(f) && /^DI-(\d+)$/i.exec(String(f.numero||'')); if(m) max = Math.max(max, Number(m[1])); });
     return 'DI-'+String(max+1).padStart(4, '0');
   }
-  // Proveedores de combustibles y lubricantes (por el rubro): su factura
-  // pide, opcionales, kilómetros y litros.
+  // Proveedores de combustible (tilde ⛽ en la ficha): su factura pide,
+  // opcionales, kilómetros y litros.
   function provEsCombustible(provId){
     var p = state.proveedores.find(function(x){ return x.id===provId; });
-    var r = normTxt(p && p.rubro);
-    return r.indexOf('combust')!==-1 || r.indexOf('lubric')!==-1;
+    return !!(p && p.combustible);
   }
   function fmtKm(n){ return Number(n||0).toLocaleString('es-AR', {maximumFractionDigits:0}); }
   function fmtLitros(n){ return Number(n||0).toLocaleString('es-AR', {maximumFractionDigits:2}); }
@@ -4871,10 +4797,20 @@
     var ffe = state.facturaFilterEstado||'';
     if(ffe==='tipo:debito_interno') list = list.filter(esDebitoInterno);
     else if(ffe==='tipo:combustible') list = list.filter(function(f){ return f.km>0 || f.litros>0; });
+    else if(ffe==='archivo:con') list = list.filter(function(f){ return (f.archivos||[]).length; });
+    else if(ffe==='archivo:sin') list = list.filter(function(f){ return !(f.archivos||[]).length && !esAnulado(f); });
     else if(ffe) list = list.filter(function(f){ return f.estado===ffe; });
+    var qf = normTxt(state.facturaBuscar||'');
+    if(qf){
+      var qd = qf.replace(/\D/g,'');
+      list = list.filter(function(f){
+        return normTxt(proveedorNombre(f.proveedorId)).indexOf(qf)!==-1 || normTxt(f.numero).indexOf(qf)!==-1
+          || (qd.length>=3 && (String(f.numero||'').replace(/\D/g,'').indexOf(qd)!==-1 || String(Math.round(Number(f.monto)||0)).indexOf(qd)!==-1));
+      });
+    }
     list.sort(function(a,b){ return (b.fecha||'').localeCompare(a.fecha||''); });
     if(list.length===0){
-      body.innerHTML = '<tr class="day-row empty"><td colspan="6">No hay facturas'+(state.facturaFilterEstado?' con ese estado':' cargadas')+'.</td></tr>';
+      body.innerHTML = '<tr class="day-row empty"><td colspan="6">No hay facturas'+(state.facturaFilterEstado || state.facturaBuscar ? ' con ese filtro' : ' cargadas')+'.</td></tr>';
       return;
     }
     list.forEach(function(f){
@@ -4885,12 +4821,18 @@
       if(esAnulado(f)){ tr.className += ' anulado'; tr.title = anulacionTexto(f); }
       var comb = (f.litros>0 || f.km>0) ? '<div class="fm-hint">⛽ '+[f.litros>0 ? fmtLitros(f.litros)+' L' : '', f.km>0 ? fmtKm(f.km)+' km' : ''].filter(Boolean).join(' · ')+'</div>' : '';
       tr.innerHTML = '<td class="day-route">'+esc(proveedorNombre(f.proveedorId))+'</td>'
-        +'<td class="num">'+esc(f.numero||'—')+(esDebitoInterno(f) ? '<span class="oc-badge di">Débito interno</span>' : '')+comb+'</td>'
+        +'<td class="num">'+esc(f.numero||'—')+((f.archivos||[]).length ? ' <button type="button" class="fac-clip" title="Ver el archivo de la factura">📎</button>' : '')+(esDebitoInterno(f) ? '<span class="oc-badge di">Débito interno</span>' : '')+comb+'</td>'
         +'<td class="num">'+esc(f.fecha||'—')+'</td>'
         +'<td>'+(oc ? esc(ocNumeroLabel(oc.numero)) : '—')+'</td>'
         +'<td class="num">$'+montoStr+(f.estado==='parcial' ? '<div class="fm-hint">falta pagar '+fmtMoney(facturaSaldo(f))+'</div>' : '')+'</td>'
         +'<td><span class="oc-badge '+esc(f.estado||'pendiente')+'">'+facturaEstadoLabel(f.estado)+'</span></td>';
       tr.addEventListener('click', function(){ openFacturaModal(f.id); });
+      var clip = tr.querySelector('.fac-clip');
+      if(clip) clip.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        openFacturaModal(f.id);
+        if(document.getElementById('fm-vista').hidden) verAdjuntoFactura(adjuntosDeFactura()[0]);
+      });
       body.appendChild(tr);
     });
   }
@@ -4956,6 +4898,10 @@
     state.sb.from('ordenes_pago').select('aplicaciones,anticipos_usados,tipo').limit(1).then(function(res){ if(!res.error) state.colAnticipos = true; });
     // ¿Seguimiento de compras (seguimiento-compras.sql)? La OC guarda sus ítems y la entrega prevista.
     state.sb.from('ordenes_compra').select('items,entrega_prevista').limit(1).then(function(res){ if(!res.error) state.colOCItems = true; });
+    // ¿Proveedor de combustible (quitar-rubro-proveedores.sql)?
+    state.sb.from('proveedores').select('combustible').limit(1).then(function(res){ if(!res.error) state.colCombustible = true; });
+    // ¿Artículos por proveedor (articulos-por-proveedor.sql)?
+    state.sb.from('articulos').select('proveedores').limit(1).then(function(res){ if(!res.error) state.colArtProv = true; });
     // ¿Existen las columnas de anulación (anulacion-comprobantes.sql)?
     state.sb.from('movimientos').select('anulado_en').limit(1).then(function(res){ if(!res.error) state.colAnulacion = true; });
     state.sb.from('gan_regimenes').select('*').then(function(res){
@@ -5003,17 +4949,18 @@
   function provGanCondicion(p){ return (p && p.ganCondicion) || provGanCondicionAuto(p); }
   function provGanRegimen(p){
     if(p && p.ganRegimen) return p.ganRegimen;
-    return RUBRO_REGIMEN[normTxt(p && p.rubro)] || null;
+    return RUBRO_REGIMEN[normTxt(p && p.rubroViejo)] || null;
   }
   var GAN_COND_LABEL = {inscripto:'Inscripto', no_inscripto:'No inscripto', exento:'Exento', monotributo:'Monotributo', no_retener:'No retener'};
   function actualizarPmGanHint(){
-    var p = {condicionIva: document.getElementById('pm-condicion-iva').value, rubro: (typeof rubroElegido==='function' ? rubroElegido() : ''),
+    var pe = state.editingProveedorId ? state.proveedores.find(function(x){ return x.id===state.editingProveedorId; }) : null;
+    var p = {condicionIva: document.getElementById('pm-condicion-iva').value, rubroViejo: pe ? pe.rubroViejo : '',
              cuit: document.getElementById('pm-cuit').value};
     document.getElementById('pm-gan-hint').textContent = document.getElementById('pm-gan-condicion').value ? '' : '→ '+GAN_COND_LABEL[provGanCondicionAuto(p)];
-    var r = RUBRO_REGIMEN[normTxt(p.rubro)];
-    document.getElementById('pm-gan-reg-hint').textContent = document.getElementById('pm-gan-regimen').value ? '' : (r ? '→ '+r+' (por el rubro)' : '→ sin régimen: no retiene');
+    var r = RUBRO_REGIMEN[normTxt(p.rubroViejo)];
+    document.getElementById('pm-gan-reg-hint').textContent = document.getElementById('pm-gan-regimen').value ? '' : (r ? '→ '+r+' (por el rubro anterior: elegilo acá)' : '→ sin régimen: no retiene');
   }
-  ['pm-gan-condicion','pm-gan-regimen','pm-condicion-iva','pm-cuit','pm-rubro'].forEach(function(id){
+  ['pm-gan-condicion','pm-gan-regimen','pm-condicion-iva','pm-cuit'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.addEventListener(el.tagName==='SELECT' ? 'change' : 'input', actualizarPmGanHint);
   });
@@ -5222,11 +5169,11 @@
             antUs.map(function(x){ return [pagoNumeroLabel(x.ant.numero), impFecha(x.ant.fecha), fmtMoney(x.importe)]; })) } : null,
         rets.length ? { titulo:'Retenciones practicadas', html: impTabla([{t:'Impuesto'},{t:'Régimen'},{t:'Certificado'},{t:'Base',num:true},{t:'Retenido',num:true}],
             rets.map(function(e){ return [impuestoLabel(e), esc(regimenLabel(e.regimen)), e.certificado ? certNumeroLabel(e.certificado) : '—', fmtMoney(e.base), fmtMoney(e.importe)]; })) } : null,
-        { titulo:'Forma de pago', html: formas.length ? impTabla([{t:'Concepto'},{t:'Cuenta'},{t:'Cheque / echeq'},{t:'Fecha de cobro'},{t:'Importe',num:true}],
+        { titulo:'Forma de pago', html: formas.length ? impTabla([{t:'Concepto'},{t:'Cheque / echeq'},{t:'Fecha de cobro'},{t:'Importe',num:true}],
             formas.map(function(f){
               var chq = formaModo(f)==='cartera' ? (f.chequeIds||[]).map(chequeById).filter(Boolean).map(function(c){ return esc(chequeResumen(c)); }).join('<br>') : esc(f.chequeNumero||'');
               var cobro = formaModo(f)==='cartera' ? (f.chequeIds||[]).map(chequeById).filter(Boolean).map(function(c){ return impFecha(c.fechaCobro); }).join('<br>') : (f.chequeFecha ? impFecha(f.chequeFecha) : '');
-              return [esc(medioLabel(f.medioId)||'—'), esc(f.cuentaId ? cuentaNombre(f.cuentaId) : '—'), chq||'—', cobro||'—', fmtMoney(f.importe)];
+              return [esc(medioLabel(f.medioId)||'—'), chq||'—', cobro||'—', fmtMoney(f.importe)];
             })) : '<div class="nota">Todavía no se cargó cómo se paga (la orden está pendiente).</div>' },
         { html: impTotales([[esAnticipo(op) ? 'Importe anticipado' : 'Total comprobantes', fmtMoney(totalFact)]].concat(totAnt ? [['Anticipos', '− '+fmtMoney(totAnt), 'menos']] : []).concat(retenido ? [['Retenciones', '− '+fmtMoney(retenido), 'menos']] : []).concat([['Neto a pagar', fmtMoney(r2(totalFact-totAnt-retenido)), 'total']])) },
         op.notas ? { titulo:'Observaciones', html:'<div class="texto">'+esc(op.notas)+'</div>' } : null
@@ -5657,8 +5604,25 @@
 
   // ---------- Artículos (base para Stock) ----------
   function mapArticuloRow(row){
+    if(row && Object.prototype.hasOwnProperty.call(row, 'proveedores')) state.colArtProv = true;
     return {id:row.id, codigo:row.codigo||'', descripcion:row.descripcion||'', unidad:row.unidad||'Unidad',
-            categoria:row.categoria||'', activo:row.activo!==false, notas:row.notas||''};
+            categoria:row.categoria||'', activo:row.activo!==false, notas:row.notas||'',
+            proveedores: Array.isArray(row.proveedores) ? row.proveedores.filter(Boolean) : []};
+  }
+  // Artículos que vende un proveedor (articulos-por-proveedor.sql)
+  function articulosDeProveedor(provId){
+    return state.articulos.filter(function(a){ return a.activo && provId && (a.proveedores||[]).indexOf(provId)!==-1; })
+      .sort(function(a,b){ return (a.descripcion||'').localeCompare(b.descripcion||''); });
+  }
+  // Suma el proveedor a los artículos que se le compraron (si no lo tenían)
+  function asociarArticulosAProveedor(provId, ids){
+    if(!provId || !state.colArtProv) return;
+    (ids||[]).forEach(function(id){
+      var a = articuloById(id);
+      if(!a || (a.proveedores||[]).indexOf(provId)!==-1) return;
+      a.proveedores = (a.proveedores||[]).concat([provId]);
+      writeArticulo(a);
+    });
   }
   function articuloById(id){ return state.articulos.find(function(a){ return a.id===id; }) || null; }
   function articuloLabel(a){ return a ? ((a.codigo ? a.codigo+' · ' : '')+a.descripcion) : ''; }
@@ -5690,16 +5654,16 @@
     var list = state.articulos.filter(function(a){
       if(f==='activos' && !a.activo) return false;
       if(f==='inactivos' && a.activo) return false;
-      return !q || normTxt(a.codigo+' '+a.descripcion+' '+a.categoria).indexOf(q)!==-1;
+      return !q || normTxt(a.codigo+' '+a.descripcion+' '+a.categoria+' '+(a.proveedores||[]).map(proveedorNombre).join(' ')).indexOf(q)!==-1;
     }).sort(function(a,b){ return (a.descripcion||'').localeCompare(b.descripcion||''); });
     document.getElementById('articulos-count').textContent = state.articulos.length ? '('+state.articulos.length+')' : '';
     body.innerHTML = '';
     if(!state.tablaArticulos){
-      body.innerHTML = '<tr class="day-row empty"><td colspan="6">Para usar artículos falta correr <b>base-de-datos/articulos.sql</b> en Supabase.</td></tr>';
+      body.innerHTML = '<tr class="day-row empty"><td colspan="7">Para usar artículos falta correr <b>base-de-datos/articulos.sql</b> en Supabase.</td></tr>';
       return;
     }
     if(!list.length){
-      body.innerHTML = '<tr class="day-row empty"><td colspan="6">'+(state.articulos.length ? 'Ningún artículo coincide con la búsqueda.' : 'Todavía no hay artículos. Cargalos con “+ Nuevo artículo” o desde la factura de un proveedor que carga artículos.')+'</td></tr>';
+      body.innerHTML = '<tr class="day-row empty"><td colspan="7">'+(state.articulos.length ? 'Ningún artículo coincide con la búsqueda.' : 'Todavía no hay artículos. Cargalos con “+ Nuevo artículo” o desde la factura de un proveedor que carga artículos.')+'</td></tr>';
       return;
     }
     list.slice(0, 300).forEach(function(a){
@@ -5710,6 +5674,7 @@
         +'<td class="day-route">'+esc(a.descripcion)+(a.activo ? '' : ' <span class="fm-hint">(inactivo)</span>')+'</td>'
         +'<td>'+esc(a.unidad)+'</td>'
         +'<td>'+esc(a.categoria||'—')+'</td>'
+        +'<td>'+((a.proveedores||[]).length ? esc(a.proveedores.map(proveedorNombre).slice(0,2).join(', '))+(a.proveedores.length>2 ? ' <span class="fm-hint">+'+(a.proveedores.length-2)+'</span>' : '') : '—')+'</td>'
         +'<td class="num">'+(c.cantidad ? fmtCant(c.cantidad)+' '+esc(a.unidad.toLowerCase()) : '—')+'</td>'
         +'<td class="num">'+(c.ultimo ? fmtMoney(c.ultimo.precio)+' <span class="fm-hint">'+esc(c.ultimo.fecha||'')+'</span>' : '—')+'</td>';
       tr.addEventListener('click', function(){ openArticuloModal(a.id); });
@@ -5721,8 +5686,8 @@
 
   function writeArticulo(a){
     if(!state.sb){ showToast('No se pudo guardar: sin conexión.'); return Promise.resolve(false); }
-    return state.sb.from('articulos').upsert({id:a.id, codigo:a.codigo||'', descripcion:a.descripcion, unidad:a.unidad||'Unidad',
-      categoria:a.categoria||'', activo:a.activo!==false, notas:a.notas||''}).then(function(res){
+    return state.sb.from('articulos').upsert(Object.assign({id:a.id, codigo:a.codigo||'', descripcion:a.descripcion, unidad:a.unidad||'Unidad',
+      categoria:a.categoria||'', activo:a.activo!==false, notas:a.notas||''}, state.colArtProv ? {proveedores:a.proveedores||[]} : {})).then(function(res){
       if(res.error){
         showToast(/duplicate|unique/i.test(res.error.message) ? 'Ya hay otro artículo con el código '+a.codigo+'.' : 'No se pudo guardar el artículo: '+res.error.message, 6000);
         return false;
@@ -5746,6 +5711,9 @@
     document.getElementById('artm-categoria').value = a ? a.categoria : '';
     document.getElementById('artm-notas').value = a ? a.notas : '';
     document.getElementById('artm-activo').checked = a ? a.activo : true;
+    state.editingArtProvs = a ? (a.proveedores||[]).slice() : (opts.proveedorId ? [opts.proveedorId] : []);
+    setProveedorComboValue('artm-prov', '');
+    renderArtProvs();
     var cats = {}; state.articulos.forEach(function(x){ if(x.categoria) cats[x.categoria] = true; });
     document.getElementById('artm-categorias').innerHTML = Object.keys(cats).sort().map(function(c){ return '<option value="'+esc(c)+'">'; }).join('');
     var uso = a ? articuloCompras(a.id) : null;
@@ -5755,6 +5723,22 @@
     document.getElementById('articulo-overlay').classList.add('show');
     setTimeout(function(){ try{ document.getElementById(a ? 'artm-descripcion' : (opts.descripcion ? 'artm-categoria' : 'artm-descripcion')).focus(); }catch(e){} }, 30);
   }
+  function renderArtProvs(){
+    var box = document.getElementById('artm-provs');
+    if(!box) return;
+    document.getElementById('artm-provs-field').hidden = !state.colArtProv;
+    box.innerHTML = (state.editingArtProvs||[]).length ? state.editingArtProvs.map(function(id, i){
+      return '<span class="art-prov-chip">'+esc(proveedorNombre(id))+' <button type="button" data-i="'+i+'" title="Quitar">✕</button></span>'; }).join('')
+      : '<span class="fm-hint">Ninguno todavía: no va a aparecer en las facturas de ningún proveedor hasta que lo sumes.</span>';
+    box.querySelectorAll('button[data-i]').forEach(function(b){ b.addEventListener('click', function(){ state.editingArtProvs.splice(Number(b.dataset.i), 1); renderArtProvs(); }); });
+  }
+  wireProveedorCombo('artm-prov');
+  document.getElementById('artm-prov').addEventListener('change', function(){
+    var id = this.value;
+    if(id && (state.editingArtProvs||[]).indexOf(id)===-1) state.editingArtProvs.push(id);
+    setProveedorComboValue('artm-prov', '');
+    renderArtProvs();
+  });
   function closeArticuloModal(){ document.getElementById('articulo-overlay').classList.remove('show'); state.artParaLinea = null; }
   document.getElementById('new-articulo-btn').addEventListener('click', function(){ openArticuloModal(null); });
   document.getElementById('artm-cancel').addEventListener('click', closeArticuloModal);
@@ -5769,7 +5753,7 @@
     if(mismaDesc && !id && !confirm('Ya existe "'+articuloLabel(mismaDesc)+'". ¿Crear otro igual de todos modos?')) return;
     var a = {id: id || newId('art_'), codigo:codigo, descripcion:desc, unidad:document.getElementById('artm-unidad').value,
       categoria:document.getElementById('artm-categoria').value.trim(), notas:document.getElementById('artm-notas').value.trim(),
-      activo:document.getElementById('artm-activo').checked};
+      activo:document.getElementById('artm-activo').checked, proveedores:(state.editingArtProvs||[]).slice()};
     var linea = state.artParaLinea;
     var btn = this; btn.disabled = true;
     writeArticulo(a).then(function(ok){
@@ -5818,29 +5802,36 @@
     if(!ver) return;
     if(!state.editingFacturaArts || !state.editingFacturaArts.length) state.editingFacturaArts = [{articuloId:'', cantidad:0, precio:0, importe:0}];
     var prov = document.getElementById('fm-proveedor').value;
-    document.getElementById('fm-art-datalist').innerHTML = state.articulos.filter(function(a){ return a.activo; })
-      .sort(function(a,b){ return (a.descripcion||'').localeCompare(b.descripcion||''); })
-      .map(function(a){ return '<option value="'+esc(articuloLabel(a))+'">'; }).join('');
+    // Se elige de la lista de artículos del proveedor (no se escribe a mano).
+    // Si todavía no tiene artículos asociados, se ofrece toda la base.
+    var propios = articulosDeProveedor(prov);
+    var usarTodos = !propios.length;
+    var opciones = usarTodos ? state.articulos.filter(function(a){ return a.activo; }).sort(function(a,b){ return (a.descripcion||'').localeCompare(b.descripcion||''); }) : propios;
+    var nota = document.getElementById('fm-art-nota');
+    nota.innerHTML = usarTodos ? (state.colArtProv ? '⚠ '+esc(prov ? proveedorNombre(prov) : 'Este proveedor')+' todavía no tiene artículos asociados: elegí de toda la base (quedan asociados al guardar) o asocialos en Compras → Artículos.' : '')
+      : 'Artículos de '+esc(proveedorNombre(prov))+' ('+propios.length+'). Si falta uno, <b>Crear un artículo nuevo</b> o asocialo en Compras → Artículos.';
     var cont = document.getElementById('fm-art-lines');
     cont.innerHTML = '<div class="art-head"><span>Artículo</span><span>Cantidad</span><span>Unidad</span><span>Precio unit.</span><span>Importe</span><span></span></div>';
     state.editingFacturaArts.forEach(function(l, i){
       var a = articuloById(l.articuloId);
       var row = document.createElement('div');
-      row.className = 'art-line'+(l.texto && !a ? ' err' : '');
-      row.innerHTML = '<input type="text" class="art" list="fm-art-datalist" placeholder="Buscar por código o descripción…">'
+      row.className = 'art-line';
+      var lista = opciones.slice();
+      if(a && lista.indexOf(a)===-1) lista.unshift(a);
+      row.innerHTML = '<select class="art"><option value="">Elegí el artículo…</option>'+lista.map(function(x){ return '<option value="'+esc(x.id)+'">'+esc(articuloLabel(x))+'</option>'; }).join('')+'</select>'
         +'<input type="text" class="cant" inputmode="decimal" placeholder="0">'
         +'<span class="uni">'+esc(a ? a.unidad : '')+'</span>'
         +'<input type="text" class="precio" inputmode="decimal" placeholder="0,00">'
         +'<span class="imp">'+(artImporte(l) ? fmtMoney(artImporte(l)) : '—')+'</span>'
         +'<button type="button" class="del" title="Quitar">✕</button>';
-      var inArt = row.querySelector('.art');
-      inArt.value = a ? articuloLabel(a) : (l.texto||'');
+      var selArt = row.querySelector('.art');
+      selArt.value = a ? a.id : '';
       row.querySelector('.cant').value = l.cantidad ? String(l.cantidad).replace('.',',') : '';
       row.querySelector('.precio').value = l.precio ? fmtMontoInput(l.precio) : '';
-      inArt.addEventListener('change', function(){
-        var enc = artBuscar(this.value);
+      selArt.addEventListener('change', function(){
+        var enc = articuloById(this.value);
         l.articuloId = enc ? enc.id : '';
-        l.texto = enc ? '' : this.value.trim();
+        l.texto = '';
         if(enc && !l.precio){ var u = articuloCompras(enc.id, prov).ultimo; if(u) l.precio = u.precio; }
         renderFacturaArts();
         if(enc){ var c = document.querySelectorAll('#fm-art-lines .art-line')[i]; if(c) c.querySelector('.cant').focus(); }
@@ -5852,13 +5843,6 @@
         renderFacturaArts();
       });
       cont.appendChild(row);
-      if(l.texto && !a){
-        var aviso = document.createElement('div');
-        aviso.className = 'fm-hint';
-        aviso.innerHTML = '“'+esc(l.texto)+'” no está en la base. <button type="button" class="link-btn">Crearlo como artículo nuevo</button>';
-        aviso.querySelector('button').addEventListener('click', function(){ openArticuloModal(null, {desdeLinea:i, descripcion:l.texto}); });
-        cont.appendChild(aviso);
-      }
     });
     actualizarArtTotal();
   }
@@ -5889,7 +5873,7 @@
     state.editingFacturaArts = state.editingFacturaArts || [];
     var i = state.editingFacturaArts.findIndex(function(l){ return !l.articuloId; });
     if(i<0){ state.editingFacturaArts.push({articuloId:'', cantidad:0, precio:0, importe:0}); i = state.editingFacturaArts.length-1; }
-    openArticuloModal(null, {desdeLinea:i, descripcion:state.editingFacturaArts[i].texto||''});
+    openArticuloModal(null, {desdeLinea:i, descripcion:'', proveedorId:document.getElementById('fm-proveedor').value});
   });
   ['fm-monto','fm-neto'].forEach(function(id){ document.getElementById(id).addEventListener('input', actualizarArtTotal); });
   // Devuelve las líneas a guardar, o false si falta algo (ya avisó).
@@ -5900,11 +5884,12 @@
     if(!state.tablaArticulos && !state.colArticulos){ showToast('Este proveedor carga artículos, pero falta correr base-de-datos/articulos.sql en Supabase.', 7000); return false; }
     for(var i=0;i<lineas.length;i++){
       var l = lineas[i];
-      if(!l.articuloId){ showToast('Artículo '+(i+1)+': '+(l.texto ? '“'+l.texto+'” no está en la base; crealo con el link de abajo.' : 'elegí el artículo.'), 6000); return false; }
+      if(!l.articuloId){ showToast('Artículo '+(i+1)+': elegí el artículo de la lista.', 6000); return false; }
       if(!(l.cantidad>0)){ showToast('Artículo '+(i+1)+' ('+articuloLabel(articuloById(l.articuloId))+'): ingresá la cantidad.'); return false; }
       if(l.precio<0){ showToast('Artículo '+(i+1)+': el precio no puede ser negativo.'); return false; }
     }
     if(lleva && !lineas.length){ showToast('Este proveedor carga artículos: agregá al menos un artículo con su cantidad.', 6000); return false; }
+    asociarArticulosAProveedor(proveedorId, lineas.map(function(l){ return l.articuloId; }));
     return lineas.map(function(l){ return {articuloId:l.articuloId, cantidad:Number(l.cantidad), precio:r2(l.precio), importe:artImporte(l)}; });
   }
 
@@ -6208,6 +6193,7 @@
   function openFacturaModal(id){
     marcarModalAnulado('fm-save', 'fm-delete', null);
     state.editingFacturaId = id || null;
+    ocultarVistaFactura(true);
     var f = id ? facturaById(id) : null;
     document.getElementById('fm-title').textContent = f ? 'Editar factura' : 'Nueva factura';
     setProveedorComboValue('fm-proveedor', f ? f.proveedorId : '');
@@ -6241,13 +6227,17 @@
     actualizarFmCombustible();
     marcarModalAnulado('fm-save', 'fm-delete', f, 'a');
     document.getElementById('factura-overlay').classList.add('show');
+    document.getElementById('fm-ver-archivo').hidden = !adjuntosDeFactura().length;
+    if(f && adjuntosDeFactura().length && window.innerWidth>900) verAdjuntoFactura(adjuntosDeFactura()[0]);
   }
   function closeFacturaModal(){
+    ocultarVistaFactura(true);
     document.getElementById('factura-overlay').classList.remove('show');
   }
 
   document.getElementById('new-factura-btn').addEventListener('click', function(){ openFacturaModal(null); });
   document.getElementById('fm-cancel').addEventListener('click', closeFacturaModal);
+  document.getElementById('factura-buscar').addEventListener('input', function(){ state.facturaBuscar = this.value; renderFacturasList(); });
   document.getElementById('factura-filter-estado').addEventListener('change', function(){
     state.facturaFilterEstado = this.value;
     renderFacturasList();
@@ -8066,7 +8056,8 @@
       if(idx>=0) state.ordenesCompra[idx] = o; else state.ordenesCompra.push(o);
       writeOC(o); renderCompras();
     },
-    abrirOC: function(id){ openOCModal(id); }, cerrarOC: closeOCModal, quien: quienAnula, mostrarSubtab: mostrarSubtab, actualizarSubtabs: function(){ actualizarSubtabs(); }, renderCompras: function(){ renderCompras(); },
+    abrirOC: function(id){ openOCModal(id); },
+    ultimoPrecio: function(articuloId, proveedorId){ var u = articuloCompras(articuloId, proveedorId).ultimo; return u ? Number(u.precio)||0 : 0; }, cerrarOC: closeOCModal, quien: quienAnula, mostrarSubtab: mostrarSubtab, actualizarSubtabs: function(){ actualizarSubtabs(); }, renderCompras: function(){ renderCompras(); },
     esAnulado: esAnulado, facturaSaldo: function(f){ return facturaSaldo(f); }, opMontoSinAnticipos: opMontoSinAnticipos, facturaLineas: facturaLineas, ccRaiz: ccRaiz, ccNombre: ccNombre, ccRuta: ccRuta, proveedorNombre: proveedorNombre,
     labelForRoute: labelForRoute, branchLabel: branchLabel, cuentaSaldoActual: cuentaSaldoActual, cuentaSaldoProyectado: cuentaSaldoProyectado,
     fmtMoney: fmtMoney, AREAS: AREAS,
@@ -8503,9 +8494,6 @@
       .subscribe();
     state.sb.channel('articulos-changes')
       .on('postgres_changes', {event:'*', schema:'public', table:'articulos'}, function(){ debounced('fetchCompras', fetchCompras); })
-      .subscribe();
-    state.sb.channel('rubros-changes')
-      .on('postgres_changes', {event:'*', schema:'public', table:'rubros'}, function(){ debounced('fetchCompras', fetchCompras); })
       .subscribe();
     state.sb.channel('conceptos-changes')
       .on('postgres_changes', {event:'*', schema:'public', table:'conceptos'}, function(){ debounced('fetchCompras', fetchCompras); })
