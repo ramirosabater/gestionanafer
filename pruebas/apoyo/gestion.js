@@ -24,7 +24,7 @@ export function baseDePrueba(extra = {}) {
       { email: "rrhh@anafer.test", activo: true, perfil: "rrhh" },
     ],
     proveedores: [], facturas: [], ordenes_pago: [], ordenes_compra: [], conceptos: [{ id: "gasoil", nombre: "Gasoil" }],
-    centros_costo: [], rubros: [], cuentas: [], movimientos: [], cheques: [], medios_caja: [],
+    centros_costo: [], cuentas: [], movimientos: [], cheques: [], medios_caja: [],
     gan_regimenes: [], gan_escalas: [], parametros: [],
   };
   for (const [k, v] of Object.entries(extra)) base[k] = v;

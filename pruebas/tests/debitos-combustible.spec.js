@@ -4,7 +4,7 @@ import { test, expect } from "@playwright/test";
 import { baseDePrueba, abrirGestion, escrituras } from "../apoyo/gestion.js";
 import { datosCompras, PROVEEDORES, FACTURAS } from "../apoyo/datos-compras.js";
 
-const YPF = { id: "ypf", nombre: "Estación YPF Centro", cuit: "30-77777777-7", condicion_iva: "Responsable inscripto", rubro: "Combustibles y lubricantes" };
+const YPF = { id: "ypf", nombre: "Estación YPF Centro", cuit: "30-77777777-7", condicion_iva: "Responsable inscripto", combustible: true };
 const CARGA_ANT = { id: "y0", proveedor_id: "ypf", numero: "B-0001-00000900", fecha: "2026-10-10", monto: 150000, estado: "pagada",
   centro_costo_id: "cc_logistica_impuestos_movil_13", concepto_id: "gasoil", cc_ref: "movil:13", km: 151850, litros: 100 };
 const datos = () => baseDePrueba(datosCompras({ proveedores: [...PROVEEDORES, YPF], facturas: [...FACTURAS, CARGA_ANT] }));

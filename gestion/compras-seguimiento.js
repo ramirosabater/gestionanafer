@@ -269,6 +269,25 @@
   // ---------------- Solicitud: alta, gestión de Compras y orden de compra ----------------
   function sectorRecordado() { try { return localStorage.getItem('sc_sector_' + usuario()) || ''; } catch (e) { return ''; } }
   function recordarSector(v) { try { localStorage.setItem('sc_sector_' + usuario(), v); } catch (e) {} }
+  function articulosActivos() { return (G.datos().articulos || []).filter(function (a) { return a.activo !== false; }); }
+  function hayArticulos() { return articulosActivos().length > 0; }
+  function articuloById(id) { return id ? (G.datos().articulos || []).find(function (a) { return a.id === id; }) || null : null; }
+  function articuloDe(it) { return articuloById(it.articulo_id); }
+  // Dos casos: artículos de la base (los que se controlan después: stock y
+  // estadísticas) u "Otro" escrito a mano (dos lamparitas: no interesa el stock).
+  function esOtro(it) { return !it.articulo_id && (it.__otro || !!it.descripcion); }
+  // <option>s agrupadas por categoría + "Otro (escribirlo)"
+  function opcionesArticulos(it) {
+    var grupos = {};
+    articulosActivos().concat(articuloDe(it) && articuloDe(it).activo === false ? [articuloDe(it)] : []).forEach(function (a) { (grupos[a.categoria || 'Otros'] = grupos[a.categoria || 'Otros'] || []).push(a); });
+    var h = '<option value="">Elegí el artículo…</option>';
+    h += '<option value="__otro"' + (esOtro(it) ? ' selected' : '') + '>✏️ Otro (no está en la lista: escribirlo)</option>';
+    Object.keys(grupos).sort().forEach(function (g) {
+      h += '<optgroup label="' + esc(g) + '">' + grupos[g].sort(function (a, b) { return (a.descripcion || '').localeCompare(b.descripcion || ''); })
+        .map(function (a) { return '<option value="' + esc(a.id) + '"' + (a.id === it.articulo_id ? ' selected' : '') + '>' + esc(a.descripcion) + (a.codigo ? ' · ' + esc(a.codigo) : '') + '</option>'; }).join('') + '</optgroup>';
+    });
+    return h;
+  }
   function nuevoItem() { return { id: nuevoId('it'), descripcion: '', articulo_id: '', cantidad: 1, unidad: 'Unidad', proveedor_id: '', precio: 0, oc_id: '' }; }
   function puedeEditarItems(s) {
     if (!vigente(s) || estadoSol(s) === 'rechazada') return false;
@@ -335,26 +354,50 @@
       var p = it.proveedor_id ? proveedores().find(function (x) { return x.id === it.proveedor_id; }) : null;
       var rec = '—';
       if (inf && inf.oc) rec = inf.completo ? '✔ ' + fmtCant(inf.recibido) + (inf.fecha ? ' · ' + fmtFechaCorta(inf.fecha) : '') : inf.recibido ? fmtCant(inf.recibido) + ' de ' + fmtCant(it.cantidad) : 'no llegó';
-      tr.innerHTML = '<td class="d"><input type="text" class="i-desc" list="sol-art-list" value="' + esc(it.descripcion || '') + '" placeholder="Qué se necesita" ' + (bloqueado ? 'disabled' : '') + '></td>'
+      var art = articuloDe(it);
+      // Artículo de la base (la unidad sale del artículo) u "Otro" escrito a mano.
+      var celdaTexto = '<input type="text" class="i-texto" value="' + esc(it.articulo_id ? '' : (it.descripcion || '')) + '" placeholder="Qué se necesita (ej.: lamparitas LED)" ' + (bloqueado ? 'disabled' : '') + '>';
+      var celdaDesc = hayArticulos()
+        ? '<select class="i-desc" ' + (bloqueado ? 'disabled' : '') + '>' + opcionesArticulos(it) + '</select>' + (esOtro(it) ? celdaTexto : '')
+        : celdaTexto;
+      var celdaUnidad = art ? '<span class="u-fija">' + esc(art.unidad || 'Unidad') + '</span>'
+        : '<select class="u i-unidad" ' + (bloqueado ? 'disabled' : '') + '>' + UNIDADES.concat(UNIDADES.indexOf(it.unidad) === -1 && it.unidad ? [it.unidad] : []).map(function (u) { return '<option' + (u === it.unidad ? ' selected' : '') + '>' + esc(u) + '</option>'; }).join('') + '</select>';
+      tr.innerHTML = '<td class="d">' + celdaDesc + '</td>'
         + '<td class="n"><input type="text" class="q i-cant" inputmode="decimal" value="' + esc(fmtCant(it.cantidad)) + '" ' + (bloqueado ? 'disabled' : '') + '></td>'
-        + '<td><select class="u i-unidad" ' + (bloqueado ? 'disabled' : '') + '>' + UNIDADES.concat(UNIDADES.indexOf(it.unidad) === -1 && it.unidad ? [it.unidad] : []).map(function (u) { return '<option' + (u === it.unidad ? ' selected' : '') + '>' + esc(u) + '</option>'; }).join('') + '</select></td>'
+        + '<td>' + celdaUnidad + '</td>'
         + '<td class="sol-c pv"><input type="text" class="i-prov" list="sol-prov-list" value="' + esc(p ? p.nombre : '') + '" placeholder="Proveedor" ' + (!compras || (inf && inf.oc) ? 'disabled' : '') + '></td>'
-        + '<td class="sol-c n"><input type="text" class="pr i-precio" inputmode="decimal" value="' + (it.precio ? esc(fmtCant(it.precio)) : '') + '" placeholder="0" ' + (!compras || (inf && inf.oc) ? 'disabled' : '') + '></td>'
         + '<td class="sol-c">' + (inf && inf.oc ? '<span class="oc-link" data-oc="' + esc(inf.oc.id) + '">' + G.ocNumeroLabel(inf.oc.numero) + '</span>' : '—') + '</td>'
         + '<td class="rec">' + rec + '</td>'
         + '<td>' + (!bloqueado && e.items.length > 1 ? '<button type="button" class="quitar" title="Quitar">✕</button>' : '') + '</td>';
       function leer() {
-        it.descripcion = tr.querySelector('.i-desc').value.trim();
+        var d = tr.querySelector('select.i-desc'), tx = tr.querySelector('.i-texto');
+        if (d && d.value === '__otro') {
+          it.__otro = true; it.articulo_id = ''; it.descripcion = tx ? tx.value.trim() : '';
+        } else if (d) {
+          it.__otro = false;
+          if (d.value) {
+            var a = articuloById(d.value);
+            var cambio = it.articulo_id !== d.value;
+            it.articulo_id = a.id; it.descripcion = a.descripcion; it.unidad = a.unidad || 'Unidad';
+            // Si el artículo lo vende un solo proveedor, Compras ya lo tiene propuesto
+            if (cambio && esCompras() && !it.proveedor_id && (a.proveedores || []).length === 1) {
+              it.proveedor_id = a.proveedores[0]; it.__prov = G.proveedorNombre(a.proveedores[0]);
+              var ip = tr.querySelector('.i-prov'); if (ip) ip.value = it.__prov;
+            }
+          } else { it.articulo_id = ''; it.descripcion = ''; }
+        } else {
+          it.descripcion = tx.value.trim(); it.articulo_id = '';
+        }
         it.cantidad = numIn(tr.querySelector('.i-cant').value);
-        it.unidad = tr.querySelector('.i-unidad').value;
-        var art = (G.datos().articulos || []).find(function (a) { return String(a.descripcion || '').toLowerCase() === it.descripcion.toLowerCase(); });
-        it.articulo_id = art ? art.id : '';
-        if (art && art.unidad && tr.querySelector('.i-unidad').dataset.tocada !== '1' && UNIDADES.indexOf(art.unidad) !== -1) { it.unidad = art.unidad; tr.querySelector('.i-unidad').value = art.unidad; }
-        it.__prov = tr.querySelector('.i-prov').value.trim();
-        it.precio = numIn(tr.querySelector('.i-precio').value);
+        var u = tr.querySelector('.i-unidad'); if (u) it.unidad = u.value;
+        var pv = tr.querySelector('.i-prov'); if (pv && pv.value.trim() !== G.proveedorNombre(it.proveedor_id)) it.__prov = pv.value.trim();
       }
       tr.querySelectorAll('input,select').forEach(function (el) { el.addEventListener('change', leer); });
-      tr.querySelector('.i-unidad').addEventListener('change', function () { this.dataset.tocada = '1'; });
+      var dsel = tr.querySelector('select.i-desc');
+      if (dsel) dsel.addEventListener('change', function () {
+        renderItemsSol();
+        if (dsel.value === '__otro') { var t = tb.children[i] && tb.children[i].querySelector('.i-texto'); if (t) t.focus(); }
+      });
       var q = tr.querySelector('.quitar');
       if (q) q.addEventListener('click', function () { e.items.splice(i, 1); renderItemsSol(); });
       var l = tr.querySelector('.oc-link');
@@ -374,6 +417,8 @@
       e.motivo = $('sol-motivo').value.trim();
     }
     if (!e.sector) return 'Elegí el sector.';
+    var vacio = e.items.find(function (it) { return !it.oc_id && it.__otro && !String(it.descripcion || '').trim(); });
+    if (vacio) return 'Escribí qué se necesita en el ítem "Otro".';
     e.items = e.items.filter(function (it) { return it.oc_id || it.descripcion; });
     if (!e.items.length) { e.items.push(nuevoItem()); renderItemsSol(); return 'Cargá al menos un ítem: qué se necesita y cuánto.'; }
     var mal = e.items.find(function (it) { return !it.oc_id && !(it.cantidad > 0); });
@@ -440,6 +485,8 @@
     }, function (er) { toast('No se pudo guardar la solicitud: ' + ((er && er.message) || 'error')); })
       .then(function () { $('sol-save').disabled = false; });
   }
+  // Precio de referencia para la OC: el último que se le pagó (a ese proveedor, si hay)
+  function precioRef(it, pid) { return it.articulo_id && G.ultimoPrecio ? G.ultimoPrecio(it.articulo_id, pid) : 0; }
   // Una orden de compra por proveedor con los ítems que tienen proveedor y no tienen orden.
   function generarOC() {
     if (!G.colOCItems()) { toast('Para generar órdenes desde la solicitud falta correr base-de-datos/seguimiento-compras.sql en Supabase.', 7000); return; }
@@ -465,9 +512,9 @@
         var o = {
           id: 'oc_' + numero, numero: numero, proveedorId: pid, fecha: hoy(),
           descripcion: solLabel(e) + ' (' + e.sector + '): ' + its.map(function (it) { return fmtCant(it.cantidad) + ' ' + it.descripcion; }).join(', '),
-          monto: Math.round(its.reduce(function (t, it) { return t + (Number(it.cantidad) || 0) * (Number(it.precio) || 0); }, 0) * 100) / 100,
+          monto: Math.round(its.reduce(function (t, it) { return t + (Number(it.cantidad) || 0) * precioRef(it, pid); }, 0) * 100) / 100,
           estado: 'aprobada', notas: e.notas_compras || '', who: G.quien(),
-          items: its.map(function (it) { return { item_id: it.id, solicitud_id: e.id, descripcion: it.descripcion, cantidad: Number(it.cantidad) || 0, unidad: it.unidad || 'Unidad', precio: Number(it.precio) || 0 }; }),
+          items: its.map(function (it) { return { item_id: it.id, solicitud_id: e.id, articulo_id: it.articulo_id || '', descripcion: it.descripcion, cantidad: Number(it.cantidad) || 0, unidad: it.unidad || 'Unidad', precio: precioRef(it, pid) }; }),
           entregaPrevista: entrega, anuladoEn: '', anuladoPor: '', motivoAnulacion: ''
         };
         G.guardarOC(o);

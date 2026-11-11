@@ -854,13 +854,19 @@ on conflict (id) do update set name = excluded.name, active = excluded.active, s
 -- proveedor y todavía no esté en la tabla (ej. rubros escritos a mano antes
 -- de que existiera la lista). Seguro de volver a correr.
 -- ------------------------------------------------------------
-insert into rubros (id, nombre)
-select distinct on (lower(trim(p.rubro)))
-       'r_' || left(regexp_replace(lower(trim(p.rubro)), '[^a-z0-9]+', '_', 'g'), 40), trim(p.rubro)
-from proveedores p
-where trim(coalesce(p.rubro,'')) <> ''
-  and not exists (select 1 from rubros r where lower(trim(r.nombre)) = lower(trim(p.rubro)))
-on conflict (id) do nothing;
+-- (noviembre 2026: el rubro se dejó de usar; solo corre si la columna todavía existe)
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'proveedores' and column_name = 'rubro') then
+    insert into rubros (id, nombre)
+    select distinct on (lower(trim(p.rubro)))
+           'r_' || left(regexp_replace(lower(trim(p.rubro)), '[^a-z0-9]+', '_', 'g'), 40), trim(p.rubro)
+    from proveedores p
+    where trim(coalesce(p.rubro,'')) <> ''
+      and not exists (select 1 from rubros r where lower(trim(r.nombre)) = lower(trim(p.rubro)))
+    on conflict (id) do nothing;
+  end if;
+end $$;
 
 -- ------------------------------------------------------------
 -- Áreas (Logística / Administración / Comercial) e ingreso único con email
@@ -1915,3 +1921,8 @@ revoke all on function public.gestion_permiso_rrhh() from public, anon;
 revoke all on function public.gestion_puede_rrhh() from public, anon;
 grant execute on function public.gestion_permiso_rrhh() to authenticated;
 grant execute on function public.gestion_puede_rrhh() to authenticated;
+
+-- =====================================================================
+-- Artículos por proveedor (noviembre 2026): ver articulos-por-proveedor.sql
+-- =====================================================================
+alter table articulos add column if not exists proveedores jsonb not null default '[]'::jsonb;

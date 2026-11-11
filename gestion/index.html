@@ -312,8 +312,34 @@
 
   .overlay{position:fixed; inset:0; background:rgba(10,9,6,0.45); display:none; align-items:center; justify-content:center; z-index:50; padding:16px;}
   .overlay.show{display:flex;}
+  /* Factura: vista previa del archivo al costado (noviembre 2026) */
+  .fm-vista[hidden], #fm-ver-archivo[hidden]{display:none;}
+  .art-provs{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px;}
+  .art-prov-chip{display:inline-flex; align-items:center; gap:4px; padding:3px 4px 3px 10px; border-radius:999px; font-size:12px; background:color-mix(in srgb, var(--accent) 12%, var(--surface)); color:var(--accent);}
+  .art-prov-chip button{border:none; background:transparent; color:inherit; cursor:pointer; font-size:12px; padding:0 4px;}
+  #artm-provs-field[hidden]{display:none;}
+  .art-nota{margin:2px 0 6px;}
+  .art-line select.art{min-width:0; width:100%; font-family:inherit; font-size:13px; border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:8px; padding:6px 8px; height:34px;}
+  .fac-clip{border:none; background:transparent; cursor:pointer; font-size:14px; padding:0 2px; vertical-align:middle;}
+  .fac-clip:hover{transform:scale(1.2);}
+  #factura-overlay.con-vista{gap:14px; align-items:stretch;}
+  #factura-overlay.con-vista #factura-modal{max-width:min(720px, 48vw); flex:0 1 720px;}
+  .fm-vista{flex:1 1 0; min-width:0; max-width:900px; display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; max-height:calc(100vh - 32px);}
+  .fm-vista-top{display:flex; align-items:center; gap:8px; padding:10px 56px 10px 12px; border-bottom:1px solid var(--border); font-size:13px;}
+  .fm-vista-nombre{flex:1; min-width:0; color:var(--muted); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .fm-vista-top .btn{padding:4px 10px; min-height:0; text-decoration:none;}
+  .fm-vista-cuerpo{flex:1; min-height:0; overflow:auto; background:#525659;}
+  .fm-vista-cuerpo iframe{display:block; width:100%; height:100%; min-height:70vh; border:0; background:#525659;}
+  .fm-vista-cuerpo img{display:block; width:100%; height:auto; cursor:zoom-in; background:#fff;}
+  .fm-vista-cuerpo img.zoom{width:200%; max-width:none; cursor:zoom-out;}
+  .fm-vista-nada{color:#fff; padding:20px; font-size:13px;}
+  @media (max-width:900px){
+    #factura-overlay.con-vista{flex-direction:column; align-items:center; overflow:auto;}
+    #factura-overlay.con-vista #factura-modal{max-width:100%; flex:none;}
+    .fm-vista{width:100%; flex:none; height:70vh; max-width:none;}
+  }
   /* Modales que se abren desde ⚙ (Configuración): van por encima de esa ventana */
-  #centro-costo-overlay, #concepto-overlay, #rubro-overlay, #medio-overlay{z-index:60;}
+  #centro-costo-overlay, #concepto-overlay, #medio-overlay{z-index:60;}
   /* Tesorería: entradas/salidas, conceptos de caja y cheques */
   .tipo-toggle{display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:14px;}
   .tipo-toggle button{border:none; background:var(--bg); color:var(--ink-2); padding:9px; font-family:inherit; font-size:13.5px; font-weight:600; cursor:pointer;}
@@ -363,7 +389,9 @@
   .sol-items input, .sol-items select{width:100%; min-width:0; padding:4px 8px; font-size:12.5px; height:34px; line-height:1.2;}
   .sol-items select{padding-right:22px;}
   .sol-items td.n{width:96px;} .sol-items td.pr, .sol-items td:has(> input.pr){width:110px;} .sol-items td:has(> select.u){width:116px;}
-  .sol-items .d{min-width:200px;} .sol-items .pv{min-width:160px;}
+  .sol-items .d{min-width:260px;}
+  .sol-items .i-texto{margin-top:4px;}
+  .sol-items .u-fija{font-size:12.5px; color:var(--ink-2); padding:0 4px;} .sol-items .pv{min-width:160px;}
   .sol-items .quitar{border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:16px; padding:0 6px;}
   .sol-items .quitar:hover{color:var(--danger);}
   .sol-items .rec{white-space:nowrap; font-size:12px;}
@@ -1409,7 +1437,7 @@
     </div>
     <div class="day-wrap prov-wrap">
       <table class="day-table" id="proveedores-table">
-        <thead><tr><th>Cód.</th><th>Proveedor</th><th>CUIT</th><th>Rubro</th><th>Imputación por defecto</th><th>Teléfono</th></tr></thead>
+        <thead><tr><th>Cód.</th><th>Proveedor</th><th>CUIT</th><th>Condición IVA</th><th>Imputación por defecto</th><th>Teléfono</th></tr></thead>
         <tbody id="proveedores-body"></tbody>
       </table>
     </div>
@@ -1457,7 +1485,7 @@
     </div>
     <div class="day-wrap prov-wrap">
       <table class="day-table" id="articulos-table">
-        <thead><tr><th>Cód.</th><th>Descripción</th><th>Unidad</th><th>Categoría</th><th>Comprado</th><th>Último precio</th></tr></thead>
+        <thead><tr><th>Cód.</th><th>Descripción</th><th>Unidad</th><th>Categoría</th><th>Proveedores</th><th>Comprado</th><th>Último precio</th></tr></thead>
         <tbody id="articulos-body"></tbody>
       </table>
     </div>
@@ -1588,7 +1616,8 @@
     <section class="subsec" data-sub="facturas" data-label="Facturas">
     <div class="compras-section-head">
       <h3>Facturas</h3>
-      <div style="display:flex; gap:8px; align-items:center;">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="search" id="factura-buscar" class="prov-search" placeholder="Buscar proveedor, número o monto..." autocomplete="off">
         <select id="factura-filter-estado" class="scope-select">
           <option value="">Todos los estados</option>
           <option value="pendiente">Pendiente</option>
@@ -1597,6 +1626,8 @@
           <option value="anulada">Anulada</option>
           <option value="tipo:debito_interno">Débitos internos</option>
           <option value="tipo:combustible">Con litros / km (combustible)</option>
+          <option value="archivo:con">📎 Con archivo</option>
+          <option value="archivo:sin">Sin archivo</option>
         </select>
         <button class="btn primary edit-action" id="new-factura-btn">+ Nueva factura</button>
       </div>
@@ -2085,11 +2116,6 @@
     </div>
     <div class="crew-fields">
       <div class="field"><label for="pm-cuit">CUIT</label><input type="text" id="pm-cuit" maxlength="20" placeholder="20-12345678-9"></div>
-      <div class="field">
-        <label for="pm-rubro">Rubro</label>
-        <select id="pm-rubro"></select>
-        <input type="text" id="pm-rubro-otro" maxlength="40" placeholder="Escribí el rubro nuevo" style="margin-top:6px;" hidden>
-      </div>
     </div>
     <div class="crew-fields">
       <div class="field">
@@ -2131,6 +2157,7 @@
     </div>
     <label class="sug-prio-check"><input type="checkbox" id="pm-prioritario"> ★ Pago prioritario (aparece primero en la sugerencia de pagos: combustible, servicios, etc.)</label>
     <label class="sug-prio-check"><input type="checkbox" id="pm-lleva-articulos"> 📦 Carga artículos: en sus facturas hay que detallar los artículos comprados (cantidad y precio), para Stock</label>
+    <label class="sug-prio-check"><input type="checkbox" id="pm-combustible"> ⛽ Proveedor de combustible: en sus facturas se cargan (opcional) los kilómetros y los litros</label>
     <div class="field">
       <label>Imputaciones contables</label>
       <div class="imput-help">Combinaciones de centro de costo + concepto que usa este proveedor. Al cargar una factura se propone la más usada (si todavía no tiene facturas, la marcada ★).</div>
@@ -2214,21 +2241,6 @@
         <button class="btn" id="cpm-delete" style="display:none; color:var(--danger);">Eliminar</button>
       </div>
       <button class="btn primary" id="cpm-save">Guardar</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="rubro-overlay">
-  <div class="modal" id="rubro-modal" style="max-width:380px;">
-    <h3 id="rbm-title">Nuevo rubro</h3>
-    <div class="sub">Se usa para clasificar a los proveedores</div>
-    <div class="field"><label for="rbm-nombre">Rubro</label><input type="text" id="rbm-nombre" maxlength="40" placeholder="Ej: Servicios"></div>
-    <div class="modal-actions">
-      <div class="left">
-        <button class="btn" id="rbm-cancel">Cancelar</button>
-        <button class="btn" id="rbm-delete" style="display:none; color:var(--danger);">Eliminar</button>
-      </div>
-      <button class="btn primary" id="rbm-save">Guardar</button>
     </div>
   </div>
 </div>
@@ -2349,8 +2361,9 @@
     </div>
     <div class="fm-hint di-aviso" id="fm-di-aviso" hidden>Débito interno: para lo que se paga <b>sin factura y sin impuestos</b>. Lleva número propio, no tiene IVA ni retención de Ganancias y se paga con una orden de pago como cualquier factura.</div>
     <div class="factura-read-row" id="fm-read-row" hidden>
-      <div class="sub2">Subí el PDF o la foto de la factura y complete los campos por vos. Revisá los datos antes de guardar.</div>
+      <div class="sub2">Subí el PDF o la foto de la factura: completa número, fecha, monto y notas, y la muestra al costado para que controles la lectura. El <b>proveedor lo elegís vos</b>.</div>
       <label class="btn" for="fm-read-input" id="fm-read-label" style="cursor:pointer;">📄 Leer desde archivo</label>
+      <button type="button" class="btn" id="fm-ver-archivo" hidden>👁 Ver la factura</button>
       <input type="file" id="fm-read-input" accept="application/pdf,image/*" style="display:none;">
     </div>
     <div class="crew-fields">
@@ -2409,7 +2422,7 @@
         <span class="lbl">📦 Artículos de la factura</span>
         <span class="fm-hint">Precio unitario sin IVA. Sirven para Stock.</span>
       </div>
-      <datalist id="fm-art-datalist"></datalist>
+      <div class="fm-hint art-nota" id="fm-art-nota"></div>
       <div class="art-lines" id="fm-art-lines"></div>
       <div class="split-foot">
         <button type="button" class="btn" id="fm-art-add">+ Agregar artículo</button>
@@ -2454,6 +2467,14 @@
       <button class="btn primary" id="fm-save">Guardar</button>
     </div>
   </div>
+  <aside class="fm-vista" id="fm-vista" hidden aria-label="Vista previa de la factura">
+    <div class="fm-vista-top">
+      <b>Vista previa</b><span class="fm-vista-nombre" id="fm-vista-nombre"></span>
+      <a class="btn" id="fm-vista-abrir" href="#" target="_blank" rel="noopener" title="Abrir en una pestaña nueva">↗</a>
+      <button type="button" class="btn" id="fm-vista-cerrar" title="Ocultar la vista previa">✕</button>
+    </div>
+    <div class="fm-vista-cuerpo" id="fm-vista-cuerpo"></div>
+  </aside>
 </div>
 
 <div class="overlay" id="pago-overlay">
@@ -2708,6 +2729,15 @@
     </div>
     <div class="field"><label for="artm-descripcion">Descripción</label><input type="text" id="artm-descripcion" maxlength="120" placeholder="Ej: Tapa plástica 28 mm azul"></div>
     <div class="field"><label for="artm-categoria">Categoría (opcional)</label><input type="text" id="artm-categoria" maxlength="60" list="artm-categorias" placeholder="Ej: Envases, Repuestos, Limpieza"><datalist id="artm-categorias"></datalist></div>
+    <div class="field" id="artm-provs-field"><label for="artm-prov-input">Proveedores que lo venden</label>
+      <div class="art-provs" id="artm-provs"></div>
+      <div class="combo" id="artm-prov-combo">
+        <input type="text" id="artm-prov-input" placeholder="Sumar proveedor: buscar por nombre..." autocomplete="off">
+        <input type="hidden" id="artm-prov">
+        <div class="combo-menu" id="artm-prov-menu" hidden></div>
+      </div>
+      <div class="fm-hint">En la factura de cada uno de estos proveedores, el artículo aparece en su lista.</div>
+    </div>
     <div class="field"><label for="artm-notas">Notas (opcional)</label><textarea id="artm-notas" placeholder="Marca, medida, proveedor habitual..."></textarea></div>
     <label class="sug-prio-check"><input type="checkbox" id="artm-activo" checked> Activo (si no, no se ofrece en las facturas nuevas)</label>
     <div class="art-uso" id="artm-uso"></div>
@@ -2753,7 +2783,6 @@
         <div class="settings-tabs settings-subtabs" id="settings-subtabs-compras" hidden>
           <button class="stabbtn" id="stabbtn-centros-costo">Centros de costo</button>
           <button class="stabbtn" id="stabbtn-conceptos">Conceptos</button>
-          <button class="stabbtn" id="stabbtn-rubros">Rubros</button>
         </div>
         <div class="settings-tabs settings-subtabs" id="settings-subtabs-tesoreria" hidden>
           <button class="stabbtn" id="stabbtn-medios-caja">Conceptos de caja</button>
@@ -2819,16 +2848,6 @@
             </table>
           </div>
           <div class="addrow"><button class="btn primary" id="new-concepto-btn">+ Nuevo concepto</button></div>
-        </div>
-        <div id="stab-rubros" hidden>
-          <div class="sub" style="margin-bottom:10px;">Rubros para clasificar a los proveedores. Si renombrás uno, se actualiza en todos los proveedores que lo tienen.</div>
-          <div class="day-wrap">
-            <table class="day-table" id="rubros-table">
-              <thead><tr><th>Rubro</th><th class="num">Proveedores</th></tr></thead>
-              <tbody id="rubros-body"></tbody>
-            </table>
-          </div>
-          <div class="addrow"><button class="btn primary" id="new-rubro-btn">+ Nuevo rubro</button></div>
         </div>
         <div id="stab-medios-caja" hidden>
           <div class="sub" style="margin-bottom:10px;">Conceptos para las entradas y salidas de caja (los códigos del sistema anterior). Cada uno va a su cuenta: al elegirlo en un movimiento o en una orden de pago, la cuenta se completa sola.</div>
@@ -2956,10 +2975,11 @@
     <div class="field">
       <label>Qué se necesita</label>
       <div class="sol-items-wrap"><table class="sol-items" id="sol-items">
-        <thead><tr><th>Insumo / descripción</th><th class="n">Cantidad</th><th>Unidad</th><th class="sol-c">Proveedor</th><th class="sol-c n">Precio unit.</th><th class="sol-c">Orden de compra</th><th>Recibido</th><th></th></tr></thead>
+        <thead><tr><th>Insumo / descripción</th><th class="n">Cantidad</th><th>Unidad</th><th class="sol-c">Proveedor</th><th class="sol-c">Orden de compra</th><th>Recibido</th><th></th></tr></thead>
         <tbody></tbody>
       </table></div>
       <button type="button" class="btn sol-add" id="sol-add">+ Agregar ítem</button>
+      <div class="fm-hint" id="sol-art-nota">Elegí el artículo de la lista (los que se controlan: stock y estadísticas). Si es algo suelto que no está, elegí <b>✏️ Otro</b> y escribilo.</div>
       <datalist id="sol-art-list"></datalist>
       <datalist id="sol-prov-list"></datalist>
     </div>
