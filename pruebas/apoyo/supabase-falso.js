@@ -74,6 +74,8 @@
         storage: { from: function () { return { upload: function () { return Promise.resolve({}); }, getPublicUrl: function () { return { data: {} }; } }; } },
         auth: {
           getSession: function () { return Promise.resolve({ data: { session: sesion() } }); },
+          // renovar la sesión: la prueba puede poner el token nuevo en DB.__tokenRenovado
+          refreshSession: function () { var s = sesion(); if (s && DB.__tokenRenovado) s.access_token = DB.__tokenRenovado; return Promise.resolve({ data: { session: s }, error: null }); },
           signInWithPassword: function (o) {
             var u = (DB.__cuentas || {})[String(o.email).toLowerCase()];
             if (u === undefined || u !== o.password) return Promise.resolve({ data: { session: null }, error: { message: "Invalid login credentials" } });

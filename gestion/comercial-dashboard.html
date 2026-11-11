@@ -275,6 +275,31 @@ const SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 let ACCESS_TOKEN=SUPABASE_KEY; // se reemplaza por el token del usuario al loguearse
 const H=()=>({apikey:SUPABASE_KEY,Authorization:"Bearer "+ACCESS_TOKEN});
+// El token del usuario vence a la hora: supabase-js lo renueva solo, así que
+// antes de cada llamado se toma el vigente (y si igual vuelve "JWT expired",
+// se renueva la sesión y se reintenta una vez).
+sb.auth.onAuthStateChange(function(ev,session){ if(session&&session.access_token) ACCESS_TOKEN=session.access_token; });
+async function tokenVigente(forzar){
+  try{
+    const r=forzar ? await sb.auth.refreshSession() : await sb.auth.getSession();
+    const s=r&&r.data&&r.data.session;
+    if(s&&s.access_token) ACCESS_TOKEN=s.access_token;
+  }catch(e){}
+  return ACCESS_TOKEN;
+}
+async function sbFetch(url,opts){
+  opts=opts||{};
+  const conToken=async function(forzar){ const t=await tokenVigente(forzar); return {...opts, headers:{...(opts.headers||{}), apikey:SUPABASE_KEY, Authorization:"Bearer "+t}}; };
+  let res=await fetch(url, await conToken(false));
+  if(res.status===401){
+    const txt=await res.clone().text().catch(()=>'');
+    if(/JWT expired|PGRST30[13]/.test(txt)){
+      res=await fetch(url, await conToken(true));
+      if(res.status===401){ const t2=await res.clone().text().catch(()=>''); if(/JWT expired|PGRST30[13]/.test(t2)) throw new Error('Se venció la sesión. Volvé a ingresar (cerrá sesión y entrá de nuevo) y repetí la importación.'); }
+    }
+  }
+  return res;
+}
 
 function showLoginError(msg){ const el=document.getElementById('login-error'); el.textContent=msg; el.style.display=''; }
 function setLoginBusy(busy){ const b=document.getElementById('login-btn'); b.disabled=busy; b.textContent=busy?'Ingresando…':'Ingresar'; }
@@ -386,7 +411,7 @@ const fmt=(n)=> medida==='monto'? fmtMonto(n) : fmtQty(n);
 
 async function fetchAll(path){
   let all=[], from=0, size=1000;
-  for(;;){ const r=await fetch(SUPABASE_URL+'/rest/v1/'+path+'&limit='+size+'&offset='+from,{headers:H()});
+  for(;;){ const r=await sbFetch(SUPABASE_URL+'/rest/v1/'+path+'&limit='+size+'&offset='+from,{headers:H()});
     const c=await r.json(); if(!Array.isArray(c)||!c.length) break; all=all.concat(c); if(c.length<size) break; from+=size; }
   return all;
 }
@@ -394,7 +419,7 @@ async function cargar(preferAnio){
   try{
     const [m, ab]=await Promise.all([
       fetchAll('comercial_mensual?select=anio,mes,unidad,presu_qty,presu_monto,real_qty,real_monto&order=anio,mes'),
-      fetch(SUPABASE_URL+'/rest/v1/comercial_altas_bajas?select=*&limit=50000',{headers:H()}).then(r=>r.json()).catch(()=>[]),
+      sbFetch(SUPABASE_URL+'/rest/v1/comercial_altas_bajas?select=*&limit=50000',{headers:H()}).then(r=>r.json()).catch(()=>[]),
     ]);
     MENSUAL=Array.isArray(m)?m:[]; AB=Array.isArray(ab)?ab:[];
     if(!MENSUAL.length){ $("estado").textContent="No hay datos. ¿Corriste supabase/migracion_multianio.sql?"; return; }
@@ -466,11 +491,11 @@ async function importarAB(file){
     if(!fhastaRaw){ msg.style.color="#e1251b"; msg.textContent="No se detectó el período en el archivo."; return; }
     const pp=fhastaRaw.split("/"); const periodo=pp[2]+"-"+String(pp[1]).padStart(2,"0")+"-01";
     const nom=new Date(periodo+"T00:00:00").toLocaleDateString("es-AR",{month:"long",year:"numeric"});
-    await fetch(SUPABASE_URL+"/rest/v1/comercial_altas_bajas?periodo=eq."+periodo,{method:"DELETE",headers:H()});
+    await sbFetch(SUPABASE_URL+"/rest/v1/comercial_altas_bajas?periodo=eq."+periodo,{method:"DELETE",headers:H()});
     const rows=Object.entries(agg).map(([uu,v])=>({periodo,unidad:uu,altas:v.altas,bajas:v.bajas}));
-    const res=await fetch(SUPABASE_URL+"/rest/v1/comercial_altas_bajas",{method:"POST",headers:{...H(),"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify(rows)});
+    const res=await sbFetch(SUPABASE_URL+"/rest/v1/comercial_altas_bajas",{method:"POST",headers:{...H(),"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify(rows)});
     if(!res.ok) throw new Error(await res.text());
-    AB=await fetch(SUPABASE_URL+"/rest/v1/comercial_altas_bajas?select=*&limit=50000",{headers:H()}).then(r=>r.json());
+    AB=await sbFetch(SUPABASE_URL+"/rest/v1/comercial_altas_bajas?select=*&limit=50000",{headers:H()}).then(r=>r.json());
     msg.style.color="#16a34a"; msg.textContent="✓ "+nom+" cargado ("+rows.length+" unidades). Si ya existía, se reemplazó.";
     render();
   }catch(e){ msg.style.color="#e1251b"; msg.textContent="No se pudo importar: "+e.message; }
@@ -540,9 +565,9 @@ async function importarClientes(file){
     const nom=MESES[mesIdx]+" "+anio;
     const rows=Object.entries(agg).map(([cliente,v])=>({periodo,unidad:v.unidad,cliente,venta:v.venta}));
     if(!rows.length){ msg.style.color="#e1251b"; msg.textContent="El archivo no tiene datos válidos."; return; }
-    await fetch(SUPABASE_URL+"/rest/v1/comercial_clientes?periodo=eq."+periodo,{method:"DELETE",headers:H()});
+    await sbFetch(SUPABASE_URL+"/rest/v1/comercial_clientes?periodo=eq."+periodo,{method:"DELETE",headers:H()});
     for(let i=0;i<rows.length;i+=1000){ const chunk=rows.slice(i,i+1000);
-      const res=await fetch(SUPABASE_URL+"/rest/v1/comercial_clientes",{method:"POST",headers:{...H(),"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify(chunk)});
+      const res=await sbFetch(SUPABASE_URL+"/rest/v1/comercial_clientes",{method:"POST",headers:{...H(),"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify(chunk)});
       if(!res.ok) throw new Error(await res.text());
       msg.textContent="Subiendo… "+Math.min(i+1000,rows.length)+"/"+rows.length;
     }
@@ -590,7 +615,7 @@ async function importarFacturacion(file){
       (malas?"\n("+malas+" fila(s) ilegibles quedaron afuera)":"")+"\n\nSi "+nom+" ya estaba cargado, se reemplaza. ¿Continuar?");
     if(!ok){ msg.textContent="Carga cancelada."; return; }
     msg.textContent="Cargando "+nom+" en la base…";
-    const res=await fetch(SUPABASE_URL+"/rest/v1/rpc/cargar_facturacion_mes",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_periodo:periodo,p_filas:filas})});
+    const res=await sbFetch(SUPABASE_URL+"/rest/v1/rpc/cargar_facturacion_mes",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_periodo:periodo,p_filas:filas})});
     const txt=await res.text();
     if(!res.ok){ let m=txt; try{ m=JSON.parse(txt).message||txt; }catch{} 
       if(/cargar_facturacion_mes/.test(m) && /not find|no existe|does not exist/i.test(m)) m="Falta crear la función en Supabase (correr supabase/funcion_cargar_facturacion_mes.sql).";
@@ -657,7 +682,7 @@ async function importarPresupuesto(file){
       const unidades=[...new Set(filas.map(r=>r.unidad))].sort().join(', ');
       if(!confirm("Cargar PRESUPUESTO "+a+"\n\nUnidades: "+unidades+"\nTotal: $"+Math.round(tm).toLocaleString('es-AR')+" · "+Math.round(tq).toLocaleString('es-AR')+" unidades\n\nReemplaza todo el presupuesto de "+a+" (el real no se toca). ¿Continuar?")) continue;
       msg.textContent="Cargando presupuesto "+a+"…";
-      const res=await fetch(SUPABASE_URL+"/rest/v1/rpc/cargar_presupuesto",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_anio:a,p_filas:filas})});
+      const res=await sbFetch(SUPABASE_URL+"/rest/v1/rpc/cargar_presupuesto",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_anio:a,p_filas:filas})});
       const txt=await res.text();
       if(!res.ok){ let m=txt; try{ m=JSON.parse(txt).message||txt; }catch{}
         if(/cargar_presupuesto/.test(m) && /not find|no existe|does not exist/i.test(m)) m="Falta crear la función en Supabase (correr supabase/migracion_multianio.sql).";
@@ -862,7 +887,7 @@ async function renderClientes(){
   const desde=ANIO+"-"+String(mesDesde+1).padStart(2,"0")+"-01";
   const hasta=ANIO+"-"+String(mesHasta+1).padStart(2,"0")+"-01";
   try{
-    const res=await fetch(SUPABASE_URL+"/rest/v1/rpc/top_clientes",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_desde:desde,p_hasta:hasta,p_unidad:u,p_limit:20})});
+    const res=await sbFetch(SUPABASE_URL+"/rest/v1/rpc/top_clientes",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({p_desde:desde,p_hasta:hasta,p_unidad:u,p_limit:20})});
     const data=await res.json();
     if(!Array.isArray(data)||!data.length){ $("clientes").innerHTML='<div class="empty">No hay datos de clientes para este período. Importá el archivo del mes.</div>'; return; }
     const maxC=Math.max(...data.map(c=>Number(c.venta)||0),1);
