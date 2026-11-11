@@ -7315,6 +7315,7 @@
     if(m.pagoId) return {label:'Orden de pago', auto:true};
     if(esTransferencia(m)) return {label:'Entre cuentas', auto:false, trf:true};
     if(m.id.indexOf('mov_chq_')===0) return {label:'Cheque', auto:true};
+    if(m.id.indexOf('mov_bco_')===0) return {label:'Extracto', auto:false, bco:true};
     return {label:'Manual', auto:false};
   }
   function renderMovimientosList(){
@@ -7343,7 +7344,8 @@
         +'<td class="num" title="'+esc(medioLabel(m.medioId))+'">'+esc(medioCodigo(m.medioId)||'—')+'</td>'
         +'<td>'+esc(cuentaNombre(m.cuentaId))+'</td>'
         +'<td class="day-note">'+esc(m.concepto||'—')+'</td>'
-        +'<td><span class="mov-origen-badge'+(org.auto?' auto':'')+(org.trf?' trf':'')+'">'+org.label+'</span></td>'
+        +'<td><span class="mov-origen-badge'+(org.auto?' auto':'')+(org.trf?' trf':'')+(org.bco?' bco':'')+'">'+org.label+'</span>'
+          +(m.bancoRef ? ' <span class="mov-conciliado" title="Está en el extracto del banco'+(m.bancoDetalle ? ': '+esc(m.bancoDetalle) : '')+'">🏦✓</span>' : '')+'</td>'
         +'<td class="num'+(ing?' monto-ingreso':'')+'">'+(ing?'+':'−')+'$'+montoStr+'</td>';
       tr.addEventListener('click', function(){
         if(org.trf){ openTransferModal(transferBase(m.id)); return; }
@@ -7459,7 +7461,7 @@
     state.sb.from('movimientos').upsert(Object.assign({
       id:m.id, cuenta_id:m.cuentaId||null, fecha:m.fecha||null, concepto:m.concepto||'', monto:m.monto||0,
       pago_id:m.pagoId||null, notas:m.notas||'', tipo:m.tipo||'egreso', medio_id:m.medioId||null, cheque_ids:m.chequeIds||[]
-    }, camposAnulacion(m))).then(function(res){
+    }, camposAnulacion(m), state.colBancoRef ? {banco_ref:m.bancoRef||null, banco_detalle:m.bancoDetalle||''} : {})).then(function(res){
       if(res.error) showToast('No se pudo guardar el movimiento: '+res.error.message);
     });
   }
@@ -7811,6 +7813,293 @@
   }
   function closeTransferModal(){ document.getElementById('transfer-overlay').classList.remove('show'); }
   document.getElementById('new-transfer-btn').addEventListener('click', function(){ openTransferModal(null); });
+
+  // ---------- Importar extracto del banco (Santander, Credicoop...) ----------
+  // Se sube el archivo de movimientos que baja el home banking (de un día o de
+  // varios). Cada línea se compara con lo que ya hay en la cuenta:
+  //  · "Ya importado": la misma línea ya se subió antes (huella banco_ref).
+  //  · "Ya cargado": coincide con un movimiento existente (mismo tipo e importe,
+  //    fecha cercana; ej. el pago de una OP por transferencia) → se concilia,
+  //    no se duplica.
+  //  · "Nuevo": se registra como entrada o salida de la cuenta.
+  var EXT_DIAS_TOLERANCIA = 5;
+  state.extracto = null;
+
+  function extNorm(t){ return normTxt(t).replace(/[^a-z0-9]+/g,' ').trim(); }
+  function extFecha(v){
+    if(v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+    var t = String(v==null?'':v).trim(), m;
+    if((m = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/))){
+      var a = m[3].length===2 ? '20'+m[3] : m[3];
+      return a+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2);
+    }
+    if((m = t.match(/^(\d{4})-(\d{2})-(\d{2})/))) return m[1]+'-'+m[2]+'-'+m[3];
+    return '';
+  }
+  function extNumero(v){
+    if(typeof v==='number') return v;
+    var t = String(v==null?'':v).trim().replace(/\s|\$/g,'');
+    if(!t) return NaN;
+    var neg = /^\(.*\)$/.test(t) || /-$/.test(t);
+    t = t.replace(/[()]/g,'').replace(/-$/,'');
+    var n = parseMontoInput(t);
+    if(isNaN(n) && /^-?\d+(\.\d+)?$/.test(t)) n = parseFloat(t);
+    return isNaN(n) ? NaN : (neg ? -Math.abs(n) : n);
+  }
+  // Filas (arrays de celdas) a partir del archivo: texto con tabulaciones/;
+  // (Santander), tabla HTML disfrazada de .xls, o Excel de verdad (SheetJS).
+  function extCargarXLSX(){
+    if(window.XLSX) return Promise.resolve();
+    return new Promise(function(ok, mal){
+      var sc = document.createElement('script');
+      sc.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+      sc.onload = function(){ ok(); }; sc.onerror = function(){ mal(new Error('No se pudo cargar el lector de Excel.')); };
+      document.head.appendChild(sc);
+    });
+  }
+  function extFilasDeArchivo(file){
+    return file.arrayBuffer().then(function(buf){
+      var b = new Uint8Array(buf);
+      var esExcel = (b[0]===0x50 && b[1]===0x4B) || (b[0]===0xD0 && b[1]===0xCF && b[2]===0x11 && b[3]===0xE0);
+      if(esExcel){
+        return extCargarXLSX().then(function(){
+          var wb = window.XLSX.read(buf, {type:'array'});
+          var ws = wb.Sheets[wb.SheetNames[0]];
+          return window.XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:false});
+        });
+      }
+      var txt = new TextDecoder('utf-8').decode(b);
+      if(txt.indexOf('�')!==-1) txt = new TextDecoder('windows-1252').decode(b);
+      if(/<table/i.test(txt)){
+        var doc = new DOMParser().parseFromString(txt, 'text/html');
+        return Array.prototype.map.call(doc.querySelectorAll('tr'), function(tr){
+          return Array.prototype.map.call(tr.querySelectorAll('th,td'), function(td){ return td.textContent.replace(/\s+/g,' ').trim(); });
+        });
+      }
+      var lineas = txt.replace(/\r/g,'').split('\n');
+      var sep = lineas.some(function(l){ return l.indexOf('\t')!==-1; }) ? '\t' : (lineas.some(function(l){ return l.split(';').length>3; }) ? ';' : ',');
+      return lineas.map(function(l){ return l.split(sep).map(function(c){ return c.replace(/^"|"$/g,'').trim(); }); });
+    });
+  }
+  // Busca la fila de títulos y arma las líneas del extracto.
+  function extInterpretar(filas){
+    var hi = -1, col = {};
+    for(var i=0; i<filas.length && i<40; i++){
+      var h = (filas[i]||[]).map(extNorm);
+      var fecha = h.findIndex(function(x){ return /^fecha( (mov|movimiento|operacion|valor))?$/.test(x) || x==='fecha'; });
+      if(fecha===-1) fecha = h.findIndex(function(x){ return x.indexOf('fecha')===0; });
+      var imp = h.findIndex(function(x){ return /^(importe|monto|importe en pesos)$/.test(x); });
+      var deb = h.findIndex(function(x){ return /^debitos?$|^debe$|^egresos?$/.test(x); });
+      var cre = h.findIndex(function(x){ return /^creditos?$|^haber$|^ingresos?$/.test(x); });
+      if(fecha!==-1 && (imp!==-1 || (deb!==-1 && cre!==-1))){
+        hi = i;
+        col = {fecha:fecha, importe:imp, debito:deb, credito:cre,
+          concepto: h.findIndex(function(x){ return /^(concepto|descripcion|detalle|leyenda|descripcion del movimiento)$/.test(x); }),
+          saldo: h.findIndex(function(x){ return x.indexOf('saldo')===0; }),
+          referencia: h.findIndex(function(x){ return /^(referencia|comprobante|nro comprobante|n comprobante|numero|nro)$/.test(x); }),
+          codigo: h.findIndex(function(x){ return /^cod/.test(x); })};
+        break;
+      }
+    }
+    if(hi===-1) throw new Error('No reconozco el archivo: no encuentro la fila de títulos (Fecha, Concepto, Importe o Débito/Crédito).');
+    var lineas = [], saldoFinal = null, fechaSaldo = '';
+    var cel = function(f, j){ return j>=0 ? (f[j]==null?'':f[j]) : ''; };
+    filas.forEach(function(f, i){
+      f = f || [];
+      var unida = f.join(' ');
+      var ms = unida.match(/saldo (?:al|a la fecha|final)[^\d]*(\d{1,2}\/\d{1,2}\/\d{2,4})?\s*\$?\s*(-?[\d.]+,\d{2})/i);
+      if(ms){ saldoFinal = extNumero(ms[2]); fechaSaldo = ms[1] ? extFecha(ms[1]) : ''; }
+      if(i<=hi) return;
+      var fecha = extFecha(cel(f, col.fecha));
+      if(!fecha) return;
+      var monto;
+      if(col.importe>=0) monto = extNumero(cel(f, col.importe));
+      else {
+        var d = extNumero(cel(f, col.debito)), c = extNumero(cel(f, col.credito));
+        monto = (isNaN(c)?0:Math.abs(c)) - (isNaN(d)?0:Math.abs(d));
+      }
+      if(isNaN(monto) || Math.abs(monto)<0.005) return;
+      var concepto = String(cel(f, col.concepto)).replace(/\s+/g,' ').trim();
+      var saldo = col.saldo>=0 ? extNumero(cel(f, col.saldo)) : NaN;
+      lineas.push({fecha:fecha, monto:Math.round(monto*100)/100, concepto:concepto,
+        referencia:String(cel(f, col.referencia)).trim(), codigo:String(cel(f, col.codigo)).trim(), saldo:isNaN(saldo)?null:saldo});
+    });
+    if(saldoFinal==null){
+      var conSaldo = lineas.filter(function(l){ return l.saldo!=null; });
+      if(conSaldo.length){
+        // el saldo más reciente: la línea de fecha mayor (los bancos ordenan distinto)
+        var ult = conSaldo.slice().sort(function(a,b){ return a.fecha.localeCompare(b.fecha); });
+        var masNueva = ult[ult.length-1].fecha;
+        var candidatas = conSaldo.filter(function(l){ return l.fecha===masNueva; });
+        var primeraFecha = conSaldo[0].fecha;
+        saldoFinal = (primeraFecha===masNueva ? candidatas[0] : candidatas[candidatas.length-1]).saldo;
+        fechaSaldo = masNueva;
+      }
+    }
+    return {lineas:lineas, saldoFinal:saldoFinal, fechaSaldo:fechaSaldo};
+  }
+  // Huella de cada línea (para no importarla dos veces). Si en el archivo hay
+  // dos líneas idénticas (mismo día, importe y concepto) se numeran.
+  function extHuellas(cuentaId, lineas){
+    var vistos = {};
+    lineas.forEach(function(l){
+      var base = [l.fecha, l.monto.toFixed(2), l.codigo, l.referencia, extNorm(l.concepto)].join('|');
+      vistos[base] = (vistos[base]||0) + 1;
+      l.ref = 'b'+hashStr(cuentaId+'|'+base).toString(36)+'_'+hashStr(base+'#').toString(36)+(vistos[base]>1 ? '_'+vistos[base] : '');
+    });
+  }
+  function extDiasEntre(a, b){ return Math.abs((new Date(a+'T12:00:00') - new Date(b+'T12:00:00'))/86400000); }
+  function extDetalle(l){
+    var t = l.concepto || 'Movimiento bancario';
+    return (l.referencia ? t+' · Ref. '+l.referencia : t).slice(0, 200);
+  }
+  function extClasificar(){
+    var ex = state.extracto; if(!ex) return;
+    var cuentaId = ex.cuentaId;
+    extHuellas(cuentaId, ex.lineas);
+    var propios = state.movimientos.filter(function(m){ return m.cuentaId===cuentaId && noAnulado(m); });
+    var refs = {}; propios.forEach(function(m){ if(m.bancoRef) refs[m.bancoRef] = m; });
+    var usados = {};
+    ex.lineas.forEach(function(l){
+      l.estado = 'nuevo'; l.mov = null; l.incluir = true;
+      if(refs[l.ref]){ l.estado = 'importado'; l.mov = refs[l.ref]; l.incluir = false; return; }
+      var tipo = l.monto>0 ? 'ingreso' : 'egreso', abs = Math.abs(l.monto);
+      var cand = propios.filter(function(m){
+        return !m.bancoRef && !usados[m.id] && (m.tipo||'egreso')===tipo && Math.abs(Number(m.monto||0)-abs)<0.005
+          && m.fecha && extDiasEntre(m.fecha, l.fecha)<=EXT_DIAS_TOLERANCIA;
+      }).sort(function(a,b){ return extDiasEntre(a.fecha, l.fecha)-extDiasEntre(b.fecha, l.fecha); });
+      if(cand[0]){ l.estado = 'coincide'; l.mov = cand[0]; usados[cand[0].id] = true; }
+    });
+  }
+  function extMedioDefault(cuentaId){
+    var ms = mediosOrdenados().filter(function(m){ return m.cuentaId===cuentaId && m.cheque==='no'; });
+    var tr = ms.find(function(m){ return /transf/i.test(m.nombre); });
+    return (tr || ms[0] || {}).id || '';
+  }
+
+  function openExtractoModal(){
+    var bancos = state.cuentas.filter(function(c){ return c.tipo==='banco'; }).sort(function(a,b){ return (a.nombre||'').localeCompare(b.nombre||''); });
+    if(!bancos.length){ showToast('Primero creá la cuenta del banco en Tesorería → Cuentas (tipo Banco).', 6000); return; }
+    var sel = document.getElementById('ext-cuenta');
+    fillSelect(sel, bancos, 'id', 'nombre', 'Elegir banco');
+    var pref = state.movFilterCuenta && bancos.some(function(c){ return c.id===state.movFilterCuenta; }) ? state.movFilterCuenta : (bancos.length===1 ? bancos[0].id : '');
+    sel.value = pref;
+    state.extracto = null;
+    document.getElementById('ext-file').value = '';
+    document.getElementById('ext-archivo').textContent = '';
+    extActualizarMedios();
+    renderExtracto();
+    document.getElementById('extracto-overlay').classList.add('show');
+  }
+  function closeExtractoModal(){ document.getElementById('extracto-overlay').classList.remove('show'); state.extracto = null; }
+  function extActualizarMedios(){
+    var cuentaId = document.getElementById('ext-cuenta').value;
+    var def = extMedioDefault(cuentaId);
+    fillMedioSelect(document.getElementById('ext-medio-ing'), def, 'Sin concepto');
+    fillMedioSelect(document.getElementById('ext-medio-egr'), def, 'Sin concepto');
+  }
+  function renderExtracto(){
+    var ex = state.extracto;
+    var body = document.getElementById('ext-body'), res = document.getElementById('ext-resumen'), btn = document.getElementById('ext-save');
+    body.innerHTML = '';
+    if(!ex){
+      res.innerHTML = '<span class="ext-vacio">Elegí el banco y subí el archivo de movimientos que baja el home banking (de un día o de varios).</span>';
+      btn.disabled = true; btn.textContent = 'Registrar';
+      document.getElementById('ext-tabla-wrap').hidden = true;
+      return;
+    }
+    document.getElementById('ext-tabla-wrap').hidden = false;
+    var n = {nuevo:0, coincide:0, importado:0}, ent = 0, sal = 0, aReg = 0;
+    var ESTADO = {nuevo:'Nuevo', coincide:'Ya cargado', importado:'Ya importado'};
+    ex.lineas.forEach(function(l, i){
+      n[l.estado]++;
+      if(l.estado==='nuevo' && l.incluir){ aReg++; if(l.monto>0) ent += l.monto; else sal += -l.monto; }
+      var tr = document.createElement('tr');
+      tr.className = 'day-row ext-'+l.estado+(l.estado==='nuevo' && !l.incluir ? ' ext-omitida' : '');
+      var detalleMov = l.mov ? (medioCodigo(l.mov.medioId) ? medioCodigo(l.mov.medioId)+' · ' : '')+(l.mov.concepto||'')+(l.mov.fecha!==l.fecha ? ' ('+l.mov.fecha+')' : '') : '';
+      tr.innerHTML = '<td>'+(l.estado==='nuevo' ? '<input type="checkbox" class="ext-chk" data-i="'+i+'"'+(l.incluir?' checked':'')+' title="Registrar esta línea">' : '')+'</td>'
+        +'<td class="num">'+esc(l.fecha)+'</td>'
+        +'<td class="day-note">'+esc(l.concepto||'—')+(l.referencia ? '<div class="ext-ref">Ref. '+esc(l.referencia)+'</div>' : '')+'</td>'
+        +'<td class="num'+(l.monto>0?' monto-ingreso':'')+'">'+(l.monto>0?'+':'−')+fmtMoney(Math.abs(l.monto))+'</td>'
+        +'<td><span class="ext-estado '+l.estado+'">'+ESTADO[l.estado]+'</span>'+(detalleMov ? '<div class="ext-ref" title="Movimiento que ya estaba cargado">'+esc(detalleMov)+'</div>' : '')+'</td>';
+      body.appendChild(tr);
+    });
+    var partes = [ex.lineas.length+' líneas'];
+    if(n.nuevo) partes.push('<b>'+n.nuevo+' nuevas</b>');
+    if(n.coincide) partes.push(n.coincide+' ya cargadas (se concilian)');
+    if(n.importado) partes.push(n.importado+' ya importadas antes');
+    var fechas = ex.lineas.map(function(l){ return l.fecha; }).sort();
+    var rango = fechas.length ? (fechas[0]===fechas[fechas.length-1] ? fechas[0] : fechas[0]+' al '+fechas[fechas.length-1]) : '';
+    var html = '<div>'+(rango ? 'Del '+esc(rango)+': ' : '')+partes.join(' · ')+'</div>';
+    if(aReg) html += '<div>Se registran '+aReg+': entradas '+fmtMoney(ent)+(sal ? ' · salidas '+fmtMoney(sal) : '')+'</div>';
+    if(ex.saldoFinal!=null){
+      var cuentaId = ex.cuentaId;
+      var simulado = cuentaSaldoActual(cuentaId, '9999-12-31') + ent - sal;
+      var dif = Math.round((ex.saldoFinal - simulado)*100)/100;
+      html += '<div class="ext-saldo'+(Math.abs(dif)>=0.01 ? ' dif' : ' ok')+'">Saldo según el banco'+(ex.fechaSaldo ? ' al '+esc(ex.fechaSaldo) : '')+': <b>'+fmtMoneySigno(ex.saldoFinal)+'</b> · en la app después de registrar: '+fmtMoneySigno(simulado)
+        +(Math.abs(dif)>=0.01 ? ' · diferencia '+fmtMoneySigno(dif)+(Math.abs(cuentaSaldoActual(cuentaId,'9999-12-31'))<0.005 && !state.movimientos.some(function(m){ return m.cuentaId===cuentaId; }) ? ' (¿cargaste el saldo inicial de la cuenta?)' : '') : ' ✓')+'</div>';
+    }
+    res.innerHTML = html;
+    var total = aReg + n.coincide;
+    btn.disabled = total===0;
+    btn.textContent = aReg && n.coincide ? 'Registrar '+aReg+' y conciliar '+n.coincide : (aReg ? 'Registrar '+aReg+' movimiento'+(aReg===1?'':'s') : (n.coincide ? 'Conciliar '+n.coincide : 'Nada para registrar'));
+  }
+  function extLeerArchivo(file){
+    var cuentaId = document.getElementById('ext-cuenta').value;
+    if(!cuentaId){ showToast('Elegí primero el banco.'); document.getElementById('ext-file').value = ''; return; }
+    document.getElementById('ext-archivo').textContent = file.name;
+    extFilasDeArchivo(file).then(function(filas){
+      var r = extInterpretar(filas);
+      if(!r.lineas.length) throw new Error('El archivo no tiene movimientos.');
+      state.extracto = {cuentaId:cuentaId, archivo:file.name, lineas:r.lineas, saldoFinal:r.saldoFinal, fechaSaldo:r.fechaSaldo};
+      extClasificar();
+      renderExtracto();
+    }).catch(function(e){
+      state.extracto = null; renderExtracto();
+      showToast(e && e.message ? e.message : 'No se pudo leer el archivo.', 7000);
+    });
+  }
+  function extRegistrar(){
+    var ex = state.extracto; if(!ex) return;
+    if(!state.colBancoRef){ showToast('Falta correr base-de-datos/extracto-bancario.sql en Supabase.', 7000); return; }
+    var medioIng = document.getElementById('ext-medio-ing').value, medioEgr = document.getElementById('ext-medio-egr').value;
+    var reg = 0, conc = 0;
+    ex.lineas.forEach(function(l){
+      if(l.estado==='coincide' && l.mov){
+        var m = Object.assign({}, l.mov, {bancoRef:l.ref, bancoDetalle:extDetalle(l)});
+        upsertMovimientoLocal(m); conc++;
+      } else if(l.estado==='nuevo' && l.incluir){
+        var ing = l.monto>0;
+        upsertMovimientoLocal({id:'mov_bco_'+l.ref, cuentaId:ex.cuentaId, fecha:l.fecha, concepto:(l.concepto||'Movimiento bancario').slice(0,200),
+          monto:Math.abs(l.monto), pagoId:'', notas:'Importado del extracto ('+ex.archivo+')'+(l.referencia ? ' · Ref. '+l.referencia : ''),
+          tipo:ing ? 'ingreso' : 'egreso', medioId:(ing ? medioIng : medioEgr)||'', chequeIds:[], bancoRef:l.ref, bancoDetalle:extDetalle(l)});
+        reg++;
+      }
+    });
+    closeExtractoModal();
+    state.movFilterCuenta = ex.cuentaId;
+    renderTesoreria();
+    showToast((reg ? reg+' movimiento'+(reg===1?'':'s')+' registrado'+(reg===1?'':'s') : '')+(reg && conc ? ' · ' : '')+(conc ? conc+' conciliado'+(conc===1?'':'s') : '')+'.', 5000);
+  }
+  document.getElementById('import-extracto-btn').addEventListener('click', openExtractoModal);
+  document.getElementById('ext-cancel').addEventListener('click', closeExtractoModal);
+  document.getElementById('ext-save').addEventListener('click', extRegistrar);
+  document.getElementById('ext-elegir').addEventListener('click', function(){ document.getElementById('ext-file').click(); });
+  document.getElementById('ext-file').addEventListener('change', function(){ if(this.files && this.files[0]) extLeerArchivo(this.files[0]); });
+  document.getElementById('ext-cuenta').addEventListener('change', function(){
+    extActualizarMedios();
+    if(state.extracto){ state.extracto.cuentaId = this.value; if(this.value){ extClasificar(); renderExtracto(); } else { state.extracto = null; renderExtracto(); } }
+  });
+  document.getElementById('ext-body').addEventListener('change', function(e){
+    var t = e.target; if(!t.classList.contains('ext-chk') || !state.extracto) return;
+    state.extracto.lineas[Number(t.dataset.i)].incluir = t.checked; renderExtracto();
+  });
+  document.getElementById('ext-todas').addEventListener('click', function(){
+    if(!state.extracto) return;
+    var nuevas = state.extracto.lineas.filter(function(l){ return l.estado==='nuevo'; });
+    var marcar = nuevas.some(function(l){ return !l.incluir; });
+    nuevas.forEach(function(l){ l.incluir = marcar; }); renderExtracto();
+  });
   document.getElementById('trf-cancel').addEventListener('click', closeTransferModal);
   ['trf-desde','trf-hacia','trf-monto'].forEach(function(id){
     document.getElementById(id).addEventListener(id==='trf-monto' ? 'input' : 'change', transferSaldos);
@@ -7998,7 +8287,8 @@
     return leerAnulacion(row, {
       id:row.id, cuentaId:row.cuenta_id||'', fecha:row.fecha||'', concepto:row.concepto||'',
       monto:typeof row.monto==='number'?row.monto:parseFloat(row.monto)||0, pagoId:row.pago_id||'', notas:row.notas||'',
-      tipo:row.tipo||'egreso', medioId:row.medio_id||'', chequeIds:Array.isArray(row.cheque_ids)?row.cheque_ids:[]
+      tipo:row.tipo||'egreso', medioId:row.medio_id||'', chequeIds:Array.isArray(row.cheque_ids)?row.cheque_ids:[],
+      bancoRef:row.banco_ref||'', bancoDetalle:row.banco_detalle||''
     });
   }
   function mapChequeRow(r){
@@ -8017,6 +8307,7 @@
       state.cuentas = (res.data||[]).map(mapCuentaRow);
       renderTesoreria(); renderMediosList();
     });
+    state.sb.from('movimientos').select('banco_ref').limit(1).then(function(res){ state.colBancoRef = !res.error; });
     fetchAllRows('movimientos').then(function(res){
       if(res.error){ showToast('Error cargando movimientos: '+res.error.message); return; }
       state.movimientos = (res.data||[]).map(mapMovimientoRow);

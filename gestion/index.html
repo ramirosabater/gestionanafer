@@ -1084,6 +1084,20 @@
   .trf-aviso{ background:#fff7e0; border:1px solid #f2d27a; color:#7a5b00; border-radius:10px; padding:8px 12px; font-size:13px; margin-top:6px; }
   .trf-aviso[hidden]{ display:none; }
   .mov-origen-badge.trf{ background:rgba(43,169,224,.14); color:#1b7fae; }
+  .mov-origen-badge.bco{ background:rgba(236,0,0,.10); color:#b3261e; }
+  .mov-conciliado{ font-size:11px; opacity:.8; white-space:nowrap; }
+  .ext-file-row{ display:flex; gap:10px; align-items:center; }
+  .ext-ref{ font-size:11.5px; color:var(--ink-2); }
+  .ext-resumen{ margin:8px 0 10px; font-size:13px; line-height:1.6; }
+  .ext-resumen .ext-vacio{ color:var(--ink-2); }
+  .ext-saldo.ok{ color:#1d7a45; } .ext-saldo.dif{ color:var(--danger); }
+  .ext-estado{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; white-space:nowrap; }
+  .ext-estado.nuevo{ background:color-mix(in srgb, var(--accent) 14%, var(--surface)); color:var(--accent); }
+  .ext-estado.coincide{ background:rgba(29,122,69,.12); color:#1d7a45; }
+  .ext-estado.importado{ background:var(--surface-2); color:var(--ink-2); }
+  #ext-table tr.ext-importado td, #ext-table tr.ext-omitida td{ opacity:.55; }
+  .ext-todas{ border:0; background:none; cursor:pointer; font-size:14px; padding:0; }
+  #extracto-modal .day-wrap{ max-height:46vh; overflow:auto; }
   @media (max-width:560px){ .trf-cuentas{ grid-template-columns:1fr; } .trf-cuentas .trf-swap{ margin-top:0; justify-self:center; transform:rotate(90deg); } }
   /* Artículos en la factura */
   .art-box{ border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin:8px 0 12px; background:color-mix(in srgb, var(--accent) 4%, var(--surface)); }
@@ -1740,6 +1754,7 @@
         <select id="mov-filter-cuenta" class="scope-select">
           <option value="">Todas las cuentas</option>
         </select>
+        <button class="btn edit-action" id="import-extracto-btn" title="Subir el archivo de movimientos del home banking (Santander, Credicoop...)">🏦 Importar extracto</button>
         <button class="btn edit-action" id="new-transfer-btn" title="Pasar plata de una caja o banco a otra">⇄ Entre cuentas</button>
         <button class="btn primary edit-action" id="new-entrada-btn">+ Entrada</button>
         <button class="btn primary edit-action" id="new-movimiento-btn">+ Salida</button>
@@ -1758,6 +1773,7 @@
       <div class="item">Los cheques de terceros que entran (concepto CHE) quedan en la cartera hasta que se depositan, se entregan a un proveedor en una orden de pago o se marcan como rechazados</div>
       <div class="item">Al marcar una orden de pago como Pagada se elige la cuenta y se genera el egreso automáticamente — esos movimientos no se pueden editar ni borrar desde acá, solo cambiando la orden de pago</div>
       <div class="item">Los movimientos cargados a mano (no ligados a una orden de pago) sí se pueden editar o borrar</div>
+      <div class="item">🏦 Importar extracto: se sube el archivo de movimientos del banco (de un día o de varios). Lo que coincide con un movimiento ya cargado queda conciliado (🏦✓) y lo nuevo se registra; si el mismo día se sube dos veces, no se duplica</div>
     </div>
   </div>
 
@@ -2718,6 +2734,37 @@
         <button class="btn" id="trf-anular" style="display:none; color:var(--danger);">Anular</button>
       </div>
       <button class="btn primary" id="trf-save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="extracto-overlay">
+  <div class="modal wide" id="extracto-modal" style="max-width:860px;">
+    <h3>Importar extracto del banco</h3>
+    <div class="sub">Subí el archivo de movimientos que baja el home banking, de un día o de varios. Lo que ya estaba cargado (ej. pagos de órdenes de pago) no se duplica: queda conciliado. Si subís dos veces el mismo día, lo repetido se saltea.</div>
+    <div class="modal-scroll-body">
+    <div class="crew-fields">
+      <div class="field"><label for="ext-cuenta">Banco</label><select id="ext-cuenta"></select></div>
+      <div class="field"><label>Archivo</label>
+        <div class="ext-file-row"><button type="button" class="btn" id="ext-elegir">📄 Elegir archivo</button><span id="ext-archivo" class="ext-ref"></span></div>
+        <input type="file" id="ext-file" accept=".xls,.xlsx,.csv,.txt" hidden>
+      </div>
+    </div>
+    <div class="crew-fields">
+      <div class="field"><label for="ext-medio-ing">Concepto de caja de las entradas</label><select id="ext-medio-ing"></select></div>
+      <div class="field"><label for="ext-medio-egr">Concepto de caja de las salidas</label><select id="ext-medio-egr"></select></div>
+    </div>
+    <div class="ext-resumen" id="ext-resumen"></div>
+    <div class="day-wrap" id="ext-tabla-wrap" hidden>
+      <table class="day-table" id="ext-table">
+        <thead><tr><th><button type="button" class="ext-todas" id="ext-todas" title="Marcar / desmarcar todas las nuevas">☑</button></th><th>Fecha</th><th>Concepto del banco</th><th>Importe</th><th>Estado</th></tr></thead>
+        <tbody id="ext-body"></tbody>
+      </table>
+    </div>
+    </div>
+    <div class="modal-actions">
+      <div class="left"><button class="btn" id="ext-cancel">Cancelar</button></div>
+      <button class="btn primary" id="ext-save" disabled>Registrar</button>
     </div>
   </div>
 </div>
