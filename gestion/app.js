@@ -3527,6 +3527,11 @@
   function imputarAlMovil(truckId){
     if(state.editingFacturaItems) return;
     var sel = document.getElementById('fm-centro-costo'), cc = sel.value;
+    if(!cc && state.fmRama){
+      var hoja = state.centrosCosto.find(function(x){ return x.activo!==false && x.refFijo==='movil:'+truckId && ccEsHoja(x) && ccRuta(x.id).some(function(y){ return y.id===state.fmRama; }); });
+      if(hoja){ sel.value = hoja.id; sel.dispatchEvent(new Event('change')); }
+      return;
+    }
     if(!cc) return;
     if(ccRequiere(cc)==='movil'){ actualizarFmRef('movil:'+truckId); return; }
     var c = centroCostoById(cc);
@@ -3866,7 +3871,7 @@
   function imputKey(ccId, coId){ return (ccId||'')+'|'+(coId||''); }
   function imputLabel(im){
     var cc = centroCostoById(im.centroCostoId), co = conceptoById(im.conceptoId);
-    return (cc ? cc.descripcion : '(centro eliminado)')+' · '+(co ? co.nombre : '(concepto eliminado)');
+    return (cc ? centroCostoLabel(cc.id) : '(centro eliminado)')+' · '+(co ? co.nombre : '(concepto eliminado)');
   }
   function imputUsos(proveedorId){
     var usos = {};
@@ -6056,12 +6061,36 @@
   function aplicarImputacionDefault(proveedorId){
     if(state.editingFacturaItems) return; // repartida: no se pisan las líneas
     var def = imputacionDefault(proveedorId);
-    if(!def) return;
+    if(!def){ state.fmRama = null; actualizarFmRamaHint(); return; }
     var ccSel = document.getElementById('fm-centro-costo');
     var coSel = document.getElementById('fm-concepto');
     var ccDef = centroCostoById(def.centroCostoId);
-    if(ccDef && ccDef.activo!==false){ ccSel.value = def.centroCostoId; actualizarFmRef(''); }
+    if(ccDef && ccDef.activo!==false){ elegirCentroOrama(def.centroCostoId); }
     if(conceptoById(def.conceptoId)) coSel.value = def.conceptoId;
+  }
+  // La imputación de un proveedor puede ser una rama que se abre por móvil o
+  // por línea (ej. Mantenimiento › Flota › Insumos): ahí no se elige sola la
+  // hoja, se avisa cuál es la rama y, si se lee el móvil, se completa.
+  function elegirCentroOrama(id){
+    var ccSel = document.getElementById('fm-centro-costo');
+    var c = centroCostoById(id);
+    state.fmRama = null;
+    if(c && !ccEsHoja(c)){ ccSel.value = ''; state.fmRama = c.id; }
+    else ccSel.value = id;
+    actualizarFmRef('');
+    actualizarFmRamaHint();
+  }
+  function actualizarFmRamaHint(){
+    var el = document.getElementById('fm-rama-hint');
+    if(!el) return;
+    var cc = document.getElementById('fm-centro-costo').value;
+    var r = state.fmRama ? centroCostoById(state.fmRama) : null;
+    if(r && cc && ccRuta(cc).some(function(x){ return x.id===r.id; })) r = null;
+    el.hidden = !r;
+    if(r){
+      var porMovil = state.centrosCosto.some(function(x){ return x.refFijo && x.refFijo.indexOf('movil:')===0 && ccRuta(x.id).some(function(y){ return y.id===r.id; }); });
+      el.textContent = 'Imputación habitual: '+centroCostoLabel(r.id)+' → elegí '+(porMovil ? 'el móvil' : 'el ítem')+' en Centro de costo.';
+    }
   }
   function renderFacturaImputChips(){
     var box = document.getElementById('fm-imputaciones');
@@ -6085,9 +6114,8 @@
           agregarLineaSplit(im.centroCostoId, im.conceptoId);
           return;
         }
-        document.getElementById('fm-centro-costo').value = im.centroCostoId;
+        elegirCentroOrama(im.centroCostoId);
         document.getElementById('fm-concepto').value = im.conceptoId;
-        actualizarFmRef('');
         renderFacturaImputChips();
       });
       box.appendChild(b);
@@ -6286,6 +6314,7 @@
   });
   document.getElementById('fm-proveedor').addEventListener('change', actualizarFmCombustible);
   document.getElementById('fm-centro-costo').addEventListener('change', actualizarFmCombustible);
+  document.getElementById('fm-centro-costo').addEventListener('change', actualizarFmRamaHint);
   document.getElementById('fm-ccref').addEventListener('change', actualizarFmCombustible);
   // Choferes: los de Logística y los que ya se cargaron en facturas
   function choferesConocidos(){
@@ -6332,6 +6361,7 @@
     marcarModalAnulado('fm-save', 'fm-delete', null);
     state.editingFacturaId = id || null;
     ocultarVistaFactura(true);
+    state.fmRama = null; document.getElementById('fm-rama-hint').hidden = true;
     var f = id ? facturaById(id) : null;
     document.getElementById('fm-title').textContent = f ? 'Editar factura' : 'Nueva factura';
     setProveedorComboValue('fm-proveedor', f ? f.proveedorId : '');

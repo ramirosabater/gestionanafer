@@ -100,3 +100,25 @@ test("móvil que no está en Camiones: avisa y deja elegirlo a mano", async ({ p
   await page.selectOption("#fm-movil", "41");
   await expect(page.locator("#fm-patente")).toHaveValue("AG241CA");
 });
+
+test("imputación habitual en una rama (Logística › Móviles): avisa elegir el móvil y la lectura lo elige sola", async ({ page }) => {
+  const estRama = { ...ESTACION, imputaciones: [{ centro_costo_id: "cc_logistica_moviles", concepto_id: "gasoil" }] };
+  const db = baseDePrueba(datosCompras({ proveedores: [...PROVEEDORES, estRama], facturas: FACTURAS, centros_costo: CC,
+    __funciones: { "leer-factura": { data: { data: LEIDO[0], facturas: [LEIDO[0]] }, error: null } } }));
+  db.trucks = TRUCKS;
+  const errores = await abrirGestion(page, db, { email: "compras@anafer.test" });
+  await page.click("#tab-pagos");
+  await page.click('#subtabs-pagos .stabbtn[data-sub="facturas"]');
+  await page.click("#new-factura-btn");
+  await page.fill("#fm-proveedor-input", "Estación");
+  await page.locator("#fm-proveedor-menu .combo-item").first().click();
+  await expect(page.locator("#fm-centro-costo")).toHaveValue("");
+  await expect(page.locator("#fm-rama-hint")).toBeVisible();
+  await expect(page.locator("#fm-rama-hint")).toContainText("Móviles");
+  await expect(page.locator("#fm-concepto")).toHaveValue("gasoil");
+  await page.setInputFiles("#fm-read-input", { name: "f.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%%EOF") });
+  await expect(page.locator("#fm-movil")).toHaveValue("36");
+  await expect(page.locator("#fm-centro-costo")).toHaveValue("cc_moviles_36");
+  await expect(page.locator("#fm-rama-hint")).toBeHidden();
+  expect(errores).toEqual([]);
+});

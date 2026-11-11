@@ -322,6 +322,7 @@
   .art-line select.art{min-width:0; width:100%; font-family:inherit; font-size:13px; border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:8px; padding:6px 8px; height:34px;}
   .fm-cola{font-size:12.5px; padding:8px 12px; border-radius:10px; margin:0 0 10px; background:color-mix(in srgb, var(--accent) 10%, var(--surface)); border:1px solid color-mix(in srgb, var(--accent) 30%, transparent);}
   .fm-cola[hidden]{display:none;}
+  .fm-rama-hint{color:#a86f00; margin-top:4px;} .fm-rama-hint[hidden]{display:none;}
   .fac-clip{border:none; background:transparent; cursor:pointer; font-size:14px; padding:0 2px; vertical-align:middle;}
   .fac-clip:hover{transform:scale(1.2);}
   #factura-overlay.con-vista{gap:14px; align-items:stretch;}
@@ -2387,6 +2388,7 @@
       <div class="field">
         <label for="fm-centro-costo">Centro de costo</label>
         <select id="fm-centro-costo"></select>
+        <div class="fm-hint fm-rama-hint" id="fm-rama-hint" hidden></div>
       </div>
       <div class="field">
         <label for="fm-concepto">Concepto</label>
