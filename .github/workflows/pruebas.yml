@@ -10,7 +10,8 @@ on:
 
 jobs:
   pruebas:
-    runs-on: ubuntu-latest
+    # ubuntu-latest pasó a 26.04 y Playwright todavía no lo soporta
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       # A propósito, una base DISTINTA de la del config.js de prueba: la prueba
