@@ -1926,3 +1926,12 @@ grant execute on function public.gestion_puede_rrhh() to authenticated;
 -- Artículos por proveedor (noviembre 2026): ver articulos-por-proveedor.sql
 -- =====================================================================
 alter table articulos add column if not exists proveedores jsonb not null default '[]'::jsonb;
+
+-- =====================================================================
+-- Facturas de combustible: móvil, patente y chofer (noviembre 2026): ver combustible-movil-chofer.sql
+-- =====================================================================
+alter table facturas add column if not exists movil   text not null default '';   -- id del camión (⚙ → Camiones)
+alter table facturas add column if not exists patente text not null default '';   -- como está en la factura, sin espacios ni guiones
+alter table facturas add column if not exists chofer  text not null default '';
+
+create index if not exists facturas_movil_idx on facturas (movil) where movil <> '';

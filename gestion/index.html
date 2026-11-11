@@ -320,6 +320,8 @@
   #artm-provs-field[hidden]{display:none;}
   .art-nota{margin:2px 0 6px;}
   .art-line select.art{min-width:0; width:100%; font-family:inherit; font-size:13px; border:1px solid var(--border); background:var(--bg); color:var(--ink); border-radius:8px; padding:6px 8px; height:34px;}
+  .fm-cola{font-size:12.5px; padding:8px 12px; border-radius:10px; margin:0 0 10px; background:color-mix(in srgb, var(--accent) 10%, var(--surface)); border:1px solid color-mix(in srgb, var(--accent) 30%, transparent);}
+  .fm-cola[hidden]{display:none;}
   .fac-clip{border:none; background:transparent; cursor:pointer; font-size:14px; padding:0 2px; vertical-align:middle;}
   .fac-clip:hover{transform:scale(1.2);}
   #factura-overlay.con-vista{gap:14px; align-items:stretch;}
@@ -2360,6 +2362,7 @@
       <button type="button" data-tipo="debito_interno">Débito interno</button>
     </div>
     <div class="fm-hint di-aviso" id="fm-di-aviso" hidden>Débito interno: para lo que se paga <b>sin factura y sin impuestos</b>. Lleva número propio, no tiene IVA ni retención de Ganancias y se paga con una orden de pago como cualquier factura.</div>
+    <div class="fm-cola" id="fm-cola" hidden></div>
     <div class="factura-read-row" id="fm-read-row" hidden>
       <div class="sub2">Subí el PDF o la foto de la factura: completa número, fecha, monto y notas, y la muestra al costado para que controles la lectura. El <b>proveedor lo elegís vos</b>.</div>
       <label class="btn" for="fm-read-input" id="fm-read-label" style="cursor:pointer;">📄 Leer desde archivo</label>
@@ -2415,6 +2418,11 @@
       <div class="crew-fields">
         <div class="field"><label for="fm-km">Kilómetros (lo que marca el odómetro)</label><input type="text" id="fm-km" inputmode="decimal" placeholder="Ej: 152.300" autocomplete="off"></div>
         <div class="field"><label for="fm-litros">Litros</label><input type="text" id="fm-litros" inputmode="decimal" placeholder="Ej: 120,5" autocomplete="off"></div>
+      </div>
+      <div class="crew-fields crew-fields-3">
+        <div class="field"><label for="fm-movil">Móvil</label><select id="fm-movil"><option value="">— Móvil —</option></select></div>
+        <div class="field"><label for="fm-patente">Patente</label><input type="text" id="fm-patente" maxlength="12" placeholder="AF123CZ" autocomplete="off"></div>
+        <div class="field"><label for="fm-chofer">Chofer</label><input type="text" id="fm-chofer" maxlength="60" list="fm-choferes" autocomplete="off"><datalist id="fm-choferes"></datalist></div>
       </div>
     </div>
     <div class="art-box" id="fm-articulos" hidden>

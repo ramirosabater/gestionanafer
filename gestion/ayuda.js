@@ -90,6 +90,8 @@
         { t: "Toma solo un número correlativo (DI-0001, DI-0002…). No lleva IVA ni retención de Ganancias; se imputa a un centro de costo como cualquier gasto y se paga con una <b>orden de pago</b>. Desde el comprobante lo podés <b>🖨 imprimir</b> para que lo firmen." },
         { t: "En Facturas, el filtro <b>Débitos internos</b> te los muestra todos.", foco: "#factura-filter-estado" },
         { t: "En las facturas de los proveedores marcados como <b>⛽ Proveedor de combustible</b> (en su ficha) aparece el bloque <b>⛽ Combustible</b>: los <b>kilómetros</b> que marca el odómetro y los <b>litros</b>. Son opcionales." },
+        { t: "Al <b>📄 Leer desde archivo</b> una factura de la estación, se completan solos el <b>móvil</b> (por la patente o el número de interno), la patente, el <b>chofer</b>, los km y los litros (sin el Azul 32, que queda en las notas). Si el móvil no está en ⚙ → Camiones, te aviso y lo elegís a mano." },
+        { t: "Si el PDF trae <b>varias facturas</b> (una por página), se cargan de a una: al guardar se abre la siguiente con el mismo proveedor y la vista previa en su página. El archivo se sube a Drive una sola vez." },
         { t: "Si la factura está imputada a un <b>móvil</b>, te muestro los km recorridos desde la carga anterior de ese móvil y el consumo en litros cada 100 km." },
       ] },
       { titulo: "Pagar a proveedores", pasos: [

@@ -26,8 +26,8 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-const MAX_BASE64_CHARS = 7_000_000; // ~5 MB de imagen (límite de la API)
+const MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf'];
+const MAX_BASE64_CHARS = 7_000_000; // ~5 MB de imagen o PDF
 const MAX_PROVEEDORES = 1500;
 
 // Clave pública del proyecto. Supabase tiene dos generaciones de claves: las nuevas
@@ -88,7 +88,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const { imagen, mediaType } = body;
   if (typeof imagen !== 'string' || imagen.length === 0) return json({ error: 'Falta la imagen.' }, 400);
   if (typeof mediaType !== 'string' || !MEDIA_TYPES.includes(mediaType)) {
-    return json({ error: 'Formato de imagen no soportado (usá PNG, JPG, WEBP o GIF).' }, 400);
+    return json({ error: 'Formato no soportado (usá PDF, PNG, JPG, WEBP o GIF).' }, 400);
   }
   if (imagen.length > MAX_BASE64_CHARS) {
     return json({ error: 'La imagen es demasiado grande (máximo 5 MB).' }, 413);
@@ -100,11 +100,20 @@ Deno.serve(async (req: Request): Promise<Response> => {
   if (!apiKey) return json({ error: 'La lectura automática no está configurada en el servidor.' }, 500);
   const model = Deno.env.get('ANTHROPIC_MODEL') || 'claude-sonnet-4-5';
 
+  const esPdf = mediaType === 'application/pdf';
   const prompt =
-    'Esta imagen es una foto o escaneo de una factura de proveedor. Leé los datos y devolvé SOLO un objeto JSON con esta forma exacta, sin texto adicional:\n' +
-    '{"numero": string o null, "fecha": "YYYY-MM-DD" o null, "monto": number o null, "notas": string o null}\n' +
+    (esPdf ? 'Este PDF tiene una o varias facturas de proveedor (puede haber una por página). '
+           : 'Esta imagen es una foto o escaneo de una factura de proveedor. ') +
+    'Leé TODAS las facturas y devolvé SOLO un objeto JSON con esta forma exacta, sin texto adicional:\n' +
+    '{"facturas": [{"pagina": number o null, "numero": string o null, "fecha": "YYYY-MM-DD" o null, "monto": number o null, "notas": string o null, ' +
+    '"combustible": null o {"movil": string o null, "patente": string o null, "chofer": string o null, "km": number o null, "litros": number o null, "otros": string o null}}]}\n' +
+    'Una entrada por factura, en el orden en que aparecen; "pagina" es la página del PDF donde está (1 = la primera). ' +
     'No hace falta leer el nombre del proveedor: lo elige el operador. ' +
-    '"monto" es el monto TOTAL de la factura, como número (sin separador de miles, con punto decimal, sin símbolo de moneda). ' +
+    '"numero" como figura (ej. 0043-00045379). "monto" es el TOTAL de la factura, como número (sin separador de miles, con punto decimal, sin símbolo de moneda). ' +
+    'Si es una factura de COMBUSTIBLE (estación de servicio, YPF, diesel, nafta, Infinia), completá "combustible": ' +
+    '"movil" = el número de vehículo o interno (ej. "INT 41" → "41", "Vehículo 36" → "36"); "patente" tal como está impresa; "chofer" = el nombre del chofer; ' +
+    '"km" = el kilometraje u odómetro; "litros" = la suma de las cantidades de COMBUSTIBLE (diesel, Infinia, nafta, súper, GNC) SIN contar AdBlue/Azul 32/urea ni lubricantes; ' +
+    '"otros" = otros productos de la misma factura que no son combustible, con su cantidad (ej. "20,90 L Azul 32"). Si no es de combustible, "combustible": null. ' +
     'Si algún dato no se puede leer con confianza, devolvé null en ese campo en vez de inventarlo.';
 
   const headers: Record<string, string> = {
@@ -122,11 +131,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
       headers,
       body: JSON.stringify({
         model,
-        max_tokens: 1024,
+        max_tokens: 4096,
         messages: [{
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType, data: imagen } },
+            esPdf
+              ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: imagen } }
+              : { type: 'image', source: { type: 'base64', media_type: mediaType, data: imagen } },
             { type: 'text', text: prompt },
           ],
         }],
@@ -147,7 +158,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const out = await resp.json();
   const text: string | undefined = out?.content?.[0]?.text;
-  const data = extractJson(text);
-  if (!data) return json({ error: 'No se pudo interpretar la respuesta.' }, 422);
-  return json({ data });
+  const leido = extractJson(text);
+  if (!leido) return json({ error: 'No se pudo interpretar la respuesta.' }, 422);
+  // "facturas": todas las del archivo; "data": la primera (la app vieja lee solo esa)
+  const facturas = Array.isArray(leido.facturas) ? leido.facturas.filter((f: unknown) => f && typeof f === 'object') : [leido];
+  if (!facturas.length) return json({ error: 'No se encontró ninguna factura en el archivo.' }, 422);
+  return json({ data: facturas[0], facturas });
 });

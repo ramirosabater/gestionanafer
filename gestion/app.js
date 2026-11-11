@@ -3379,7 +3379,8 @@
       del.addEventListener('click', function(){
         var current = getArr();
         var removed = current.splice(idx,1)[0];
-        if(removed && !removed.pending && removed.id) deleteAdjunto(removed.id, removed.modulo || 'administracion', !!removed.unidad);
+        var compartido = removed && removed.id && containerId==='fm-archivos-list' && state.facturas.some(function(f){ return f.id!==state.editingFacturaId && (f.archivos||[]).some(function(a){ return a && a.id===removed.id; }); });
+        if(removed && !removed.pending && removed.id && !compartido) deleteAdjunto(removed.id, removed.modulo || 'administracion', !!removed.unidad);
         renderAttachList(containerId, getArr);
       });
       row.appendChild(del);
@@ -3479,7 +3480,59 @@
     if(data.fecha && /^\d{4}-\d{2}-\d{2}$/.test(data.fecha)) document.getElementById('fm-fecha').value = data.fecha;
     if(data.monto!=null && !isNaN(parseFloat(data.monto))) document.getElementById('fm-monto').value = String(data.monto).replace('.',',');
     if(data.notas) document.getElementById('fm-notas').value = data.notas;
+    var aviso = '';
+    var c = data.combustible;
+    if(c && typeof c==='object'){
+      var otros = c.otros ? String(c.otros) : '';
+      if(otros) document.getElementById('fm-notas').value = [document.getElementById('fm-notas').value, 'Además: '+otros].filter(Boolean).join(' · ');
+      if(c.km!=null && !isNaN(parseFloat(c.km))) document.getElementById('fm-km').value = fmtKm(Math.round(parseFloat(c.km)));
+      if(c.litros!=null && !isNaN(parseFloat(c.litros))) document.getElementById('fm-litros').value = fmtLitros(parseFloat(c.litros));
+      if(c.chofer) document.getElementById('fm-chofer').value = String(c.chofer).trim();
+      var t = buscarMovil(c.movil, c.patente);
+      document.getElementById('fm-patente').value = normPatente(t && t.patente ? t.patente : c.patente);
+      setFmMovil(t ? t.id : '');
+      if(t) imputarAlMovil(t.id);
+      else if(c.movil || c.patente) aviso = '⚠ El móvil '+[c.movil, c.patente].filter(Boolean).join(' / ')+' no está en ⚙ → Camiones: elegilo a mano.';
+      document.getElementById('fm-combustible').hidden = false;
+    }
     updateSplitTotal();
+    actualizarFmCombustible();
+    return aviso;
+  }
+  // ---- Combustible: móvil, patente y chofer ----
+  function normPatente(p){ return String(p||'').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  // Busca el camión por patente (sin espacios ni guiones) o por número de móvil / interno
+  function buscarMovil(movil, patente){
+    var trucks = state.trucks || [];
+    var pat = normPatente(patente);
+    if(pat){ var t1 = trucks.find(function(t){ return t.patente && normPatente(t.patente)===pat; }); if(t1) return t1; }
+    var num = String(movil||'').replace(/\D/g, '');
+    if(num){
+      var t2 = trucks.find(function(t){ return String(t.id)===num; })
+        || trucks.find(function(t){ return new RegExp('(^|\\D)'+num+'(\\D|$)').test(String(t.label||'')); });
+      if(t2) return t2;
+    }
+    return null;
+  }
+  function fillFmMovilSelect(sel){
+    var el = document.getElementById('fm-movil');
+    var trucks = (state.trucks||[]).filter(function(t){ return t.active!==false || t.id===sel; })
+      .sort(function(a,b){ return (Number(a.id)||9999)-(Number(b.id)||9999) || String(a.label||'').localeCompare(String(b.label||'')); });
+    el.innerHTML = '<option value="">— Móvil —</option>'+trucks.map(function(t){ return '<option value="'+esc(t.id)+'">'+esc(t.label||t.id)+(t.patente ? ' · '+esc(t.patente) : '')+'</option>'; }).join('');
+    el.value = sel || '';
+  }
+  function setFmMovil(id){ fillFmMovilSelect(id); }
+  // Si la imputación es por móvil, la pasa al móvil leído: en un centro que pide
+  // el móvil lo elige, y en un centro "de un móvil" busca el mismo para este.
+  function imputarAlMovil(truckId){
+    if(state.editingFacturaItems) return;
+    var sel = document.getElementById('fm-centro-costo'), cc = sel.value;
+    if(!cc) return;
+    if(ccRequiere(cc)==='movil'){ actualizarFmRef('movil:'+truckId); return; }
+    var c = centroCostoById(cc);
+    if(!c || !c.refFijo || c.refFijo.indexOf('movil:')!==0 || c.refFijo==='movil:'+truckId) return;
+    var hermano = state.centrosCosto.find(function(x){ return x.parentId===c.parentId && x.activo!==false && x.refFijo==='movil:'+truckId; });
+    if(hermano){ sel.value = hermano.id; sel.dispatchEvent(new Event('change')); }
   }
 
   // Vista previa del archivo al costado del formulario, para controlar la lectura
@@ -3531,6 +3584,50 @@
     });
   }
   function adjuntosDeFactura(){ return (state.editingFacturaArchivos||[]).filter(function(a){ return a && (a.pending || a.id || a.url); }); }
+  function irAPaginaVista(pagina){
+    var fr = document.querySelector('#fm-vista-cuerpo iframe');
+    if(!fr || !vistaFacturaUrl || !(pagina>0)) return;
+    fr.src = vistaFacturaUrl+'#page='+Math.round(pagina)+'&toolbar=1&view=FitH';
+  }
+  // ---- Varias facturas en un mismo archivo (ej. resumen de la estación de servicio) ----
+  function actualizarColaLectura(){
+    var box = document.getElementById('fm-cola');
+    if(!box) return;
+    var c = state.colaLectura;
+    if(!c){ box.hidden = true; return; }
+    var f = c.lista[c.idx] || {};
+    box.hidden = false;
+    box.innerHTML = '📄 Este archivo trae <b>'+c.lista.length+' facturas</b>. Cargando la <b>'+(c.idx+1)+' de '+c.lista.length+'</b>'+(f.numero ? ' ('+esc(f.numero)+')' : '')
+      +'. Al guardar se abre la siguiente. <button type="button" class="link-btn" id="fm-cola-saltear">Saltear esta</button>';
+    document.getElementById('fm-cola-saltear').addEventListener('click', function(){ siguienteDeCola(null); });
+  }
+  // Pasa a la factura siguiente del archivo (adjunto = el archivo ya subido a Drive con la anterior)
+  function siguienteDeCola(adjunto){
+    var c = state.colaLectura;
+    if(!c) return;
+    if(adjunto) c.adjunto = adjunto;
+    c.idx++;
+    if(c.idx>=c.lista.length){
+      var n = c.hechas;
+      state.colaLectura = null;
+      closeFacturaModal();
+      showToast('Listo: se cargaron '+n+' factura'+(n===1?'':'s')+' del archivo.', 5000);
+      return;
+    }
+    var prov = document.getElementById('fm-proveedor').value;
+    state.colaLectura = null;            // openFacturaModal limpia la vista; se restaura abajo
+    openFacturaModal(null);
+    state.colaLectura = c;
+    if(prov){ setProveedorComboValue('fm-proveedor', prov); fillFacturaOCSelect(prov); aplicarImputacionDefault(prov); renderFacturaImputChips(); renderFacturaArts(); }
+    state.editingFacturaArchivos = c.adjunto ? [c.adjunto] : [{ pending:true, file:c.file, name:c.file.name, contentType:c.file.type||'', sizeBytes:c.file.size||0 }];
+    renderAttachList('fm-archivos-list', function(){ return state.editingFacturaArchivos; });
+    mostrarVistaFactura(c.file);
+    var f = c.lista[c.idx];
+    var aviso = applyFacturaReadResult(f);
+    if(f.pagina) setTimeout(function(){ irAPaginaVista(f.pagina); }, 50);
+    actualizarColaLectura();
+    if(aviso) showToast(aviso, 6000);
+  }
   function ocultarVistaFactura(liberar){
     var panel = document.getElementById('fm-vista');
     if(!panel) return;
@@ -3561,19 +3658,31 @@
         return;
       }
       mostrarVistaFactura(file);   // primero se ve; si la lectura falla, igual queda para cargar a mano
-      if(file.type === 'application/pdf') imageBlob = await pdfFirstPageToImageBlob(file);
-      showToast('Leyendo factura...', 15000);
+      state.colaLectura = null; actualizarColaLectura();
+      showToast('Leyendo factura...', 20000);
       if(label) label.classList.add('leyendo');
       // el archivo original queda como adjunto pendiente; se sube a Drive
       // recién al Guardar, porque ahí ya sabemos a qué proveedor pertenece
       state.editingFacturaArchivos.push({ pending:true, file:file, name:file.name, contentType:file.type||'', sizeBytes:file.size||0 });
       renderAttachList('fm-archivos-list', function(){ return state.editingFacturaArchivos; });
 
-      var base64 = await blobToBase64(imageBlob);
-      var res = await state.sb.functions.invoke('leer-factura', { body: {
-        imagen: base64,
-        mediaType: imageBlob.type && LECTURA_TIPOS.indexOf(imageBlob.type)!==-1 ? imageBlob.type : 'image/png'
-      }});
+      // El PDF va entero (se leen todas sus facturas y el texto exacto); si la
+      // función del servidor es la vieja y no acepta PDF, se manda la 1ª página como imagen.
+      var res;
+      if(file.type==='application/pdf'){
+        res = await state.sb.functions.invoke('leer-factura', { body: { imagen: await blobToBase64(file), mediaType: 'application/pdf' } });
+        var st0 = res.error && res.error.context ? res.error.context.status : 0;
+        if(res.error && st0===400){
+          imageBlob = await pdfFirstPageToImageBlob(file);
+          res = null;
+        }
+      }
+      if(!res){
+        res = await state.sb.functions.invoke('leer-factura', { body: {
+          imagen: await blobToBase64(imageBlob),
+          mediaType: imageBlob.type && LECTURA_TIPOS.indexOf(imageBlob.type)!==-1 ? imageBlob.type : 'image/png'
+        }});
+      }
       if(res.error){
         var msg = '', status = 0;
         try{ var ctx = res.error.context; if(ctx){ status = ctx.status||0; var j = await ctx.json(); msg = (j && j.error) || ''; } }catch(e2){}
@@ -3581,10 +3690,16 @@
         else showToast('No se pudo leer la factura automáticamente: '+(msg || res.error.message || 'error')+' — completá los datos a mano.', 8000);
         return;
       }
-      var data = res.data && res.data.data;
-      if(!data){ showToast('No se pudo interpretar la respuesta — completá los datos a mano.'); return; }
-      applyFacturaReadResult(data);
-      showToast('Factura leída — compará con la vista previa y elegí el proveedor a mano.', 6000);
+      var lista = (res.data && Array.isArray(res.data.facturas) && res.data.facturas.length) ? res.data.facturas : (res.data && res.data.data ? [res.data.data] : []);
+      if(!lista.length){ showToast('No se pudo interpretar la respuesta — completá los datos a mano.'); return; }
+      if(lista.length>1){
+        // Varias facturas en el mismo archivo: se cargan de a una; al guardar se abre la siguiente.
+        state.colaLectura = {file:file, lista:lista, idx:0, adjunto:null, hechas:0};
+      }
+      var aviso = applyFacturaReadResult(lista[0]);
+      if(lista[0].pagina) irAPaginaVista(lista[0].pagina);
+      actualizarColaLectura();
+      showToast((lista.length>1 ? 'El archivo trae '+lista.length+' facturas: cargando la 1. ' : 'Factura leída. ')+'Compará con la vista previa y elegí el proveedor a mano.'+(aviso ? ' '+aviso : ''), 8000);
     }catch(e){
       showToast('No se pudo leer la factura automáticamente — completá los datos a mano.');
     }finally{
@@ -4638,6 +4753,7 @@
   function fmtLitros(n){ return Number(n||0).toLocaleString('es-AR', {maximumFractionDigits:2}); }
   // Móvil de una factura (para el consumo): el de su imputación
   function facturaMovil(f){
+    if(f && f.movil) return 'movil:'+f.movil;
     var refs = facturaLineas(f).map(function(l){ return ccRefEfectiva(l.centroCostoId, l.ccRef); }).filter(function(r){ return r && r.indexOf('movil:')===0; });
     return refs[0] || '';
   }
@@ -4898,6 +5014,8 @@
     state.sb.from('ordenes_pago').select('aplicaciones,anticipos_usados,tipo').limit(1).then(function(res){ if(!res.error) state.colAnticipos = true; });
     // ¿Seguimiento de compras (seguimiento-compras.sql)? La OC guarda sus ítems y la entrega prevista.
     state.sb.from('ordenes_compra').select('items,entrega_prevista').limit(1).then(function(res){ if(!res.error) state.colOCItems = true; });
+    // ¿Móvil, patente y chofer en las facturas de combustible (combustible-movil-chofer.sql)?
+    state.sb.from('facturas').select('movil,patente,chofer').limit(1).then(function(res){ if(!res.error) state.colCombMovil = true; });
     // ¿Proveedor de combustible (quitar-rubro-proveedores.sql)?
     state.sb.from('proveedores').select('combustible').limit(1).then(function(res){ if(!res.error) state.colCombustible = true; });
     // ¿Artículos por proveedor (articulos-por-proveedor.sql)?
@@ -5904,6 +6022,7 @@
       items:(f.items||[]).map(function(it){ return {centro_costo_id:it.centroCostoId, concepto_id:it.conceptoId, cc_ref:it.ccRef||'', monto:it.monto||0, detalle:it.detalle||''}; })
     }, state.schemaV3 ? {cc_ref:f.ccRef||'', neto:(f.neto==null ? null : f.neto), regimen_gan:(f.regimenGan||null)} : {},
        state.colDI ? {tipo_comprobante:f.tipoComprobante||'factura', km:(f.km==null ? null : f.km), litros:(f.litros==null ? null : f.litros)} : {},
+       state.colCombMovil ? {movil:f.movil||'', patente:f.patente||'', chofer:f.chofer||''} : {},
        (state.colArticulos || state.tablaArticulos) ? {articulos:(f.articulos||[]).map(function(a){ return {articulo_id:a.articuloId, cantidad:a.cantidad, precio:a.precio, importe:a.importe}; })} : {},
        camposAnulacion(f))).then(function(res){
       if(res.error) showToast('No se pudo guardar la factura: '+res.error.message);
@@ -6149,13 +6268,14 @@
     var provId = document.getElementById('fm-proveedor').value;
     var km = parseMontoInput(document.getElementById('fm-km').value), lt = parseMontoInput(document.getElementById('fm-litros').value);
     var box = document.getElementById('fm-combustible');
-    box.hidden = !(provEsCombustible(provId) || km>0 || lt>0);
+    box.hidden = !(provEsCombustible(provId) || km>0 || lt>0 || document.getElementById('fm-movil').value || document.getElementById('fm-chofer').value.trim());
     var hint = document.getElementById('fm-comb-hint');
     hint.textContent = '';
     if(box.hidden) return;
     var cc = document.getElementById('fm-centro-costo').value;
-    var movil = state.editingFacturaItems ? '' : (ccRequiere(cc)==='movil' ? document.getElementById('fm-ccref').value : ccRefEfectiva(cc, ''));
-    if(!movil || movil.indexOf('movil:')!==0){ hint.textContent = 'Con el móvil en la imputación, calculo el consumo.'; return; }
+    var movSel = document.getElementById('fm-movil').value;
+    var movil = movSel ? 'movil:'+movSel : (state.editingFacturaItems ? '' : (ccRequiere(cc)==='movil' ? document.getElementById('fm-ccref').value : ccRefEfectiva(cc, '')));
+    if(!movil || movil.indexOf('movil:')!==0){ hint.textContent = 'Con el móvil elegido, calculo el consumo.'; return; }
     var c = consumoDesdeAnterior(movil, km, lt, state.editingFacturaId);
     if(c) hint.textContent = 'Desde la carga anterior ('+impFecha(c.anterior.fecha)+', '+fmtKm(c.anterior.km)+' km): '+fmtKm(c.km)+' km · '+String(c.l100).replace('.',',')+' L/100 km';
   }
@@ -6167,6 +6287,24 @@
   document.getElementById('fm-proveedor').addEventListener('change', actualizarFmCombustible);
   document.getElementById('fm-centro-costo').addEventListener('change', actualizarFmCombustible);
   document.getElementById('fm-ccref').addEventListener('change', actualizarFmCombustible);
+  // Choferes: los de Logística y los que ya se cargaron en facturas
+  function choferesConocidos(){
+    var n = {};
+    (state.drivers||[]).forEach(function(d){ var x = String(d.name||d.label||'').trim(); if(x && d.active!==false) n[x] = true; });
+    state.facturas.forEach(function(f){ if(f.chofer) n[f.chofer] = true; });
+    return Object.keys(n).sort(function(a,b){ return a.localeCompare(b); });
+  }
+  document.getElementById('fm-movil').addEventListener('change', function(){
+    var t = (state.trucks||[]).find(function(x){ return x.id===this.value; }, this);
+    if(t && t.patente) document.getElementById('fm-patente').value = normPatente(t.patente);
+    if(t) imputarAlMovil(t.id);
+    actualizarFmCombustible();
+  });
+  document.getElementById('fm-patente').addEventListener('change', function(){
+    this.value = normPatente(this.value);
+    if(!document.getElementById('fm-movil').value){ var t = buscarMovil('', this.value); if(t){ setFmMovil(t.id); imputarAlMovil(t.id); } }
+    actualizarFmCombustible();
+  });
   function imprimirDebitoInterno(f){
     var p = state.proveedores.find(function(x){ return x.id===f.proveedorId; }) || {};
     var anul = esAnulado(f);
@@ -6221,6 +6359,10 @@
     renderFacturaArts();
     document.getElementById('fm-km').value = (f && f.km!=null) ? fmtKm(f.km) : '';
     document.getElementById('fm-litros').value = (f && f.litros!=null) ? fmtLitros(f.litros) : '';
+    fillFmMovilSelect(f ? (f.movil||'') : '');
+    document.getElementById('fm-patente').value = f ? (f.patente||'') : '';
+    document.getElementById('fm-chofer').value = f ? (f.chofer||'') : '';
+    document.getElementById('fm-choferes').innerHTML = choferesConocidos().map(function(n){ return '<option value="'+esc(n)+'">'; }).join('');
     // El tipo no se cambia en un comprobante ya guardado
     Array.prototype.forEach.call(document.querySelectorAll('#fm-tipo-toggle button'), function(b){ b.disabled = !!f; });
     setFmTipo(esDebitoInterno(f) ? 'debito_interno' : 'factura');
@@ -6231,6 +6373,7 @@
     if(f && adjuntosDeFactura().length && window.innerWidth>900) verAdjuntoFactura(adjuntosDeFactura()[0]);
   }
   function closeFacturaModal(){
+    state.colaLectura = null;
     ocultarVistaFactura(true);
     document.getElementById('factura-overlay').classList.remove('show');
   }
@@ -6303,6 +6446,9 @@
       regimenGan: esDI ? 0 : (document.getElementById('fm-regimen').value==='' ? null : Number(document.getElementById('fm-regimen').value)),
       tipoComprobante: esDI ? 'debito_interno' : 'factura',
       km: kmV, litros: ltV,
+      movil: document.getElementById('fm-movil').value || '',
+      patente: normPatente(document.getElementById('fm-patente').value),
+      chofer: document.getElementById('fm-chofer').value.trim(),
       items: items,
       articulos: arts,
       numero:numero,
@@ -6324,6 +6470,15 @@
       // El asistente mira el historial ANTES de sumar la imputación al proveedor.
       if(isNew) revisarFacturaNueva(f);
       facturaLineas(f).forEach(function(l){ sumarImputacionAProveedor(f.proveedorId, l.centroCostoId, l.conceptoId); });
+      if(state.colaLectura && isNew){
+        var cola = state.colaLectura;
+        cola.hechas++;
+        var adj = (f.archivos||[]).find(function(a){ return a && a.unidad && a.name===cola.file.name; }) || null;
+        renderPagos(); renderProveedoresList();
+        siguienteDeCola(adj);
+        if(state.colaLectura) showToast('Factura '+f.numero+' guardada. Sigue la '+(state.colaLectura.idx+1)+' de '+state.colaLectura.lista.length+'.', 4000);
+        return;
+      }
       closeFacturaModal();
       renderPagos();
       renderProveedoresList();
@@ -6951,6 +7106,7 @@
       ccRef: row.cc_ref||'',
       tipoComprobante: row.tipo_comprobante==='debito_interno' ? 'debito_interno' : 'factura',
       km: (row.km===null || row.km===undefined || row.km==='') ? null : Number(row.km),
+      movil: row.movil||'', patente: row.patente||'', chofer: row.chofer||'',
       litros: (row.litros===null || row.litros===undefined || row.litros==='') ? null : Number(row.litros),
       neto: (row.neto===null || row.neto===undefined || row.neto==='') ? null : Number(row.neto),
       regimenGan: row.regimen_gan==null ? null : Number(row.regimen_gan),

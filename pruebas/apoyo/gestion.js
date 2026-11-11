@@ -42,6 +42,8 @@ export async function abrirGestion(page, db, { email = null, ruta = "/index.html
       ? r.fulfill({ contentType: "application/javascript", body: SUPABASE_FALSO })
       : r.abort());
   await page.addInitScript(({ db, email }) => {
+    // también corre en los iframes (ej. la vista previa de un PDF), donde no hay storage
+    if (window.top !== window) return;
     window.__DB = db;
     if (email && !sessionStorage.getItem("prueba_iniciada")) {
       localStorage.clear();
