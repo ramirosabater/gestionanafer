@@ -1084,6 +1084,9 @@
   .trf-aviso{ background:#fff7e0; border:1px solid #f2d27a; color:#7a5b00; border-radius:10px; padding:8px 12px; font-size:13px; margin-top:6px; }
   .trf-aviso[hidden]{ display:none; }
   .mov-origen-badge.trf{ background:rgba(43,169,224,.14); color:#1b7fae; }
+  .fm-ivang{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+  .fm-ivang label{ display:block; }
+  .fm-cuadre{ margin-top:4px; } .fm-cuadre.ok{ color:#1d7a45; } .fm-cuadre.dif{ color:var(--danger); }
   .mov-origen-badge.bco{ background:rgba(236,0,0,.10); color:#b3261e; }
   .mov-conciliado{ font-size:11px; opacity:.8; white-space:nowrap; }
   .ext-file-row{ display:flex; gap:10px; align-items:center; }
@@ -2467,6 +2470,11 @@
         <div id="fm-impuestos">
         <label for="fm-neto" style="margin-top:8px;">Neto gravado (sin IVA) <span class="fm-hint" id="fm-neto-hint"></span></label>
         <input type="text" id="fm-neto" inputmode="decimal" placeholder="Automático">
+        <div class="fm-ivang">
+          <div><label for="fm-iva">IVA</label><input type="text" id="fm-iva" inputmode="decimal" placeholder="Automático"></div>
+          <div><label for="fm-nogravado" title="Impuestos que no llevan IVA: en combustible ICL + IDC (tasas)">No gravado</label><input type="text" id="fm-nogravado" inputmode="decimal" placeholder="0,00"></div>
+        </div>
+        <div class="fm-hint fm-cuadre" id="fm-cuadre" hidden></div>
         <label for="fm-regimen" style="margin-top:8px;">Retención de Ganancias</label>
         <select id="fm-regimen"></select>
         </div>

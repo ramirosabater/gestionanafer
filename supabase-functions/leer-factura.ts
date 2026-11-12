@@ -105,11 +105,16 @@ Deno.serve(async (req: Request): Promise<Response> => {
     (esPdf ? 'Este PDF tiene una o varias facturas de proveedor (puede haber una por página). '
            : 'Esta imagen es una foto o escaneo de una factura de proveedor. ') +
     'Leé TODAS las facturas y devolvé SOLO un objeto JSON con esta forma exacta, sin texto adicional:\n' +
-    '{"facturas": [{"pagina": number o null, "numero": string o null, "fecha": "YYYY-MM-DD" o null, "monto": number o null, "notas": string o null, ' +
+    '{"facturas": [{"pagina": number o null, "numero": string o null, "fecha": "YYYY-MM-DD" o null, "monto": number o null, ' +
+    '"neto": number o null, "iva": number o null, "no_gravado": number o null, "percepciones": number o null, "notas": string o null, ' +
     '"combustible": null o {"movil": string o null, "patente": string o null, "chofer": string o null, "km": number o null, "litros": number o null, "otros": string o null}}]}\n' +
     'Una entrada por factura, en el orden en que aparecen; "pagina" es la página del PDF donde está (1 = la primera). ' +
     'No hace falta leer el nombre del proveedor: lo elige el operador. ' +
     '"numero" como figura (ej. 0043-00045379). "monto" es el TOTAL de la factura, como número (sin separador de miles, con punto decimal, sin símbolo de moneda). ' +
+    '"neto" = neto gravado (sin IVA); "iva" = el IVA total; "no_gravado" = conceptos no gravados / exentos / impuestos internos que no llevan IVA; "percepciones" = percepciones de IVA/IIBB/Ganancias. ' +
+    'En las facturas de COMBUSTIBLE con "Régimen de Transparencia Fiscal al Consumidor (Ley 27.743)": "neto" = "Precio sin impuestos"; "iva" = "IVA contenido"; ' +
+    '"no_gravado" = la SUMA de los "Otros impuestos nacionales indirectos" (ICL / Imp. comb. líq. / imp. int. + IDC / Imp. dióx. carb / Tasas); "percepciones" = Percepciones + Impuestos municipales + Tasa vial. ' +
+    'Tiene que cumplirse neto + iva + no_gravado + percepciones = monto (total). Todos como número con punto decimal. ' +
     'Si es una factura de COMBUSTIBLE (estación de servicio, YPF, diesel, nafta, Infinia), completá "combustible": ' +
     '"movil" = el número de vehículo o interno (ej. "INT 41" → "41", "Vehículo 36" → "36"); "patente" tal como está impresa; "chofer" = el nombre del chofer; ' +
     '"km" = el kilometraje u odómetro; "litros" = la suma de las cantidades de COMBUSTIBLE (diesel, Infinia, nafta, súper, GNC) SIN contar AdBlue/Azul 32/urea ni lubricantes; ' +

@@ -17,9 +17,11 @@ const CC = [...CENTROS,
 ].map((c) => (c.id === "cc_logistica_moviles" ? { ...c, requiere: "" } : c));
 const LEIDO = [
   { pagina: 1, numero: "0044-00034047", fecha: "2026-11-10", monto: 225185.04, notas: null,
+    neto: 172223.70, iva: 36166.98, no_gravado: 16794.36, percepciones: 0,
     combustible: { movil: "36", patente: "AF123CZ", chofer: "GOMEZ", km: 139402, litros: 87.1122, otros: null } },
   // la patente de la factura está mal tipeada: se reconoce por el interno
   { pagina: 2, numero: "0043-00045379", fecha: "2026-11-04", monto: 441767.78, notas: null,
+    neto: 341512.11, iva: 71717.54, no_gravado: 28538.13, percepciones: 0,
     combustible: { movil: "41", patente: "AG 421 CA", chofer: "PEREZ", km: 65290, litros: 148.03, otros: "20,90 L Azul 32" } },
 ];
 
@@ -54,6 +56,11 @@ test("PDF con dos facturas de combustible: completa móvil, patente, chofer, km 
   await expect(page.locator("#fm-chofer")).toHaveValue("GOMEZ");
   await expect(page.locator("#fm-centro-costo")).toHaveValue("cc_moviles_36");   // pasó al centro del móvil leído
   await expect(page.locator("#fm-proveedor-input")).toHaveValue("Estación de Servicio Ruta 3");
+  // reparto: Precio sin impuestos / IVA contenido / ICL + IDC
+  await expect(page.locator("#fm-neto")).toHaveValue("172223,7");
+  await expect(page.locator("#fm-iva")).toHaveValue("36166,98");
+  await expect(page.locator("#fm-nogravado")).toHaveValue("16794,36");
+  await expect(page.locator("#fm-cuadre")).toContainText("= total ✓");
   // el llamado manda el PDF entero
   const llamada = (await escrituras(page, "__funciones")).filter((x) => x[1] === "leer-factura").pop();
   expect(llamada[2].mediaType).toBe("application/pdf");
@@ -77,6 +84,7 @@ test("PDF con dos facturas de combustible: completa móvil, patente, chofer, km 
     ["0044-00034047", "36", "AF123CZ", "GOMEZ", 139402, 87.11, "cc_moviles_36"],
     ["0043-00045379", "41", "AG241CA", "PEREZ", 65290, 148.03, "cc_moviles_41"],
   ]);
+  expect(fs.map((f) => [f.neto, f.iva, f.no_gravado])).toEqual([[172223.7, 36166.98, 16794.36], [341512.11, 71717.54, 28538.13]]);
   expect(fs[0].archivos[0].id).toBe("DRVcomb1234567");
   expect(fs[1].archivos[0].id).toBe("DRVcomb1234567");     // el mismo archivo, subido una sola vez
   expect(subidas.length).toBe(1);

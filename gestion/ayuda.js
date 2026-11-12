@@ -81,6 +81,7 @@
         { t: "El <b>centro de costo</b> está agrupado por área. Los de Logística y de Mantenimiento › Flota vienen abiertos por <b>móvil</b>, y los de Mantenimiento › Instalaciones por <b>sucursal</b>: así se sabe cuánto cuesta cada camión y cada local. Lo ves en el Dashboard." },
         { t: "Si una factura va a varias imputaciones, usá <b>Repartir esta factura</b> y cargá una línea por cada una." },
         { t: "<b>Neto gravado</b>: si lo dejás vacío se calcula solo (total ÷ 1,21 para Responsables Inscriptos; el total para el resto). Es la base de la retención de Ganancias." },
+        { t: "<b>IVA</b> y <b>No gravado</b>: en las facturas de combustible la lectura los completa sola — Neto = Precio sin impuestos, IVA = IVA contenido, No gravado = ICL + IDC (tasas) — y abajo avisa si Neto + IVA + No gravado no da el total. En las demás facturas son opcionales." },
         { t: "Si el proveedor tiene tildado <b>📦 Carga artículos</b>, aparece el bloque de artículos: elegís cada artículo, la cantidad y el precio sin IVA (te propongo el último pagado). Si no existe, lo creás ahí mismo. Va aparte de la imputación." },
         { t: "También podés <b>📄 Leer desde archivo</b> el PDF o la foto: completa los datos y vos los revisás antes de guardar." },
         { t: "Los <b>archivos adjuntos</b> se guardan en la unidad compartida <b>Gestión Anafer</b> de Google Drive, en Administración › Facturas › proveedor. Se abren desde acá, según tu perfil; si quitás uno, queda 30 días en la papelera de la unidad." },

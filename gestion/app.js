@@ -3485,6 +3485,14 @@
     if(data.fecha && /^\d{4}-\d{2}-\d{2}$/.test(data.fecha)) document.getElementById('fm-fecha').value = data.fecha;
     if(data.monto!=null && !isNaN(parseFloat(data.monto))) document.getElementById('fm-monto').value = String(data.monto).replace('.',',');
     if(data.notas) document.getElementById('fm-notas').value = data.notas;
+    // Neto gravado / IVA / No gravado (en combustible: Precio sin impuestos, IVA contenido, ICL + IDC)
+    var numLeido = function(v){ var n = typeof v==='number' ? v : parseFloat(v); return (v==null || isNaN(n)) ? null : n; };
+    var nLeido = numLeido(data.neto), iLeido = numLeido(data.iva), gLeido = numLeido(data.no_gravado);
+    document.getElementById('fm-neto').value = nLeido!=null ? fmtMontoInput(nLeido) : '';
+    document.getElementById('fm-iva').value = iLeido!=null ? fmtMontoInput(iLeido) : '';
+    document.getElementById('fm-nogravado').value = gLeido!=null && Math.abs(gLeido)>=0.005 ? fmtMontoInput(gLeido) : '';
+    var pLeido = numLeido(data.percepciones);
+    if(pLeido!=null && Math.abs(pLeido)>=0.005) document.getElementById('fm-notas').value = [document.getElementById('fm-notas').value, 'Percepciones: '+fmtMoney(pLeido)].filter(Boolean).join(' · ');
     var aviso = '';
     var c = data.combustible;
     if(c && typeof c==='object'){
@@ -3502,6 +3510,8 @@
     }
     updateSplitTotal();
     actualizarFmCombustible();
+    actualizarFmNetoHint();
+    actualizarFmCuadre();
     return aviso;
   }
   // ---- Combustible: móvil, patente y chofer ----
@@ -5026,6 +5036,7 @@
     state.sb.from('ordenes_compra').select('items,entrega_prevista').limit(1).then(function(res){ if(!res.error) state.colOCItems = true; });
     // ¿Móvil, patente y chofer en las facturas de combustible (combustible-movil-chofer.sql)?
     state.sb.from('facturas').select('movil,patente,chofer').limit(1).then(function(res){ if(!res.error) state.colCombMovil = true; });
+    state.sb.from('facturas').select('iva,no_gravado').limit(1).then(function(res){ if(!res.error) state.colIvaNoGrav = true; });
     // ¿Proveedor de combustible (quitar-rubro-proveedores.sql)?
     state.sb.from('proveedores').select('combustible').limit(1).then(function(res){ if(!res.error) state.colCombustible = true; });
     // ¿Artículos por proveedor (articulos-por-proveedor.sql)?
@@ -6031,6 +6042,7 @@
       fecha:f.fecha||'', monto:f.monto||0, estado:f.estado||'pendiente', notas:f.notas||'', archivos:f.archivos||[],
       items:(f.items||[]).map(function(it){ return {centro_costo_id:it.centroCostoId, concepto_id:it.conceptoId, cc_ref:it.ccRef||'', monto:it.monto||0, detalle:it.detalle||''}; })
     }, state.schemaV3 ? {cc_ref:f.ccRef||'', neto:(f.neto==null ? null : f.neto), regimen_gan:(f.regimenGan||null)} : {},
+       state.colIvaNoGrav ? {iva:(f.iva==null ? null : f.iva), no_gravado:(f.noGravado==null ? null : f.noGravado)} : {},
        state.colDI ? {tipo_comprobante:f.tipoComprobante||'factura', km:(f.km==null ? null : f.km), litros:(f.litros==null ? null : f.litros)} : {},
        state.colCombMovil ? {movil:f.movil||'', patente:f.patente||'', chofer:f.chofer||''} : {},
        (state.colArticulos || state.tablaArticulos) ? {articulos:(f.articulos||[]).map(function(a){ return {articulo_id:a.articuloId, cantidad:a.cantidad, precio:a.precio, importe:a.importe}; })} : {},
@@ -6247,6 +6259,20 @@
   }
   document.getElementById('fm-monto').addEventListener('input', actualizarFmNetoHint);
   document.getElementById('fm-proveedor').addEventListener('change', actualizarFmNetoHint);
+  // IVA y No gravado (ej. combustible: Precio sin impuestos / IVA contenido / ICL + IDC).
+  function fmMontoOpcional(id){ var t = document.getElementById(id).value.trim(); if(!t) return null; var n = parseMontoInput(t); return isNaN(n) ? null : r2(n); }
+  function actualizarFmCuadre(){
+    var el = document.getElementById('fm-cuadre'), ivaEl = document.getElementById('fm-iva');
+    var tot = facturaMontoActual(), neto = fmMontoOpcional('fm-neto'), iva = fmMontoOpcional('fm-iva'), ng = fmMontoOpcional('fm-nogravado');
+    // IVA automático: lo que falta para llegar al total
+    ivaEl.placeholder = (neto!=null && tot) ? 'Automático: '+fmtMontoInput(r2(tot-neto-(ng||0))) : 'Automático';
+    if(neto==null || (iva==null && ng==null) || !tot){ el.hidden = true; return; }
+    var suma = r2(neto+(iva==null ? r2(tot-neto-(ng||0)) : iva)+(ng||0)), dif = r2(tot-suma);
+    el.hidden = false;
+    el.className = 'fm-hint fm-cuadre '+(Math.abs(dif)<0.02 ? 'ok' : 'dif');
+    el.textContent = Math.abs(dif)<0.02 ? 'Neto + IVA + No gravado = total ✓' : 'Neto + IVA + No gravado = '+fmtMoney(suma)+': difiere del total en '+fmtMoney(dif);
+  }
+  ['fm-monto','fm-neto','fm-iva','fm-nogravado'].forEach(function(id){ document.getElementById(id).addEventListener('input', actualizarFmCuadre); });
 
   function sumarImputacionAProveedor(proveedorId, ccId, coId){
     var p = state.proveedores.find(function(x){ return x.id===proveedorId; });
@@ -6383,6 +6409,9 @@
     document.getElementById('fm-fecha').value = f ? (f.fecha||todayStr()) : todayStr();
     document.getElementById('fm-monto').value = f ? String(f.monto||0).replace('.',',') : '';
     document.getElementById('fm-neto').value = (f && f.neto!=null) ? fmtMontoInput(f.neto) : '';
+    document.getElementById('fm-iva').value = (f && f.iva!=null) ? fmtMontoInput(f.iva) : '';
+    document.getElementById('fm-nogravado').value = (f && f.noGravado!=null) ? fmtMontoInput(f.noGravado) : '';
+    actualizarFmCuadre();
     fillRegimenSelect(document.getElementById('fm-regimen'), f && f.regimenGan!=null ? f.regimenGan : '', 'Según el proveedor');
     actualizarFmNetoHint();
     document.getElementById('fm-notas').value = f ? (f.notas||'') : '';
@@ -6478,6 +6507,8 @@
       conceptoId: conceptoId,
       ccRef: ccRef,
       neto: esDI ? r2(monto) : (function(){ var t = document.getElementById('fm-neto').value.trim(); if(!t) return null; var n = parseMontoInput(t); return isNaN(n) ? null : r2(n); })(),
+      iva: esDI ? null : fmMontoOpcional('fm-iva'),
+      noGravado: esDI ? null : fmMontoOpcional('fm-nogravado'),
       regimenGan: esDI ? 0 : (document.getElementById('fm-regimen').value==='' ? null : Number(document.getElementById('fm-regimen').value)),
       tipoComprobante: esDI ? 'debito_interno' : 'factura',
       km: kmV, litros: ltV,
@@ -7144,6 +7175,8 @@
       movil: row.movil||'', patente: row.patente||'', chofer: row.chofer||'',
       litros: (row.litros===null || row.litros===undefined || row.litros==='') ? null : Number(row.litros),
       neto: (row.neto===null || row.neto===undefined || row.neto==='') ? null : Number(row.neto),
+      iva: (row.iva===null || row.iva===undefined || row.iva==='') ? null : Number(row.iva),
+      noGravado: (row.no_gravado===null || row.no_gravado===undefined || row.no_gravado==='') ? null : Number(row.no_gravado),
       regimenGan: row.regimen_gan==null ? null : Number(row.regimen_gan),
       articulos: (function(){
         if(row && Object.prototype.hasOwnProperty.call(row, 'articulos')) state.colArticulos = true;
