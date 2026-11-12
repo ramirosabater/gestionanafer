@@ -269,6 +269,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="productos.js"></script>
 <script>
 const SUPABASE_URL="https://sjhonbjphfacajftptgg.supabase.co";
 const SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqaG9uYmpwaGZhY2FqZnRwdGdnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzOTMyNjUsImV4cCI6MjEwMzk2OTI2NX0.KdKps-zzoT0IRJGzuAGZg_EFJ6lXCzRsqf2pm81x_ew";
@@ -843,7 +844,7 @@ function render(){
   const top=prodsD.filter(x=>x.real||x.presu).sort((a,b)=>b.real-a.real).slice(0,12);
   $("top").innerHTML = top.length? '<thead><tr><th>Producto</th><th class="num">Real</th><th class="num">Presupuesto</th><th class="num">Cumplimiento</th><th class="num">Precio prom.</th></tr></thead><tbody>'+
     top.map(p=>{ const c=p.presu? p.real/p.presu*100:null; const col=c==null?GRIS:(c>=100?OK:MAL);
-      return '<tr><td class="prod">'+escH(p.producto)+'</td><td class="num">'+fmt(p.real)+'</td><td class="num" style="color:var(--ink2)">'+fmt(p.presu)+'</td>'+
+      return '<tr><td class="prod">'+(window.ProductosAnafer ? ProductosAnafer.html(p.producto) : escH(p.producto))+'</td><td class="num">'+fmt(p.real)+'</td><td class="num" style="color:var(--ink2)">'+fmt(p.presu)+'</td>'+
         '<td class="num"><div class="cbar"><div class="t"><div style="width:'+Math.min(c||0,100)+'%;background:'+col+'"></div></div><b style="min-width:42px;color:'+col+'">'+(c==null?'—':c.toFixed(0)+'%')+'</b></div></td>'+
         '<td class="num">$'+Math.round(p.precio).toLocaleString('es-AR')+'</td></tr>'; }).join('')+'</tbody>'
     : '<tbody><tr><td class="empty">Sin datos de productos.</td></tr></tbody>';
@@ -853,7 +854,8 @@ function render(){
     .filter(x=>x.real||x.r2025).sort((a,b)=>b.dif-a.dif).slice(0,10);
   const maxD=Math.max(...dif.map(x=>Math.abs(x.dif)),1);
   $("dif").innerHTML = dif.length ? dif.map(x=>{ const col=x.dif>=0?OK:MAL;
-    return '<div class="hrow" title="'+escH(x.producto+'\n'+(ANIO-1)+': '+fmt(x.r2025)+'\n'+ANIO+': '+fmt(x.real))+'"><div class="hl">'+escH(x.producto)+'</div>'+
+    const P=window.ProductosAnafer, nom=P?P.mostrar(x.producto):x.producto, des=P?P.descripcion(x.producto):'';
+    return '<div class="hrow" title="'+escH((des?nom+' = '+des:x.producto)+'\n'+(ANIO-1)+': '+fmt(x.r2025)+'\n'+ANIO+': '+fmt(x.real))+'"><div class="hl">'+escH(nom)+'</div>'+
       '<div class="htrack"><div class="b" style="width:'+(Math.abs(x.dif)/maxD*100)+'%;background:'+col+'"></div></div>'+
       '<div class="hv" style="color:'+col+'">'+(x.dif>=0?'+':'−')+fmt(Math.abs(x.dif))+'</div>'+
       '<div class="hsub">'+(ANIO-1)+': '+fmt(x.r2025)+' → '+ANIO+': '+fmt(x.real)+'</div></div>'; }).join('')

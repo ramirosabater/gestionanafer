@@ -10,7 +10,7 @@ import { sbRpc } from "../lib/supabase.js";
 
 // Listas de siempre (si Calidad nunca las editó en Gestión → ⚙ → Calidad)
 const LISTAS_DEF = {
-  productos: ["Bx5Azul", "Bx8Azul", "Bx12Azul", "Bx20Azul", "Bx5Verde", "Bx8Verde", "Bx12Verde", "Bx20Verde", "Soda Descartable", "Soda retornable 1.5L", "Soda retornable 650ml", "Otro"],
+  productos: ["Bx5Azul", "B8A", "B12A", "B20A", "Bx5Verde", "B8V", "B12V", "B20V", "Soda Descartable", "S1500", "S650", "Otro"],
   origenes_reclamo: ["Planta", "Sucursal", "Distribuidor", "Reparto", "Atención al cliente"],
   desvios: ["Mal gusto", "Otros", "Pinchado", "No pasó repartidor"],
   reclamos_cliente: ["MG: plastico", "MG: cloro", "MG: otro", "EE: insecto", "EE: precinto/tapa", "EE: otro", "Pierde por tapa", "Pinchado"],
@@ -24,11 +24,20 @@ const inputCls = "w-full bg-[#f1f4f7] border border-[#cfd6dd] rounded-lg px-2.5 
 const labelCls = "text-[10px] uppercase tracking-widest text-[#94a1ab]";
 const MOTIVOS = { sin_permiso: "No tenés permiso para esto. Pedíselo a Calidad.", falta_producto: "Elegí el producto.", pin_incorrecto: "Tu sesión venció: volvé a entrar.", no_es_responsable: "Esa acción ya no está a tu cargo.", cerrada: "Esa acción ya está cerrada." };
 
+// Nomenclatura nueva de productos (noviembre 2026): la descripción se ve al
+// pasar el mouse por la opción (y debajo, al elegirla, para el celular).
+const DESC_PRODUCTO = {
+  B8A: "BIDON 8 L.", B12A: "BIDON 12 L.", B20A: "BIDON 20 L.", B8V: "BIDON DE 8 LTS VERDE", B12V: "BIDON DE 12 LTS VERDE",
+  B20V: "BIDON DE 20 LTS VERDE", S1500: "SODA 1.500 CC.", S2000: "SIF.2.000 CC.", S1750: "SIF.1.750 CC MENOS SODIO", S650: "SIFON 650 cc",
+  A500: "AGUA 500 CC.", A1500: "AGUA MINERAL 1.500 CC.", A2250: "AGUA DE MESA 2.250 CC.", A500CG: "AGUA GASIFICADA 500 CC",
+  SB1500: "SABORIZADA 1.500 CC.", SB500: "SABORIZADA 500 CC", AS750: "AGUA SPORT 750cc",
+};
+
 function Sel({ value, onChange, opciones, vacio, ...rest }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} className={inputCls} {...rest}>
       {vacio != null && <option value="">{vacio}</option>}
-      {opciones.map((o) => <option key={o} value={o}>{o}</option>)}
+      {opciones.map((o) => <option key={o} value={o} title={DESC_PRODUCTO[o] || undefined}>{o}</option>)}
     </select>
   );
 }
@@ -92,7 +101,8 @@ function CargarReclamo({ empleado, pin, permisos, onRefrescar }) {
       <div className="grid grid-cols-4 gap-2 mt-2" data-linea>
         <div className="col-span-4 sm:col-span-1">
           <label className={labelCls}>Producto</label>
-          <Sel value={d.producto} onChange={set("producto")} opciones={L("productos")} vacio="Elegir…" data-prod />
+          <Sel value={d.producto} onChange={set("producto")} opciones={L("productos")} vacio="Elegir…" data-prod title={DESC_PRODUCTO[d.producto] || undefined} />
+          {DESC_PRODUCTO[d.producto] && <div className="text-[11px] text-slate-500 mt-0.5 truncate" data-prod-desc>{DESC_PRODUCTO[d.producto]}</div>}
         </div>
         <div className="col-span-2 sm:col-span-1">
           <label className={labelCls}>Lote</label>

@@ -49,14 +49,14 @@ test("empleado que carga reclamos: entra por el link de Calidad, ve el Nº en gr
   await page.setViewportSize({ width: 900, height: 900 });
   const tops = await f.locator("[data-linea] > div").evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
   expect(new Set(tops).size).toBe(1);
-  await f.locator("[data-prod]").selectOption("Bx20Azul");               // (sin origen: viene fijo "Sucursal")
+  await f.locator("[data-prod]").selectOption("B20A");               // (sin origen: viene fijo "Sucursal")
   await f.getByPlaceholder("Ej: 343").fill("343");
   await f.locator("[data-rc]").selectOption("MG: cloro");
   await f.getByPlaceholder("Nombre o Nº de cliente").fill("Kiosco Sol");
   await page.getByRole("button", { name: "Guardar reclamo" }).click();
   await expect(page.locator("[data-reclamo-listo]")).toContainText(`Reclamo Nº 603 / ${ANIO} cargado`);
   const enviado = llamadas.find((x) => x[0] === "calidad_cargar_reclamo")[1];
-  expect(enviado).toMatchObject({ p_legajo: 441, p_pin: "1234", p_datos: { producto: "Bx20Azul", lote: "343", reclamo_cliente: "MG: cloro", cliente: "Kiosco Sol", origen: "Sucursal" } });
+  expect(enviado).toMatchObject({ p_legajo: 441, p_pin: "1234", p_datos: { producto: "B20A", lote: "343", reclamo_cliente: "MG: cloro", cliente: "Kiosco Sol", origen: "Sucursal" } });
   expect(enviado.p_datos.fecha).toBeUndefined();                          // la fecha la pone la base (hoy)
   // no hay lista de reclamos: solo "Cargar otro"
   await expect(page.getByRole("button", { name: "Cargar otro reclamo" })).toBeVisible();
@@ -94,7 +94,7 @@ test("empleado sin permiso de Calidad: no ve el botón y por el link le avisa", 
 // ---------- Gestión (Calidad) ----------
 function datos(extra = {}) {
   return baseDePrueba({
-    calidad_reclamos: [{ id: "r1", numero: 602, anio: ANIO, fecha: HOY, producto: "Bx20Azul", lote: "1", estado: "Abierto" }],
+    calidad_reclamos: [{ id: "r1", numero: 602, anio: ANIO, fecha: HOY, producto: "B20A", lote: "1", estado: "Abierto" }],
     calidad_pac: [{ id: "pac_x", numero: 3, anio: ANIO, fecha: HOY, hallazgo: "Algo", estado: "Abierta", reclamo_ids: [], responsable_legajo: 57, resp_completo_en: new Date().toISOString(), resp_completo_por: "Legajo 57 · Ancapillan, José" }],
     calidad_listas: [], ayudante_memoria: [],
     __rpc: {

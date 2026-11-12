@@ -37,12 +37,17 @@
   }
   var DEFAULT_DRIVERS = buildPersonDefaults();
   var DEFAULT_HELPERS = buildPersonDefaults();
+  // Tipos de carga: el id sale del nombre viejo (así lo guardan los viajes) y
+  // el nombre es la abreviatura nueva de productos (noviembre 2026).
+  var NOMBRE_CARGA_NUEVO = {'S175 B/S':'S1750','A1.5':'A1500','A2.25':'A2250','A/G 500':'A500CG','X8':'B8A','X20':'B20A','X12':'B12A',
+    'SAB1.5':'SB1500','SAB500':'SB500','CAJ':'C1500','DISP':'DAN','EX12':'E12A','EX20':'E20A','EVS1500':'ES1500','X8V':'B8V','X12V':'B12V','X20V':'B20V',
+    'EX12V':'E12V','EX20V':'E20V','M F/C':'DFC','VASOS':'VA','CAN':'CDISP','SPORT':'AS750'};
   var DEFAULT_CARGO_TYPES = [
     'S1500','S2000','S175 B/S','A1.5','A2.25','A500','A/G 500','X8','X20','X12',
     'SAB1.5','SAB500','CAJ','DISP','EX12','EX20','EVS1500','X8V','X12V','X20V',
     'EX12V','EX20V','PROMO MUNDIAL','M F/C','BBA','VASOS','CAN','R-8','R12/20','SPORT',
     'SIFON DESC','BMB AUT.','MATE'
-  ].map(function(n,i){ return {id:slug(n), name:n, active:true, order:i+1}; });
+  ].map(function(n,i){ return {id:slug(n), name:NOMBRE_CARGA_NUEVO[n]||n, active:true, order:i+1}; });
 
   // Sucursales: mismo catálogo de tipos de carga que FlotaPesada (arriba),
   // pero una lista propia de puntos de entrega. Activas/inactivas según el

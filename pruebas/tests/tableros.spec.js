@@ -232,7 +232,7 @@ test("voz de Sifoncito: si el servidor no tiene voz, usa la del navegador eligie
 test("Reclamos totales por tipo: en el tablero general, en el de Calidad y en Indicadores de Calidad", async ({ page }) => {
   const anio = new Date().getFullYear();
   const f = (d) => `${anio}-01-${String(d).padStart(2, "0")}`;
-  const r = (i, rc, extra = {}) => ({ id: "t" + i, numero: i, anio, fecha: f(i), producto: "Bx20Azul", reclamo_cliente: rc, estado: "Abierto", ...extra });
+  const r = (i, rc, extra = {}) => ({ id: "t" + i, numero: i, anio, fecha: f(i), producto: "B20A", reclamo_cliente: rc, estado: "Abierto", ...extra });
   const db = datos();
   db.calidad_reclamos = [r(1, "MG: cloro"), r(2, "MG: plastico"), r(3, "MG: cloro", { estado: "Cerrado justificado", desvio_real: "MG: cloro" }), r(4, "EE: insecto"), r(5, "Pinchado"), r(6, "", { desvio: "Otros" })];
   await abrirGestion(page, db, { email: "admin@anafer.test" });

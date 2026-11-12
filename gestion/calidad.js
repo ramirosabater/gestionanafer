@@ -20,7 +20,7 @@
   // Las opciones salen de la planilla. Los nombres de personas (responsables
   // y controladores) no van en el código: se cargan en ⚙ o con la importación.
   var LISTAS = [
-    { id: 'productos', nombre: 'Productos', para: 'Reclamos', def: ['Bx5Azul', 'Bx8Azul', 'Bx12Azul', 'Bx20Azul', 'Bx5Verde', 'Bx8Verde', 'Bx12Verde', 'Bx20Verde', 'Soda Descartable', 'Soda retornable 1.5L', 'Soda retornable 650ml', 'Otro'] },
+    { id: 'productos', nombre: 'Productos', para: 'Reclamos', def: ['Bx5Azul', 'B8A', 'B12A', 'B20A', 'Bx5Verde', 'B8V', 'B12V', 'B20V', 'Soda Descartable', 'S1500', 'S650', 'Otro'] },
     { id: 'origenes_reclamo', nombre: 'Origen del reclamo', para: 'Reclamos', def: ['Planta', 'Sucursal', 'Distribuidor', 'Reparto', 'Atención al cliente'] },
     { id: 'desvios', nombre: 'Desvío informado', para: 'Reclamos', def: ['Mal gusto', 'Otros', 'Pinchado', 'No pasó repartidor'] },
     { id: 'reclamos_cliente', nombre: 'Reclamo del cliente', para: 'Reclamos', def: ['MG: plastico', 'MG: cloro', 'MG: otro', 'EE: insecto', 'EE: precinto/tapa', 'EE: otro', 'Pierde por tapa', 'Pinchado'] },

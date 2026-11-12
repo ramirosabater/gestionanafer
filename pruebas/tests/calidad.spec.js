@@ -8,12 +8,12 @@ function mas(n) { const d = new Date(); d.setDate(d.getDate() + n); return iso(d
 const ANIO = new Date().getFullYear();
 
 function rec(n, extra = {}) {
-  return { id: `rec_${ANIO}_${n}`, numero: n, anio: ANIO, fecha: mas(-2), producto: "Bx20Azul", lote: "343", desvio: "Mal gusto", reclamo_cliente: "MG: plastico",
+  return { id: `rec_${ANIO}_${n}`, numero: n, anio: ANIO, fecha: mas(-2), producto: "B20A", lote: "343", desvio: "Mal gusto", reclamo_cliente: "MG: plastico",
     desvio_real: "MG: plastico", envase: "Camillo", lote_envase: "2/25", tapa: "PRIVA", cantidad: 1, destino_envase: "A la linea", estado: "Cerrado justificado", controlo: "PEREZ", ...extra };
 }
 function datosCalidad(extra = {}) {
   return baseDePrueba({
-    calidad_reclamos: [rec(1), rec(2, { desvio_real: "SIN GUSTO", estado: "Cerrado No justificado" }), rec(3, { lote: "350", producto: "Bx12Azul" }), rec(4, { estado: "Abierto", desvio_real: "", fecha: mas(-12), lote: "777" })],
+    calidad_reclamos: [rec(1), rec(2, { desvio_real: "SIN GUSTO", estado: "Cerrado No justificado" }), rec(3, { lote: "350", producto: "B12A" }), rec(4, { estado: "Abierto", desvio_real: "", fecha: mas(-12), lote: "777" })],
     calidad_pac: [
       { id: "pac_a", numero: 1, anio: ANIO, fecha: mas(-40), origen: "AUDITORIA INTERNA", clasificacion: "NC MENOR", proceso: "MANTENIMIENTO", hallazgo: "Falta registro de limpieza de tanques",
         riesgo: "MEDIO", resp_accion: "Responsable Uno", fecha_accion: mas(-5), estado: "En gestión", reclamo_ids: [] },
@@ -64,7 +64,7 @@ test("reclamo nuevo de un lote repetido: Sifoncito propone abrir la NC/PAC y la 
   await abrirGestion(page, datosCalidad({ calidad_reclamos: [rec(1), rec(2)] }), { email: "admin@anafer.test" });
   await entrarCalidad(page);
   await page.click("#rq-nuevo");
-  await page.selectOption("#rq-producto", "Bx20Azul");
+  await page.selectOption("#rq-producto", "B20A");
   await page.fill("#rq-lote", "343");
   await page.check("#rq-venc-ilegible");
   await expect(page.locator("#rq-venc")).toBeDisabled();
@@ -78,7 +78,7 @@ test("reclamo nuevo de un lote repetido: Sifoncito propone abrir la NC/PAC y la 
   await page.click("#rq-save");
   await expect(page.locator("#reclamo-overlay")).not.toHaveClass(/show/);
   const nuevo = (await escrituras(page, "calidad_reclamos")).map((x) => x[2]).pop();
-  expect(nuevo).toMatchObject({ numero: 3, anio: ANIO, producto: "Bx20Azul", lote: "343", vencimiento_ilegible: true, vencimiento: null, desvio_real: "MG: plastico", controlo: "GOMEZ", creado_por: "admin@anafer.test" });
+  expect(nuevo).toMatchObject({ numero: 3, anio: ANIO, producto: "B20A", lote: "343", vencimiento_ilegible: true, vencimiento: null, desvio_real: "MG: plastico", controlo: "GOMEZ", creado_por: "admin@anafer.test" });
 
   const card = page.locator("#ayuda-sug");
   await expect(card).toContainText("3 reclamos");
@@ -136,13 +136,13 @@ test("indicadores y listas de calidad", async ({ page }) => {
   await expect(page.locator("#cd-dona-desvio .center b")).toHaveText("3");          // 3 reclamos controlados
   await expect(page.locator("#cd-vencidas tbody tr")).toHaveCount(1);
   // filtro por producto
-  await page.selectOption("#cd-producto", "Bx12Azul");
+  await page.selectOption("#cd-producto", "B12A");
   await expect(kpi("#cd-kpis", "Reclamos del período")).toHaveText("1");
   // ⚙ → Calidad → Listas
   await page.click("#settings-btn");
   await page.click("#scatbtn-calidad");
   const caja = page.locator('.cal-lista[data-lista="productos"]');
-  await expect(caja).toContainText("Bx20Azul");
+  await expect(caja).toContainText("B20A");
   await caja.locator("input").fill("Bx6Azul");
   await caja.locator(".addrow button").click();
   const l = (await escrituras(page, "calidad_listas")).map((x) => x[2]).pop();
@@ -172,13 +172,13 @@ test("reclamo: queda quién lo cargó, el origen asignado a esa persona y el cli
   await expect(page.locator("#rq-sub")).toContainText("admin@anafer.test · Distribuidor");
   await expect(page.locator("#rq-origen")).toHaveValue("Distribuidor");
   await expect(page.locator("#rq-origen")).toBeDisabled();
-  await expect(page.locator("#rq-producto option")).toContainText(["Bx5Azul", "Bx5Verde", "Soda retornable 1.5L", "Soda retornable 650ml"]);
-  await page.selectOption("#rq-producto", "Soda retornable 650ml");
+  await expect(page.locator("#rq-producto option")).toContainText(["Bx5Azul", "Bx5Verde", "S1500", "S650"]);
+  await page.selectOption("#rq-producto", "S650");
   await page.fill("#rq-clientenom", "Almacén Don Pepe");
   await page.click("#rq-save");
   await expect(page.locator("#reclamo-overlay")).not.toHaveClass(/show/);
   const nuevo = (await escrituras(page, "calidad_reclamos")).map((x) => x[2]).pop();
-  expect(nuevo).toMatchObject({ origen: "Distribuidor", cliente: "Almacén Don Pepe", creado_por: "admin@anafer.test", producto: "Soda retornable 650ml" });
+  expect(nuevo).toMatchObject({ origen: "Distribuidor", cliente: "Almacén Don Pepe", creado_por: "admin@anafer.test", producto: "S650" });
   // quien carga la recepción no ve la lista: los reclamos los sigue Calidad
   await expect(page.locator("#rq-body")).toContainText("lo sigue Calidad");
   await expect(page.locator("#rq-fbar")).toBeHidden();
@@ -220,7 +220,7 @@ test("reclamo en dos partes: la recepción carga la 1ª parte con comentarios y 
   await page.click("#rq-nuevo");
   await expect(page.locator("#rq-parte1")).toBeVisible();
   await expect(page.locator("#rq-parte2")).toBeHidden();
-  await page.selectOption("#rq-producto", "Bx20Azul");
+  await page.selectOption("#rq-producto", "B20A");
   await page.fill("#rq-lote", "343");
   await page.selectOption("#rq-desvio", { index: 1 });
   await page.fill("#rq-comentarios", "El cliente dice que tiene gusto raro");
